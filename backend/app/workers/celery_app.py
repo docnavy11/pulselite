@@ -49,4 +49,5 @@ celery_app.conf.include = [
     "app.workers.tasks.reindex_article",
     "app.workers.tasks.sync_documents",
     "app.workers.tasks.weekly_digest",
+    "app.workers.tasks.crawl_website",
 ]
