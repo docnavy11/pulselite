@@ -87,7 +87,7 @@ async def end_conversation(
 ):
     await conversation_service.update_conversation_status(db, conversation_id, "resolved")
 
-    analyze_conversation.delay(str(conversation_id), str(workspace_id))
+    analyze_conversation.delay(str(conversation_id), str(workspace_id))  # type: ignore[attr-defined]
 
     return {"status": "resolved", "conversation_id": str(conversation_id)}
 
@@ -160,37 +160,3 @@ async def get_sentiment_by_segment(
     return {"data": data}
 
 
-@router.get("/analytics/chats-by-country")
-async def get_chats_by_country(
-    workspace_id: uuid.UUID = Depends(get_workspace),
-    days: int = Query(30, ge=1, le=90),
-    db: AsyncSession = Depends(get_db),
-    current_user: Agent = Depends(get_current_user),
-):
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-
-    result = await db.execute(
-        select(
-            Conversation.country_code,
-            Conversation.country_name,
-            func.count().label("count"),
-        )
-        .where(
-            Conversation.workspace_id == workspace_id,
-            Conversation.country_code.isnot(None),
-            Conversation.created_at >= cutoff,
-        )
-        .group_by(Conversation.country_code, Conversation.country_name)
-        .order_by(func.count().desc())
-        .limit(20)
-    )
-    rows = result.all()
-    data = [
-        {
-            "country_code": row.country_code,
-            "country_name": row.country_name,
-            "count": row.count,
-        }
-        for row in rows
-    ]
-    return {"data": data}
