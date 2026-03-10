@@ -23,8 +23,6 @@ import {
   getAutoRecharge,
   updateAutoRecharge,
   getUsageBreakdown,
-  getWhiteLabel,
-  updateWhiteLabel,
 } from "@/lib/api-functions";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 
@@ -39,9 +37,6 @@ export default function BillingPage() {
     enabled: false, threshold: 200, amount: 1000,
   });
   const [savingAutoRecharge, setSavingAutoRecharge] = useState(false);
-  const [whiteLabelEnabled, setWhiteLabelEnabled] = useState(false);
-  const [savingWhiteLabel, setSavingWhiteLabel] = useState(false);
-
   useEffect(() => {
     const promises: Promise<unknown>[] = [
       getBillingPlans().then(setPlans),
@@ -66,13 +61,6 @@ export default function BillingPage() {
     }).catch(() => {});
   }, [workspace]);
 
-  useEffect(() => {
-    if (!workspace) return;
-    getWhiteLabel(workspace.id).then((data) => {
-      setWhiteLabelEnabled(data.white_label_enabled);
-    }).catch(() => {});
-  }, [workspace]);
-
   async function handleUpgrade(planId: string) {
     if (!workspace) return;
     try {
@@ -84,19 +72,6 @@ export default function BillingPage() {
       }
     } catch {
       // handle error
-    }
-  }
-
-  async function handleSaveWhiteLabel() {
-    if (!workspace) return;
-    setSavingWhiteLabel(true);
-    try {
-      const data = await updateWhiteLabel(workspace.id, whiteLabelEnabled);
-      setWhiteLabelEnabled(data.white_label_enabled);
-    } catch {
-      // handle error
-    } finally {
-      setSavingWhiteLabel(false);
     }
   }
 
@@ -349,41 +324,6 @@ export default function BillingPage() {
           </CardContent>
         </Card>
       )}
-
-      {/* White-labeling */}
-      <Card className="mt-8">
-        <CardContent className="pt-6">
-          <h3 className="text-base font-semibold text-gray-900 mb-1">White-labeling</h3>
-          <p className="text-sm text-gray-500 mb-4">
-            Remove the &ldquo;Powered by Pulse&rdquo; badge from your widget. Available on Growth and Enterprise plans.
-          </p>
-          <div className="flex items-center gap-3 mb-4">
-            <button
-              type="button"
-              role="switch"
-              aria-checked={whiteLabelEnabled}
-              onClick={() => setWhiteLabelEnabled((v) => !v)}
-              className={clsx(
-                "relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2",
-                whiteLabelEnabled ? "bg-primary-600" : "bg-gray-200",
-              )}
-            >
-              <span
-                className={clsx(
-                  "inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform",
-                  whiteLabelEnabled ? "translate-x-6" : "translate-x-1",
-                )}
-              />
-            </button>
-            <span className="text-sm font-medium text-gray-700">
-              {whiteLabelEnabled ? "Enabled" : "Disabled"}
-            </span>
-          </div>
-          <Button onClick={handleSaveWhiteLabel} loading={savingWhiteLabel} size="sm">
-            Save settings
-          </Button>
-        </CardContent>
-      </Card>
 
       {/* Auto-recharge */}
       <Card className="mt-8">

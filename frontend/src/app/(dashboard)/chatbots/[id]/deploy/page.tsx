@@ -1,17 +1,13 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 import { useParams } from "next/navigation";
 import { clsx } from "clsx";
-import { Copy, Check, Plus, Trash2, Key } from "lucide-react";
+import { Copy, Check } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { Highlight, themes } from "prism-react-renderer";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
 import { Card, CardContent } from "@/components/ui/Card";
-import { ApiKey, ApiKeyCreated } from "@/lib/types";
-import { getApiKeys, createApiKey, revokeApiKey } from "@/lib/api-functions";
-import { useWorkspaceStore } from "@/stores/workspace-store";
+
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -103,13 +99,8 @@ const platformGuides: { name: string; steps: string[] }[] = [
 
 export default function DeployPage() {
   const params = useParams();
-  const workspace = useWorkspaceStore((s) => s.currentWorkspace);
   const chatbotId = params.id as string;
   const [activeTab, setActiveTab] = useState<DeployTab>("Script Tag");
-  const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
-  const [newKeyName, setNewKeyName] = useState("");
-  const [createdKey, setCreatedKey] = useState<ApiKeyCreated | null>(null);
-  const [creating, setCreating] = useState(false);
   const [expandedGuide, setExpandedGuide] = useState<string | null>(null);
   const qrRef = useRef<HTMLDivElement>(null);
 
@@ -123,36 +114,6 @@ export default function DeployPage() {
     "message": "Hello, I need help",
     "session_id": "unique-session-id"
   }'`;
-
-  useEffect(() => {
-    if (!workspace) return;
-    getApiKeys(workspace.id).then(setApiKeys).catch(() => {});
-  }, [workspace, chatbotId]);
-
-  async function handleCreateKey() {
-    if (!newKeyName.trim() || !workspace) return;
-    setCreating(true);
-    try {
-      const key = await createApiKey(workspace.id, newKeyName.trim());
-      setCreatedKey(key);
-      setApiKeys((prev) => [...prev, key]);
-      setNewKeyName("");
-    } catch {
-      // handle error
-    } finally {
-      setCreating(false);
-    }
-  }
-
-  async function handleRevokeKey(keyId: string) {
-    if (!workspace) return;
-    try {
-      await revokeApiKey(workspace.id, keyId);
-      setApiKeys((prev) => prev.filter((k) => k.id !== keyId));
-    } catch {
-      // handle error
-    }
-  }
 
   return (
     <div>
@@ -294,83 +255,6 @@ export default function DeployPage() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardContent className="pt-6 pb-6">
-              <h2 className="text-sm font-semibold text-gray-900 mb-4">
-                API Keys
-              </h2>
-
-              {createdKey && (
-                <div className="mb-4 rounded-lg bg-green-50 border border-green-200 p-4">
-                  <p className="text-sm font-medium text-green-800 mb-1">
-                    API key created! Copy it now - it won&apos;t be shown again.
-                  </p>
-                  <div className="flex items-center gap-2 mt-2">
-                    <code className="text-sm bg-white px-3 py-1.5 rounded border border-green-200 flex-1 truncate">
-                      {createdKey.key}
-                    </code>
-                    <CopyButton text={createdKey.key} />
-                  </div>
-                  <button
-                    onClick={() => setCreatedKey(null)}
-                    className="mt-2 text-xs text-green-700 hover:text-green-800"
-                  >
-                    Dismiss
-                  </button>
-                </div>
-              )}
-
-              <div className="flex gap-2 mb-4">
-                <Input
-                  placeholder="Key name (e.g. Production)"
-                  value={newKeyName}
-                  onChange={(e) => setNewKeyName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleCreateKey();
-                  }}
-                />
-                <Button onClick={handleCreateKey} loading={creating} size="sm">
-                  <Plus className="h-4 w-4 mr-1" />
-                  Create
-                </Button>
-              </div>
-
-              {apiKeys.length > 0 ? (
-                <div className="space-y-2">
-                  {apiKeys.map((key) => (
-                    <div
-                      key={key.id}
-                      className="flex items-center justify-between rounded-lg bg-gray-50 px-4 py-3"
-                    >
-                      <div className="flex items-center gap-3">
-                        <Key className="h-4 w-4 text-gray-400" />
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">
-                            {key.name}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {key.key_prefix}... / Created{" "}
-                            {new Date(key.created_at).toLocaleDateString()}
-                          </p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => handleRevokeKey(key.id)}
-                        className="rounded p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 transition-all duration-200"
-                        title="Revoke"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-gray-400 text-center py-4">
-                  No API keys yet
-                </p>
-              )}
-            </CardContent>
-          </Card>
         </div>
       )}
     </div>

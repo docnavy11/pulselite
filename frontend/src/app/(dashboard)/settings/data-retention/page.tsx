@@ -20,7 +20,6 @@ function daysToOption(days: number | null): RetentionOption {
 
 export default function DataRetentionPage() {
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);
-  const [retentionDays, setRetentionDays] = useState<number | null>(null);
   const [selectedOption, setSelectedOption] = useState<RetentionOption>("forever");
   const [customDays, setCustomDays] = useState<number>(30);
   const [loading, setLoading] = useState(true);
@@ -34,7 +33,6 @@ export default function DataRetentionPage() {
     getDataRetention(workspace.id)
       .then((data) => {
         const days = data.data_retention_days;
-        setRetentionDays(days);
         const opt = daysToOption(days);
         setSelectedOption(opt);
         if (opt === "custom" && days !== null) {
@@ -61,7 +59,6 @@ export default function DataRetentionPage() {
     const days = getEffectiveDays();
     try {
       await updateDataRetention(workspace.id, days);
-      setRetentionDays(days);
       setSuccess(true);
     } catch {
       setError("Failed to save data retention settings. Please try again.");

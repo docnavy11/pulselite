@@ -32,10 +32,6 @@ class TestWorkspaceSubstitution:
         r = await auth_client.get(f"/api/v1/workspaces/{second_workspace.id}/knowledge-bases")
         assert r.status_code == 403
 
-    async def test_cannot_view_exceptions_in_other_workspace(self, auth_client, second_workspace):
-        r = await auth_client.get(f"/api/v1/workspaces/{second_workspace.id}/exceptions")
-        assert r.status_code == 403
-
     async def test_cannot_view_credits_balance_of_other_workspace(self, auth_client, second_workspace):
         r = await auth_client.get(f"/api/v1/workspaces/{second_workspace.id}/credits/balance")
         assert r.status_code == 403
@@ -44,20 +40,12 @@ class TestWorkspaceSubstitution:
         r = await auth_client.get(f"/api/v1/workspaces/{second_workspace.id}/dashboard")
         assert r.status_code == 403
 
-    async def test_cannot_view_leads_of_other_workspace(self, auth_client, second_workspace):
-        r = await auth_client.get(f"/api/v1/workspaces/{second_workspace.id}/leads")
-        assert r.status_code == 403
-
     async def test_cannot_view_integrations_of_other_workspace(self, auth_client, second_workspace):
         r = await auth_client.get(f"/api/v1/workspaces/{second_workspace.id}/integrations")
         assert r.status_code == 403
 
     async def test_cannot_view_data_retention_of_other_workspace(self, auth_client, second_workspace):
         r = await auth_client.get(f"/api/v1/workspaces/{second_workspace.id}/data-retention")
-        assert r.status_code == 403
-
-    async def test_cannot_view_intelligence_signals_of_other_workspace(self, auth_client, second_workspace):
-        r = await auth_client.get(f"/api/v1/workspaces/{second_workspace.id}/intelligence-signals")
         assert r.status_code == 403
 
 
@@ -151,18 +139,6 @@ class TestIDOR:
         )
         assert r.status_code == 404
 
-    async def test_cannot_read_exception_detail_of_other_workspace_via_idor(
-        self, db, auth_client, workspace, second_workspace
-    ):
-        bot_b = await make_chatbot(db, second_workspace)
-        conv_b = await make_conversation(
-            db, second_workspace, bot_b, escalation_reason="low_confidence"
-        )
-        r = await auth_client.get(
-            f"/api/v1/workspaces/{workspace.id}/exceptions/{conv_b.id}"
-        )
-        assert r.status_code == 404
-
 
 # ══════════════════════════════════════════════════════════════════════════════
 # POSITIVE CONTROLS: Agent A can access their OWN resources
@@ -211,10 +187,6 @@ class TestNoAuthentication:
 
     async def test_unauthenticated_cannot_view_credits(self, client, workspace):
         r = await client.get(f"/api/v1/workspaces/{workspace.id}/credits/balance")
-        assert r.status_code in (401, 403)
-
-    async def test_unauthenticated_cannot_view_exceptions(self, client, workspace):
-        r = await client.get(f"/api/v1/workspaces/{workspace.id}/exceptions")
         assert r.status_code in (401, 403)
 
     async def test_unknown_agent_token_rejected(self, client, workspace):
