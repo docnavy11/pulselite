@@ -2,7 +2,7 @@ from app.models.organizational import Agent, Workspace, WorkspaceMembership
 from app.models.invites import WorkspaceInvite  # noqa: F401
 from app.models.integrations import CreditLedger, IntegrationConfig
 from app.models.contacts import Company, Contact, ContactEvent, DataAttribute, Segment
-from app.models.conversations import Conversation, ConversationTag, Message, Tag, Ticket
+from app.models.conversations import Conversation, ConversationTag, Message, Tag
 from app.models.knowledge import Article, ArticleCollection, Chatbot, Chunk, Document, KnowledgeBase
 from app.models.intelligence import (
     AutonomousResolutionStats,
@@ -41,7 +41,6 @@ __all__ = [
     "RetrievalLog",
     "Segment",
     "Tag",
-    "Ticket",
     "TopicCluster",
     "Workspace",
     "WorkspaceMembership",

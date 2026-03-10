@@ -4,7 +4,7 @@ import asyncio
 import logging
 from datetime import datetime, timezone, timedelta
 
-from sqlalchemy import delete, select, update as sql_update
+from sqlalchemy import delete, select
 
 from app.database import async_session_factory
 from app.models.organizational import Workspace
@@ -50,15 +50,11 @@ async def _purge() -> dict:
                     Message,
                     MessageFeedback,
                     ConversationTag,
-                    Ticket,
                 )
                 from app.models.intelligence import (
                     ConversationAnalysis,
                     IntelligenceSignal,
                     LeadScore,
-                )
-                await session.execute(
-                    sql_update(Ticket).where(Ticket.conversation_id.in_(conv_ids)).values(conversation_id=None)
                 )
 
                 await session.execute(delete(Message).where(Message.conversation_id.in_(conv_ids)))

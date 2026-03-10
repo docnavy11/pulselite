@@ -12,14 +12,10 @@ class Conversation(UUIDPrimaryKeyMixin, TimestampUpdateMixin, Base):
     __tablename__ = "conversations"
 
     workspace_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("workspaces.id"), nullable=False)
-    inbox_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("inboxes.id"), nullable=True)
     chatbot_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("chatbots.id"), nullable=True)
     contact_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("contacts.id"), nullable=True)
     assignee_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("agents.id"), nullable=True)
-    team_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("teams.id"), nullable=True)
     status: Mapped[str] = mapped_column(Text, server_default=text("'open'"))
-    snoozed_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    waiting_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     priority: Mapped[str] = mapped_column(Text, server_default=text("'normal'"))
     channel: Mapped[str] = mapped_column(Text, server_default=text("'chat'"))
     lifecycle_stage: Mapped[str] = mapped_column(Text, server_default=text("'unknown'"))
@@ -30,12 +26,9 @@ class Conversation(UUIDPrimaryKeyMixin, TimestampUpdateMixin, Base):
     ai_participated: Mapped[bool] = mapped_column(Boolean, server_default=text("TRUE"))
     escalation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     autonomous_resolved: Mapped[bool] = mapped_column(Boolean, server_default=text("FALSE"))
-    sla_policy_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     first_response_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     stats: Mapped[dict] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
-    intercom_id: Mapped[str | None] = mapped_column(Text, nullable=True)
-    external_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     country_code: Mapped[str | None] = mapped_column(String(2), nullable=True)
     country_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
@@ -63,7 +56,6 @@ class Message(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     confidence_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     retrieval_log_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     is_fallback: Mapped[bool] = mapped_column(Boolean, server_default=text("FALSE"))
-    intercom_part_id: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     conversation: Mapped["Conversation"] = relationship(back_populates="messages")
 
@@ -108,21 +100,3 @@ class MessageFeedback(UUIDPrimaryKeyMixin, Base):
     rating: Mapped[str] = mapped_column(Text, nullable=False)  # 'thumbs_up' or 'thumbs_down'
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"), nullable=False)
-
-
-class Ticket(UUIDPrimaryKeyMixin, TimestampUpdateMixin, Base):
-    __tablename__ = "tickets"
-
-    workspace_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("workspaces.id"), nullable=False)
-    conversation_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("conversations.id"), nullable=True
-    )
-    contact_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("contacts.id"), nullable=True)
-    assignee_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("agents.id"), nullable=True)
-    team_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("teams.id"), nullable=True)
-    ticket_state: Mapped[str] = mapped_column(Text, server_default=text("'submitted'"))
-    ticket_type_category: Mapped[str] = mapped_column(Text, server_default=text("'customer'"))
-    title: Mapped[str | None] = mapped_column(Text, nullable=True)
-    description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    custom_attributes: Mapped[dict] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
-    intercom_ticket_id: Mapped[str | None] = mapped_column(Text, nullable=True)
