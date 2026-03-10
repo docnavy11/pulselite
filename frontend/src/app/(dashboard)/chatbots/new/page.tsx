@@ -80,22 +80,26 @@ export default function NewBotWizardPage() {
       const chatbot = await createChatbot(workspace.id, { name });
       setChatbotId(chatbot.id);
 
-      // Start crawl
-      const crawl = await startCrawl(workspace.id, normalized, 50);
-      setCrawlStatus({ job_id: crawl.job_id, status: "pending", pages_discovered: crawl.pages_discovered, pages_queued: 0, pages_failed: 0 });
+      // Start crawl — pass chatbot_id so KB gets linked
+      const crawl = await startCrawl(workspace.id, normalized, 50, chatbot.id);
+      setCrawlStatus({ job_id: crawl.job_id, status: "pending", pages_discovered: crawl.pages_discovered, pages_queued: 0, pages_failed: 0, docs_indexed: 0, docs_total: 0 });
 
       // Poll for completion
       pollRef.current = setInterval(async () => {
         try {
           const status = await getCrawlStatus(workspace.id, crawl.job_id);
           setCrawlStatus(status);
-          if (status.status === "completed" || status.status === "failed") {
+          if (status.status === "failed") {
             clearInterval(pollRef.current!);
-            if (status.status === "failed") {
-              setError("Crawl failed. Please try again.");
-              setStep("url");
-              return;
-            }
+            setError("Crawl failed. Please try again.");
+            setStep("url");
+            return;
+          }
+          // Wait for crawl to finish AND all docs indexed
+          const crawlDone = status.status === "completed" || status.status === "running";
+          const indexingDone = status.docs_total > 0 && status.docs_indexed >= status.docs_total;
+          if (crawlDone && indexingDone) {
+            clearInterval(pollRef.current!);
             // Run autoconfig
             const result = await runAutoconfig(workspace.id, chatbot.id, crawl.kb_id);
             setConfig(result);
@@ -221,31 +225,59 @@ export default function NewBotWizardPage() {
       {step === "crawling" && (
         <Card>
           <CardContent className="pt-8 pb-8">
-            <div className="flex flex-col items-center text-center gap-4 py-6">
+            <div className="flex flex-col items-center text-center gap-6 py-4">
               <Spinner className="h-10 w-10 text-primary-600" />
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">Crawling your site…</h2>
-                <p className="text-sm text-gray-500 mt-1">
-                  {crawlStatus
-                    ? `${crawlStatus.pages_discovered} pages found${crawlStatus.pages_queued > 0 ? `, ${crawlStatus.pages_queued} queued` : ""}`
-                    : "Starting crawl…"}
-                </p>
-              </div>
-              {crawlStatus && crawlStatus.pages_discovered > 0 && (
-                <div className="w-full max-w-xs mt-2">
-                  <div className="h-2 w-full rounded-full bg-gray-100">
-                    <div
-                      className="h-2 rounded-full bg-primary-600 transition-all duration-500"
-                      style={{
-                        width: crawlStatus.status === "running"
-                          ? `${Math.min(85, (crawlStatus.pages_queued / Math.max(crawlStatus.pages_discovered, 1)) * 100)}%`
-                          : "100%",
-                      }}
-                    />
-                  </div>
+              <h2 className="text-lg font-semibold text-gray-900">Setting up your bot…</h2>
+
+              {/* Phase 1: Crawling */}
+              <div className="w-full max-w-sm space-y-1.5">
+                <div className="flex justify-between text-sm">
+                  <span className="font-medium text-gray-700">Crawling pages</span>
+                  <span className="text-gray-500">
+                    {crawlStatus
+                      ? crawlStatus.status === "pending"
+                        ? "Starting…"
+                        : `${crawlStatus.pages_queued} / ${crawlStatus.pages_discovered} pages`
+                      : "Starting…"}
+                  </span>
                 </div>
-              )}
-              <p className="text-xs text-gray-400 mt-2">This usually takes under a minute.</p>
+                <div className="h-2 w-full rounded-full bg-gray-100">
+                  <div
+                    className="h-2 rounded-full bg-primary-600 transition-all duration-500"
+                    style={{
+                      width: !crawlStatus || crawlStatus.status === "pending"
+                        ? "5%"
+                        : crawlStatus.status === "running"
+                        ? `${Math.min(95, (crawlStatus.pages_queued / Math.max(crawlStatus.pages_discovered, 1)) * 100)}%`
+                        : "100%",
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Phase 2: Indexing */}
+              <div className="w-full max-w-sm space-y-1.5">
+                <div className="flex justify-between text-sm">
+                  <span className="font-medium text-gray-700">Indexing content</span>
+                  <span className="text-gray-500">
+                    {!crawlStatus || crawlStatus.docs_total === 0
+                      ? "Waiting…"
+                      : `${crawlStatus.docs_indexed} / ${crawlStatus.docs_total} pages`}
+                  </span>
+                </div>
+                <div className="h-2 w-full rounded-full bg-gray-100">
+                  <div
+                    className="h-2 rounded-full bg-indigo-400 transition-all duration-500"
+                    style={{
+                      width: !crawlStatus || crawlStatus.docs_total === 0
+                        ? "0%"
+                        : `${Math.round((crawlStatus.docs_indexed / crawlStatus.docs_total) * 100)}%`,
+                    }}
+                  />
+                </div>
+              </div>
+
+              <p className="text-xs text-gray-400">This usually takes under a minute.</p>
             </div>
           </CardContent>
         </Card>

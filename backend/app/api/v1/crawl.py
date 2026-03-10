@@ -5,9 +5,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from sqlalchemy import func
+
 from app.database import get_db
 from app.dependencies import get_workspace
-from app.models.knowledge import CrawlJob
+from app.models.knowledge import CrawlJob, Document
 from app.schemas.crawl import CrawlJobStatusResponse, CrawlRequest, CrawlResponse
 from app.services.crawl_service import start_crawl
 
@@ -21,7 +23,7 @@ async def crawl_website_endpoint(
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        result = await start_crawl(db, workspace_id, body.url, body.max_pages, body.knowledge_base_id)
+        result = await start_crawl(db, workspace_id, body.url, body.max_pages, body.knowledge_base_id, body.chatbot_id)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     return CrawlResponse(
@@ -46,6 +48,20 @@ async def get_crawl_status(
     job = result.scalar_one_or_none()
     if job is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Crawl job not found")
+
+    # Count ingestion progress for this KB
+    docs_total_result = await db.execute(
+        select(func.count()).where(Document.knowledge_base_id == job.kb_id)
+    )
+    docs_indexed_result = await db.execute(
+        select(func.count()).where(
+            Document.knowledge_base_id == job.kb_id,
+            Document.status == "indexed",
+        )
+    )
+    docs_total = docs_total_result.scalar() or 0
+    docs_indexed = docs_indexed_result.scalar() or 0
+
     return CrawlJobStatusResponse(
         job_id=str(job.id),
         kb_id=str(job.kb_id),
@@ -53,6 +69,8 @@ async def get_crawl_status(
         pages_discovered=job.pages_discovered,
         pages_queued=job.pages_queued,
         pages_failed=job.pages_failed,
+        docs_indexed=docs_indexed,
+        docs_total=docs_total,
         over_limit=job.over_limit,
         limit=job.max_pages,
         created_at=job.created_at.isoformat(),

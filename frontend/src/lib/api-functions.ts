@@ -68,8 +68,8 @@ export function duplicateChatbot(workspaceId: string, chatbotId: string) {
   return api.post<Chatbot>(`/api/v1/workspaces/${workspaceId}/chatbots/${chatbotId}/duplicate`);
 }
 
-export function startCrawl(workspaceId: string, url: string, maxPages: number) {
-  return api.post<CrawlResponse>(`/api/v1/workspaces/${workspaceId}/crawl`, { url, max_pages: maxPages });
+export function startCrawl(workspaceId: string, url: string, maxPages: number, chatbotId?: string) {
+  return api.post<CrawlResponse>(`/api/v1/workspaces/${workspaceId}/crawl`, { url, max_pages: maxPages, chatbot_id: chatbotId });
 }
 
 export function getCrawlStatus(workspaceId: string, jobId: string) {

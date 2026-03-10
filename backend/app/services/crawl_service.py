@@ -34,6 +34,7 @@ async def start_crawl(
     url: str,
     max_pages: int,
     kb_id: uuid.UUID | None = None,
+    chatbot_id: uuid.UUID | None = None,
 ) -> CrawlStartResult:
     from app.workers.tasks.ingest_document import ingest_document
 
@@ -49,7 +50,7 @@ async def start_crawl(
     if kb_id is None:
         domain = urlparse(url).netloc
         date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        kb = KnowledgeBase(workspace_id=workspace_id, name=f"{domain} — crawled {date_str}")
+        kb = KnowledgeBase(workspace_id=workspace_id, name=f"{domain} — crawled {date_str}", chatbot_id=chatbot_id)
         db.add(kb)
         await db.flush()
         kb_id = kb.id

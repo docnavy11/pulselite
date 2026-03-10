@@ -62,6 +62,8 @@ export interface CrawlStatusResponse {
   pages_discovered: number;
   pages_queued: number;
   pages_failed: number;
+  docs_indexed: number;
+  docs_total: number;
 }
 
 export interface AutoConfigResponse {

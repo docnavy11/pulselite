@@ -10,6 +10,7 @@ class CrawlRequest(BaseModel):
     url: str
     max_pages: int
     knowledge_base_id: Optional[uuid.UUID] = None
+    chatbot_id: Optional[uuid.UUID] = None
 
     @field_validator("max_pages")
     @classmethod
@@ -45,6 +46,8 @@ class CrawlJobStatusResponse(BaseModel):
     pages_discovered: int
     pages_queued: int
     pages_failed: int
+    docs_indexed: int
+    docs_total: int
     over_limit: bool
     limit: int
     created_at: str
