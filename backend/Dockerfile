@@ -6,4 +6,5 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN pip install uv
 COPY pyproject.toml .
 RUN uv pip install --system -e ".[dev]"
+RUN playwright install chromium --with-deps
 COPY . .
