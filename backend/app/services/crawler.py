@@ -1,13 +1,17 @@
 # backend/app/services/crawler.py
 import logging
+from collections import deque
 from dataclasses import dataclass
 from urllib.parse import urljoin, urlparse, urlunparse
 
 import defusedxml.ElementTree as ET
+from bs4 import BeautifulSoup
 
 from app.services.fetcher import FetchResult, fetch
 
 logger = logging.getLogger(__name__)
+
+_MAX_CHILD_SITEMAPS = 20
 
 
 @dataclass
@@ -37,14 +41,16 @@ async def _discover_via_sitemap(root_url: str) -> list[str] | None:
 
     try:
         root_el = ET.fromstring(result.html.encode())
-    except Exception:
+    except Exception as exc:
+        logger.warning("Failed to parse sitemap XML from %s: %s", sitemap_url, exc)
         return None
 
     ns = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
     urls: list[str] = []
 
-    # Sitemap index: recurse into child sitemaps
-    for sitemap_el in root_el.findall(".//sm:sitemap/sm:loc", ns):
+    # Sitemap index: recurse into child sitemaps (capped to avoid unbounded fetches)
+    child_sitemap_els = root_el.findall(".//sm:sitemap/sm:loc", ns)
+    for sitemap_el in child_sitemap_els[:_MAX_CHILD_SITEMAPS]:
         loc_text = sitemap_el.text
         if not loc_text:
             continue
@@ -54,28 +60,26 @@ async def _discover_via_sitemap(root_url: str) -> list[str] | None:
                 child_root = ET.fromstring(child.html.encode())
                 for loc in child_root.findall(".//sm:url/sm:loc", ns):
                     if loc.text:
-                        urls.append(loc.text.strip())
-            except Exception:
-                pass
+                        urls.append(_normalize(loc.text.strip()))
+            except Exception as exc:
+                logger.warning("Failed to parse child sitemap %s: %s", loc_text.strip(), exc)
 
     # Regular sitemap entries
     for loc in root_el.findall(".//sm:url/sm:loc", ns):
         if loc.text:
-            urls.append(loc.text.strip())
+            urls.append(_normalize(loc.text.strip()))
 
     return urls if urls else None
 
 
 async def _discover_via_bfs(root_url: str, max_depth: int = 3) -> list[str]:
-    from bs4 import BeautifulSoup
-
     root_domain = urlparse(root_url).netloc
     visited: set[str] = set()
-    queue: list[tuple[str, int]] = [(root_url, 0)]
+    queue: deque[tuple[str, int]] = deque([(root_url, 0)])
     found: list[str] = []
 
     while queue:
-        url, depth = queue.pop(0)
+        url, depth = queue.popleft()
         norm = _normalize(url)
         if norm in visited:
             continue
@@ -117,13 +121,12 @@ async def discover_urls(root_url: str, max_pages: int) -> CrawlResult:
     else:
         urls = await _discover_via_bfs(root_url)
 
-    # Deduplicate preserving order
+    # Deduplicate preserving order (sitemap URLs already normalized; BFS URLs already normalized)
     seen: set[str] = set()
     deduped: list[str] = []
     for u in urls:
-        n = _normalize(u)
-        if n not in seen:
-            seen.add(n)
+        if u not in seen:
+            seen.add(u)
             deduped.append(u)
 
     total = len(deduped)
