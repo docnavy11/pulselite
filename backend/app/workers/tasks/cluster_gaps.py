@@ -97,9 +97,4 @@ async def _cluster_workspace(session, workspace_id: uuid.UUID) -> int:
             event.gap_cluster_id = cluster.id
             clustered_count += 1
 
-    if topic_events:
-        from app.workers.tasks.auto_draft_article import auto_draft_articles
-
-        auto_draft_articles.delay(str(workspace_id))
-
     return clustered_count

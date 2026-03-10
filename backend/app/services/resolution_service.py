@@ -12,9 +12,6 @@ from app.services.encryption import decrypt_api_key
 from app.services import conversation_service
 from app.services.rag.engine import RAGResult, process_query
 from app.services.webhooks import fire_event
-from app.workers.tasks.log_retrieval import log_retrieval_task
-from app.workers.tasks.score_lead import flush_lead_score, score_lead_message
-from app.workers.tasks.send_alerts import send_escalation_alerts
 
 logger = logging.getLogger(__name__)
 
@@ -62,8 +59,6 @@ async def handle_message(
         message_type="incoming",
     )
 
-    score_lead_message.delay(str(conversation_id), message)
-
     # Load workspace OpenRouter key if configured
     openrouter_key: str | None = None
     ws_result = await db.execute(select(Workspace).where(Workspace.id == workspace_id))
@@ -102,7 +97,6 @@ async def handle_message(
     if escalated:
         conversation.escalation_reason = "low_confidence"
         conversation.outcome = "escalated_to_human"
-        send_escalation_alerts.delay(str(conversation_id), str(workspace_id))
         await fire_event(
             db,
             workspace_id,
@@ -118,23 +112,6 @@ async def handle_message(
     conversation.confidence_avg = confidence_avg
     conversation.ai_participated = True
     await db.flush()
-
-    # Flush accumulated lead score to DB and trigger HubSpot push if hot
-    if contact_id:
-        flush_lead_score.delay(str(conversation_id), str(workspace_id))  # type: ignore[attr-defined]
-
-    if rag_result:
-        log_retrieval_task.delay(
-            workspace_id=str(workspace_id),
-            chatbot_id=str(chatbot.id),
-            conversation_id=str(conversation_id),
-            message_id=str(bot_message.id),
-            query=rag_result.query,
-            confidence_score=rag_result.confidence_score,
-            confidence_avg=rag_result.confidence_avg,
-            retrieved_chunk_ids=[str(cid) for cid in rag_result.retrieved_chunk_ids],
-            escalated=rag_result.escalated,
-        )
 
     sources = rag_result.sources if rag_result else []
     yield ResolutionEvent(
