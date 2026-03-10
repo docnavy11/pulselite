@@ -1,10 +1,13 @@
 # backend/app/workers/tasks/crawl_website.py
 import asyncio
+import logging
 import uuid
 from datetime import datetime, timezone
 
 from app.database import async_session_factory, engine
 from app.workers.celery_app import celery_app
+
+logger = logging.getLogger(__name__)
 
 
 @celery_app.task(bind=True, max_retries=3, default_retry_delay=60)
@@ -48,6 +51,8 @@ async def _run(
             if job:
                 job.started_at = datetime.now(timezone.utc)
                 await session.commit()
+            else:
+                logger.warning("crawl_website: CrawlJob %s not found when setting started_at", job_id)
 
             # start_crawl sets status="running" and dispatches ingest_document child tasks.
             # Job completion is tracked per-document; we do NOT set status="completed" here.
