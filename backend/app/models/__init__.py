@@ -5,21 +5,16 @@ from app.models.contacts import Company, Contact, ContactEvent, DataAttribute, S
 from app.models.conversations import Conversation, ConversationTag, Message, Tag
 from app.models.knowledge import Article, ArticleCollection, Chatbot, Chunk, Document, KnowledgeBase
 from app.models.intelligence import (
-    AutonomousResolutionStats,
     ConversationAnalysis,
     GapCluster,
     GapEvent,
-    IntelligenceSignal,
-    LeadScore,
     RetrievalLog,
-    TopicCluster,
 )
 
 __all__ = [
     "Agent",
     "Article",
     "ArticleCollection",
-    "AutonomousResolutionStats",
     "Chatbot",
     "Chunk",
     "Company",
@@ -34,14 +29,11 @@ __all__ = [
     "GapCluster",
     "GapEvent",
     "IntegrationConfig",
-    "IntelligenceSignal",
     "KnowledgeBase",
-    "LeadScore",
     "Message",
     "RetrievalLog",
     "Segment",
     "Tag",
-    "TopicCluster",
     "Workspace",
     "WorkspaceMembership",
     "WorkspaceInvite",

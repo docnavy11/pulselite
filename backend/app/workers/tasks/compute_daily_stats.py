@@ -3,12 +3,11 @@ import uuid
 from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import func, select
-from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session_factory
 from app.models.conversations import Conversation
-from app.models.intelligence import AutonomousResolutionStats, GapCluster, GapEvent, RetrievalLog
+from app.models.intelligence import GapCluster, GapEvent, RetrievalLog
 from app.models.knowledge import Chatbot
 from app.models.organizational import Workspace
 from app.workers.celery_app import celery_app
@@ -38,7 +37,6 @@ async def _compute() -> dict:
                 for cb_id in chatbot_ids:
                     stats = await _compute_for_pair(session, ws_id, cb_id, yesterday, day_start, day_end)
                     if stats["total_conversations"] > 0:
-                        await _upsert_stats(session, ws_id, cb_id, yesterday, stats)
                         total_upserts += 1
 
             await session.commit()
@@ -131,24 +129,3 @@ async def _compute_for_pair(
     }
 
 
-async def _upsert_stats(
-    session: AsyncSession,
-    workspace_id: uuid.UUID,
-    chatbot_id: uuid.UUID | None,
-    period_date: date,
-    stats: dict,
-) -> None:
-    stmt = (
-        insert(AutonomousResolutionStats)
-        .values(
-            workspace_id=workspace_id,
-            chatbot_id=chatbot_id,
-            period_date=period_date,
-            **stats,
-        )
-        .on_conflict_do_update(
-            index_elements=["workspace_id", "chatbot_id", "period_date"],
-            set_=stats,
-        )
-    )
-    await session.execute(stmt)

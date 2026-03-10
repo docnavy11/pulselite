@@ -11,14 +11,10 @@ from app.dependencies import get_current_user, get_workspace, get_workspace_admi
 from app.models.contacts import Company, Contact, ContactEvent, DataAttribute, Segment
 from app.models.conversations import Conversation, ConversationTag, Message, Tag
 from app.models.intelligence import (
-    AutonomousResolutionStats,
     ConversationAnalysis,
     GapCluster,
     GapEvent,
-    IntelligenceSignal,
-    LeadScore,
     RetrievalLog,
-    TopicCluster,
 )
 from app.models.integrations import CreditLedger, IntegrationConfig
 from app.models.invites import WorkspaceInvite
@@ -65,8 +61,6 @@ async def delete_contact(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found")
 
     await db.execute(delete(ContactEvent).where(ContactEvent.contact_id == contact_id))
-    await db.execute(delete(LeadScore).where(LeadScore.contact_id == contact_id))
-    await db.execute(delete(IntelligenceSignal).where(IntelligenceSignal.contact_id == contact_id))
 
     conv_result = await db.execute(select(Conversation.id).where(Conversation.contact_id == contact_id))
     conv_ids = [row[0] for row in conv_result.all()]
@@ -105,10 +99,6 @@ async def delete_workspace(
     # Gap clusters
     await db.execute(delete(GapCluster).where(GapCluster.workspace_id == workspace_id))
 
-    # Intelligence signals, lead scores, conversation analysis
-    await db.execute(delete(IntelligenceSignal).where(IntelligenceSignal.workspace_id == workspace_id))
-    await db.execute(delete(LeadScore).where(LeadScore.workspace_id == workspace_id))
-
     conv_result = await db.execute(select(Conversation.id).where(Conversation.workspace_id == workspace_id))
     conv_ids = [row[0] for row in conv_result.all()]
     if conv_ids:
@@ -125,9 +115,7 @@ async def delete_workspace(
     await db.execute(delete(ArticleCollection).where(ArticleCollection.workspace_id == workspace_id))
     await db.execute(delete(KnowledgeBase).where(KnowledgeBase.workspace_id == workspace_id))
 
-    # Chatbots, autonomous resolution stats, topic clusters
-    await db.execute(delete(AutonomousResolutionStats).where(AutonomousResolutionStats.workspace_id == workspace_id))
-    await db.execute(delete(TopicCluster).where(TopicCluster.workspace_id == workspace_id))
+    # Chatbots
     await db.execute(delete(Chatbot).where(Chatbot.workspace_id == workspace_id))
 
     # Integration configs, credit ledger

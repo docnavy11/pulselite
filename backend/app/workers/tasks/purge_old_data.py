@@ -51,11 +51,7 @@ async def _purge() -> dict:
                     MessageFeedback,
                     ConversationTag,
                 )
-                from app.models.intelligence import (
-                    ConversationAnalysis,
-                    IntelligenceSignal,
-                    LeadScore,
-                )
+                from app.models.intelligence import ConversationAnalysis
 
                 await session.execute(delete(Message).where(Message.conversation_id.in_(conv_ids)))
                 await session.execute(delete(MessageFeedback).where(MessageFeedback.conversation_id.in_(conv_ids)))
@@ -63,10 +59,6 @@ async def _purge() -> dict:
                 await session.execute(
                     delete(ConversationAnalysis).where(ConversationAnalysis.conversation_id.in_(conv_ids))
                 )
-                await session.execute(
-                    delete(IntelligenceSignal).where(IntelligenceSignal.conversation_id.in_(conv_ids))
-                )
-                await session.execute(delete(LeadScore).where(LeadScore.conversation_id.in_(conv_ids)))
                 await session.execute(delete(Conversation).where(Conversation.id.in_(conv_ids)))
                 deleted = len(conv_ids)
                 total_deleted += deleted

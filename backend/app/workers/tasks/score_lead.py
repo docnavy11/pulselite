@@ -9,7 +9,6 @@ from app.config import settings
 from app.database import async_session_factory
 from app.models.contacts import Contact
 from app.models.conversations import Conversation
-from app.models.intelligence import LeadScore
 from app.services.integrations.hubspot import push_lead_to_hubspot
 from app.workers.celery_app import celery_app
 
@@ -77,15 +76,6 @@ async def _flush(conversation_id: uuid.UUID, workspace_id: uuid.UUID) -> dict:
 
             if contact_id is None:
                 return {"status": "no_contact"}
-
-            lead_score = LeadScore(
-                workspace_id=workspace_id,
-                contact_id=contact_id,
-                conversation_id=conversation_id,
-                score=score,
-                tier=tier,
-            )
-            session.add(lead_score)
 
             result = await session.execute(select(Contact).where(Contact.id == contact_id))
             contact = result.scalar_one_or_none()

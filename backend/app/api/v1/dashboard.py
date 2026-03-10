@@ -7,14 +7,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import get_current_user, get_workspace
-from app.models.contacts import Contact
 from app.models.conversations import Conversation
 from app.models.intelligence import (
-    AutonomousResolutionStats,
     ConversationAnalysis,
     GapCluster,
-    LeadScore,
-    TopicCluster,
 )
 from app.models.knowledge import Article
 from app.models.organizational import Agent
@@ -113,32 +109,9 @@ async def get_dashboard(
     )
     open_gaps = open_gaps_result.scalar() or 0
 
-    hot_leads_result = await db.execute(
-        select(func.count())
-        .select_from(LeadScore)
-        .where(LeadScore.workspace_id == workspace_id, LeadScore.tier == "hot")
-    )
-    hot_leads = hot_leads_result.scalar() or 0
-
-    anomalies_result = await db.execute(
-        select(func.count())
-        .select_from(TopicCluster)
-        .where(TopicCluster.workspace_id == workspace_id, TopicCluster.anomaly_detected == True)  # noqa: E712
-    )
-    topic_anomalies = anomalies_result.scalar() or 0
-
-    velocity_result = await db.execute(
-        select(AutonomousResolutionStats.knowledge_velocity)
-        .where(AutonomousResolutionStats.workspace_id == workspace_id)
-        .order_by(AutonomousResolutionStats.period_date.desc())
-        .limit(1)
-    )
-    knowledge_velocity = velocity_result.scalar() or 0.0
-
     return {
         "resolution_rate": round(resolution_rate, 4),
         "resolution_rate_trend": round(rate_trend, 4),
-        "knowledge_velocity": round(float(knowledge_velocity), 4),
         "escalation_breakdown": escalation_breakdown,
         "resolution_trend": trend_data,
         "stats": {
@@ -149,93 +122,7 @@ async def get_dashboard(
         },
         "intelligence": {
             "open_gaps": open_gaps,
-            "hot_leads": hot_leads,
-            "topic_anomalies": topic_anomalies,
         },
-    }
-
-
-@router.get("/topics")
-async def list_topics(
-    workspace_id: uuid.UUID = Depends(get_workspace),
-    limit: int = Query(50, ge=1, le=200),
-    offset: int = Query(0, ge=0, le=100_000_000),
-    db: AsyncSession = Depends(get_db),
-    current_user: Agent = Depends(get_current_user),
-):
-    result = await db.execute(
-        select(TopicCluster)
-        .where(TopicCluster.workspace_id == workspace_id)
-        .order_by(TopicCluster.conversation_count.desc())
-        .limit(limit)
-        .offset(offset)
-    )
-    topics = result.scalars().all()
-    return [
-        {
-            "id": str(t.id),
-            "label": t.label,
-            "keywords": t.keywords,
-            "conversation_count": t.conversation_count,
-            "volume_trend": t.volume_trend,
-            "anomaly_detected": t.anomaly_detected,
-            "anomaly_type": t.anomaly_type,
-            "date_range_start": t.date_range_start.isoformat() if t.date_range_start else None,
-            "date_range_end": t.date_range_end.isoformat() if t.date_range_end else None,
-        }
-        for t in topics
-    ]
-
-
-@router.get("/topics/{topic_id}")
-async def get_topic_detail(
-    topic_id: uuid.UUID,
-    workspace_id: uuid.UUID = Depends(get_workspace),
-    db: AsyncSession = Depends(get_db),
-    current_user: Agent = Depends(get_current_user),
-):
-    from fastapi import HTTPException, status
-
-    result = await db.execute(
-        select(TopicCluster).where(
-            TopicCluster.id == topic_id,
-            TopicCluster.workspace_id == workspace_id,
-        )
-    )
-    topic = result.scalar_one_or_none()
-    if topic is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Topic not found")
-
-    conv_result = await db.execute(
-        select(
-            ConversationAnalysis.conversation_id,
-            ConversationAnalysis.summary,
-            ConversationAnalysis.sentiment_label,
-        )
-        .where(
-            ConversationAnalysis.workspace_id == workspace_id,
-            ConversationAnalysis.topics.any(topic.label),
-        )
-        .limit(20)
-    )
-    conversations = [
-        {
-            "conversation_id": str(row[0]),
-            "summary": row[1],
-            "sentiment": row[2],
-        }
-        for row in conv_result.all()
-    ]
-
-    return {
-        "id": str(topic.id),
-        "label": topic.label,
-        "keywords": topic.keywords,
-        "conversation_count": topic.conversation_count,
-        "volume_trend": topic.volume_trend,
-        "anomaly_detected": topic.anomaly_detected,
-        "anomaly_type": topic.anomaly_type,
-        "conversations": conversations,
     }
 
 
@@ -276,62 +163,3 @@ async def get_sentiment_trends(
     return {"data": data}
 
 
-@router.get("/feature-requests")
-async def list_feature_requests(
-    workspace_id: uuid.UUID = Depends(get_workspace),
-    limit: int = Query(50, ge=1, le=200),
-    db: AsyncSession = Depends(get_db),
-    current_user: Agent = Depends(get_current_user),
-):
-    result = await db.execute(
-        select(TopicCluster)
-        .where(
-            TopicCluster.workspace_id == workspace_id,
-            TopicCluster.label.startswith("FR: "),
-        )
-        .order_by(TopicCluster.conversation_count.desc())
-        .limit(limit)
-    )
-    clusters = result.scalars().all()
-    return [
-        {
-            "id": str(c.id),
-            "label": c.label.removeprefix("FR: "),
-            "keywords": c.keywords,
-            "count": c.conversation_count,
-            "volume_trend": c.volume_trend,
-        }
-        for c in clusters
-    ]
-
-
-@router.get("/leads")
-async def list_leads(
-    workspace_id: uuid.UUID = Depends(get_workspace),
-    limit: int = Query(50, ge=1, le=200),
-    offset: int = Query(0, ge=0, le=100_000_000),
-    db: AsyncSession = Depends(get_db),
-    current_user: Agent = Depends(get_current_user),
-):
-    result = await db.execute(
-        select(LeadScore, Contact)
-        .join(Contact, LeadScore.contact_id == Contact.id)
-        .where(LeadScore.workspace_id == workspace_id)
-        .order_by(LeadScore.score.desc())
-        .limit(limit)
-        .offset(offset)
-    )
-    rows = result.all()
-    return [
-        {
-            "id": str(ls.id),
-            "contact_id": str(ls.contact_id),
-            "contact_name": c.name,
-            "contact_email": c.email,
-            "score": ls.score,
-            "tier": ls.tier,
-            "signals": ls.signals,
-            "scored_at": ls.scored_at.isoformat(),
-        }
-        for ls, c in rows
-    ]
