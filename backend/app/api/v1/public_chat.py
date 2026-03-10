@@ -67,12 +67,6 @@ async def public_chat(
 
     contact = await _get_or_create_contact(db, workspace_id, body.session_id)
 
-    # Resolve client IP (respect X-Forwarded-For for proxied deployments)
-    forwarded_for = request.headers.get("X-Forwarded-For")
-    client_ip = (
-        forwarded_for.split(",")[0].strip() if forwarded_for else (request.client.host if request.client else None)
-    )
-
     async def event_stream():
         async for event in handle_message(
             db,
@@ -80,7 +74,6 @@ async def public_chat(
             chatbot,
             body.message,
             contact_id=contact.id,
-            client_ip=client_ip,
         ):
             chat_event = ChatEvent(
                 type=event.type,

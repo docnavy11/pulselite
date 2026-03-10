@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,7 +9,6 @@ from app.dependencies import get_current_user, get_workspace
 from app.models.organizational import Agent, WorkspaceMembership
 from app.schemas.invites import InviteAccept, InviteCreate, InviteResponse
 from app.services import invite_service
-from app.services.audit import log_audit
 from app.services.integrations.email import send_invite_email
 
 router = APIRouter(tags=["invites"])
@@ -33,7 +32,6 @@ async def _require_admin(
 
 @router.post("/workspaces/{workspace_id}/invites", response_model=InviteResponse)
 async def create_invite(
-    request: Request,
     body: InviteCreate,
     background_tasks: BackgroundTasks,
     workspace_id: uuid.UUID = Depends(get_workspace),
@@ -42,17 +40,6 @@ async def create_invite(
 ):
     await _require_admin(workspace_id, current_user, db)
     invite = await invite_service.create_invite(db, workspace_id, body.email, body.role, current_user.id)
-    await log_audit(
-        db,
-        workspace_id,
-        "member.invite",
-        actor_id=current_user.id,
-        actor_email=current_user.email,
-        resource_type="member",
-        resource_name=body.email,
-        ip_address=request.client.host if request.client else None,
-        metadata={"role": body.role},
-    )
     await db.commit()
     background_tasks.add_task(send_invite_email, invite.email, invite.token, workspace_id)
     return invite

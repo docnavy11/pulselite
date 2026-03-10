@@ -1,17 +1,15 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_user, get_workspace
+from app.dependencies import get_workspace
 from app.models.knowledge import Chatbot as ChatbotModel
-from app.models.organizational import Agent
 from app.schemas.chatbots import ChatbotCreate, ChatbotResponse, ChatbotUpdate
 from app.schemas.widget import LLMConfigUpdate, PersonaUpdate, WidgetConfig
 from app.services import chatbot_service
-from app.services.audit import log_audit
 from app.services.encryption import encrypt_api_key
 
 router = APIRouter(prefix="/workspaces/{workspace_id}/chatbots", tags=["chatbots"])
@@ -19,24 +17,11 @@ router = APIRouter(prefix="/workspaces/{workspace_id}/chatbots", tags=["chatbots
 
 @router.post("", response_model=ChatbotResponse)
 async def create_chatbot(
-    request: Request,
     body: ChatbotCreate,
     workspace_id: uuid.UUID = Depends(get_workspace),
-    current_user: Agent = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     chatbot = await chatbot_service.create_chatbot(db, workspace_id, **body.model_dump())
-    await log_audit(
-        db,
-        workspace_id,
-        "chatbot.create",
-        actor_id=current_user.id,
-        actor_email=current_user.email,
-        resource_type="chatbot",
-        resource_id=str(chatbot.id),
-        resource_name=chatbot.name,
-        ip_address=request.client.host if request.client else None,
-    )
     return chatbot
 
 
@@ -59,57 +44,22 @@ async def get_chatbot(
 
 @router.put("/{chatbot_id}", response_model=ChatbotResponse)
 async def update_chatbot(
-    request: Request,
     chatbot_id: uuid.UUID,
     body: ChatbotUpdate,
     workspace_id: uuid.UUID = Depends(get_workspace),
-    current_user: Agent = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     chatbot = await chatbot_service.update_chatbot(db, workspace_id, chatbot_id, **body.model_dump(exclude_unset=True))
-    await log_audit(
-        db,
-        workspace_id,
-        "chatbot.update",
-        actor_id=current_user.id,
-        actor_email=current_user.email,
-        resource_type="chatbot",
-        resource_id=str(chatbot_id),
-        resource_name=chatbot.name,
-        ip_address=request.client.host if request.client else None,
-    )
     return chatbot
 
 
 @router.delete("/{chatbot_id}", status_code=204)
 async def delete_chatbot(
-    request: Request,
     chatbot_id: uuid.UUID,
     workspace_id: uuid.UUID = Depends(get_workspace),
-    current_user: Agent = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    # Fetch name before deleting for the audit record
-    result = await db.execute(
-        select(ChatbotModel).where(
-            ChatbotModel.id == chatbot_id,
-            ChatbotModel.workspace_id == workspace_id,
-        )
-    )
-    existing = result.scalar_one_or_none()
-    chatbot_name = existing.name if existing else str(chatbot_id)
     await chatbot_service.delete_chatbot(db, workspace_id, chatbot_id)
-    await log_audit(
-        db,
-        workspace_id,
-        "chatbot.delete",
-        actor_id=current_user.id,
-        actor_email=current_user.email,
-        resource_type="chatbot",
-        resource_id=str(chatbot_id),
-        resource_name=chatbot_name,
-        ip_address=request.client.host if request.client else None,
-    )
 
 
 @router.get("/{chatbot_id}/widget-config", response_model=WidgetConfig)
@@ -153,10 +103,8 @@ async def update_persona(
 
 @router.post("/{chatbot_id}/duplicate", response_model=ChatbotResponse)
 async def duplicate_chatbot(
-    request: Request,
     chatbot_id: uuid.UUID,
     workspace_id: uuid.UUID = Depends(get_workspace),
-    current_user: Agent = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     source = await chatbot_service.get_chatbot(db, workspace_id, chatbot_id)
@@ -182,18 +130,6 @@ async def duplicate_chatbot(
     db.add(new_chatbot)
     await db.commit()
     await db.refresh(new_chatbot)
-    await log_audit(
-        db,
-        workspace_id,
-        "chatbot.duplicate",
-        actor_id=current_user.id,
-        actor_email=current_user.email,
-        resource_type="chatbot",
-        resource_id=str(new_chatbot.id),
-        resource_name=new_chatbot.name,
-        ip_address=request.client.host if request.client else None,
-        metadata={"source_chatbot_id": str(chatbot_id)},
-    )
     return new_chatbot
 
 

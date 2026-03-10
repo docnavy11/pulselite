@@ -1,27 +1,20 @@
-import json
 import logging
 import uuid
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 
-from openai import AsyncOpenAI
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.models.knowledge import Chatbot
 from app.models.organizational import Workspace
 from app.services.encryption import decrypt_api_key
 from app.services import conversation_service
-from app.services.action_service import build_tools_for_chatbot, execute_action, list_actions
-from app.services.geoip import get_country
 from app.services.rag.engine import RAGResult, process_query
 from app.services.webhooks import fire_event
 from app.workers.tasks.log_retrieval import log_retrieval_task
 from app.workers.tasks.score_lead import flush_lead_score, score_lead_message
 from app.workers.tasks.send_alerts import send_escalation_alerts
-
-_openai_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 
 logger = logging.getLogger(__name__)
 
@@ -38,59 +31,6 @@ class ResolutionEvent:
     sources: list[dict] | None = None
 
 
-async def _detect_and_fire_actions(
-    db: AsyncSession,
-    workspace_id: uuid.UUID,
-    chatbot: Chatbot,
-    message: str,
-    conversation_id: uuid.UUID | None,
-) -> AsyncGenerator[ResolutionEvent, None]:
-    """Make a non-streaming OpenAI call with tools to detect and fire actions."""
-    actions = await list_actions(db, chatbot.id)
-    if not actions:
-        return
-
-    tools = build_tools_for_chatbot(actions)
-    if not tools:
-        return
-
-    try:
-        response = await _openai_client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You are a helpful assistant. Determine if any of the provided tools "
-                        "should be triggered based on the user message. Only call a tool if "
-                        "you are confident the user intent matches the trigger description."
-                    ),
-                },
-                {"role": "user", "content": message},
-            ],
-            tools=tools,
-            tool_choice="auto",
-            max_tokens=200,
-        )
-
-        if response.choices and response.choices[0].message.tool_calls:
-            for tool_call in response.choices[0].message.tool_calls:
-                fn_name = tool_call.function.name
-                if fn_name.startswith("action_"):
-                    action_id_str = fn_name[len("action_") :].replace("_", "-")
-                    matched = next((a for a in actions if str(a.id) == action_id_str), None)
-                    if matched:
-                        args = json.loads(tool_call.function.arguments or "{}")
-                        action_data = await execute_action(db, workspace_id, chatbot.id, conversation_id, matched, args)
-                        yield ResolutionEvent(
-                            type="action",
-                            data=json.dumps(action_data),
-                            conversation_id=conversation_id,
-                        )
-    except Exception as e:
-        logger.error(f"Action detection failed: {e}")
-
-
 async def handle_message(
     db: AsyncSession,
     workspace_id: uuid.UUID,
@@ -98,7 +38,6 @@ async def handle_message(
     message: str,
     conversation_id: uuid.UUID | None = None,
     contact_id: uuid.UUID | None = None,
-    client_ip: str | None = None,
 ) -> AsyncGenerator[ResolutionEvent, None]:
     if conversation_id is None:
         conversation = await conversation_service.create_conversation(db, workspace_id, chatbot.id, contact_id)
@@ -111,15 +50,6 @@ async def handle_message(
                 "conversation_id": str(conversation_id),
             },
         )
-        # Geolocate client IP and store on the conversation (best-effort, non-blocking)
-        if client_ip:
-            try:
-                country_code, country_name = await get_country(client_ip)
-                if country_code:
-                    conversation.country_code = country_code
-                    conversation.country_name = country_name
-            except Exception:
-                pass
     else:
         conversation = await conversation_service.get_conversation(db, conversation_id)
 
@@ -133,10 +63,6 @@ async def handle_message(
     )
 
     score_lead_message.delay(str(conversation_id), message)
-
-    # Detect and fire AI actions before streaming the response
-    async for action_event in _detect_and_fire_actions(db, workspace_id, chatbot, message, conversation_id):
-        yield action_event
 
     # Load workspace OpenRouter key if configured
     openrouter_key: str | None = None

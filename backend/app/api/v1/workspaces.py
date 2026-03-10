@@ -1,7 +1,7 @@
 import uuid as _uuid
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,7 +11,6 @@ from app.dependencies import get_current_user, get_workspace
 from app.models.organizational import Agent, Workspace
 from app.schemas.workspaces import WorkspaceCreate, WorkspaceResponse
 from app.services import workspace_service
-from app.services.audit import log_audit
 from app.services.encryption import decrypt_api_key, encrypt_api_key
 
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
@@ -178,10 +177,8 @@ async def get_data_retention(
 
 @router.put("/{workspace_id}/data-retention", response_model=DataRetentionResponse)
 async def update_data_retention(
-    request: Request,
     body: DataRetentionUpdate,
     workspace_id: _uuid.UUID = Depends(get_workspace),
-    current_user: Agent = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(Workspace).where(Workspace.id == workspace_id))
@@ -189,17 +186,6 @@ async def update_data_retention(
     if workspace is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found")
     workspace.data_retention_days = body.data_retention_days
-    await log_audit(
-        db,
-        workspace_id,
-        "workspace.data_retention_update",
-        actor_id=current_user.id,
-        actor_email=current_user.email,
-        resource_type="workspace",
-        resource_id=str(workspace_id),
-        ip_address=request.client.host if request.client else None,
-        metadata={"data_retention_days": body.data_retention_days},
-    )
     await db.commit()
     await db.refresh(workspace)
     return DataRetentionResponse(data_retention_days=workspace.data_retention_days)
@@ -219,10 +205,8 @@ async def get_white_label(
 
 @router.put("/{workspace_id}/white-label", response_model=WhiteLabelResponse)
 async def update_white_label(
-    request: Request,
     body: WhiteLabelUpdate,
     workspace_id: _uuid.UUID = Depends(get_workspace),
-    current_user: Agent = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(Workspace).where(Workspace.id == workspace_id))
@@ -230,17 +214,6 @@ async def update_white_label(
     if workspace is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found")
     workspace.white_label_enabled = body.white_label_enabled
-    await log_audit(
-        db,
-        workspace_id,
-        "workspace.white_label_update",
-        actor_id=current_user.id,
-        actor_email=current_user.email,
-        resource_type="workspace",
-        resource_id=str(workspace_id),
-        ip_address=request.client.host if request.client else None,
-        metadata={"white_label_enabled": body.white_label_enabled},
-    )
     await db.commit()
     await db.refresh(workspace)
     return WhiteLabelResponse(white_label_enabled=workspace.white_label_enabled)
