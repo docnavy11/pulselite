@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, Text, text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -35,6 +35,9 @@ class Chatbot(UUIDPrimaryKeyMixin, TimestampUpdateMixin, Base):
     fallback_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, server_default=text("TRUE"))
     widget_config: Mapped[dict] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
+    brand_color: Mapped[str | None] = mapped_column(String(7), nullable=True)
+    welcome_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    suggested_questions: Mapped[list | None] = mapped_column(JSONB, nullable=True)
 
     knowledge_bases: Mapped[list["KnowledgeBase"]] = relationship(back_populates="chatbot")
 
@@ -142,3 +145,19 @@ class Article(UUIDPrimaryKeyMixin, TimestampUpdateMixin, Base):
     intercom_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     language: Mapped[str] = mapped_column(Text, server_default=text("'en'"))
     order_index: Mapped[int] = mapped_column(Integer, server_default=text("0"))
+
+
+class CrawlJob(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "crawl_jobs"
+
+    workspace_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("workspaces.id"), nullable=False)
+    kb_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("knowledge_bases.id"), nullable=False)
+    root_url: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, server_default=text("'pending'"))
+    pages_discovered: Mapped[int] = mapped_column(Integer, server_default=text("0"))
+    pages_queued: Mapped[int] = mapped_column(Integer, server_default=text("0"))
+    pages_failed: Mapped[int] = mapped_column(Integer, server_default=text("0"))
+    max_pages: Mapped[int] = mapped_column(Integer, nullable=False)
+    over_limit: Mapped[bool] = mapped_column(Boolean, server_default=text("FALSE"))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
