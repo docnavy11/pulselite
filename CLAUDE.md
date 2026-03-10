@@ -3,7 +3,7 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## What this project is
-AI-native autonomous resolution platform. FastAPI backend + Next.js 15 frontend + Celery workers. Multi-tenant SaaS — every API route is workspace-scoped.
+Dead-simple website chatbot — paste a URL, the system crawls it, auto-configures the chatbot, and returns a `<script>` tag. FastAPI backend + Next.js 15 frontend + Celery workers. Multi-tenant SaaS — every API route is workspace-scoped.
 
 ## Running the project
 ```bash
@@ -24,32 +24,26 @@ After any Python change: `docker compose restart backend`
 
 ```bash
 # Backend
-make test                    # all pytest (234 tests)
+make test                    # all pytest
 make test-unit               # tests/unit/ only
 make test-integration        # tests/integration/ only
 make test-security           # tests/security/ (tenant isolation)
 make test-coverage-gate      # pytest + cov-fail-under=45 (workers excluded)
 
 # Frontend
-make test-frontend           # Vitest (53 tests)
+make test-frontend           # Vitest
 make test-frontend-coverage
 
 # E2E
-make test-e2e                # Playwright (22 tests, needs Docker up + seeded)
+make test-e2e                # Playwright (needs Docker up + seeded)
 make test-e2e-headed
 
 # Static security
 make lint-security-static    # bandit + semgrep
 
-# API fuzz
-make test-schema-public      # schemathesis against public endpoints
+# API fuzz / load
 make test-schema             # schemathesis public + authenticated
-
-# Load
-make perf-smoke              # k6 health (5 VUs/20s)
-make perf-auth               # k6 authenticated reads (10 VUs/30s)
-make perf-widget             # k6 widget config (20 VUs/30s)
-make perf-all                # all three k6 scenarios
+make perf-all                # k6 smoke + auth + widget scenarios
 
 # Run a single test
 docker compose exec backend pytest tests/unit/test_auth_service.py -v
@@ -71,22 +65,55 @@ Public exceptions:
 - `GET /api/v1/billing/plans`
 
 ### Key files
-- `backend/app/main.py` — all 34 routers registered
+- `backend/app/main.py` — all routers registered
 - `backend/app/api/v1/` — route handlers (one file per domain)
 - `backend/app/services/` — business logic (called by routes)
 - `backend/app/models/` — SQLAlchemy mapped classes
 - `backend/app/schemas/` — Pydantic request/response models
 - `backend/app/config.py` — all env var settings (pydantic-settings)
-- `backend/app/workers/tasks/` — 14 Celery tasks (excluded from coverage gate)
+- `backend/app/workers/tasks/` — Celery tasks (excluded from coverage gate)
 
 ### Auth flow
 JWT access token (30 min) + refresh (7d, stored in Redis). Tokens in `Authorization: Bearer` header. `Depends(get_current_user)` on every protected route. Google OAuth and OIDC SSO also supported (`backend/app/api/v1/sso.py`).
 
+### Celery task pattern
+Every task wraps async code in `asyncio.run()`, which creates a fresh event loop. **Always call `await engine.dispose()` first** — a new event loop invalidates the existing connection pool, causing "Future attached to a different loop" errors otherwise.
+
+```python
+@celery_app.task(bind=True, max_retries=3, default_retry_delay=60)
+def my_task(self, arg: str) -> dict:
+    try:
+        return asyncio.run(_run(arg))
+    except Exception as exc:
+        raise self.retry(exc=exc)
+
+async def _run(arg: str) -> dict:
+    await engine.dispose()          # REQUIRED — clear stale pool
+    async with async_session_factory() as session:
+        ...
+```
+
+### Crawl pipeline
+`POST /crawl` → `prepare_crawl()` creates KB + `CrawlJob` (status=`pending`), commits, returns `job_id` immediately → fires `crawl_website.delay(job_id)` → Celery task calls `execute_crawl()` which discovers URLs, fetches each page, commits `pages_queued += 1` after every page (live progress), then fires `ingest_document.delay(doc_id)` for each document.
+
+**Critical ordering**: `ingest_document.delay()` must be called **after** `db.commit()`. Workers read from the DB — dispatching before commit causes a race where the worker finds no row.
+
 ### RAG pipeline
-Hybrid retrieval: pgvector cosine similarity + BM25 FTS → cross-encoder reranking → multi-model LLM (OpenAI/Anthropic/Google). Entry point: `backend/app/services/resolution_service.py`.
+Entry point: `backend/app/services/resolution_service.py`
+
+1. Hybrid retrieval: pgvector cosine (top 20) + BM25 FTS (top 20) → Reciprocal Rank Fusion
+2. Optional cross-encoder reranking (`chatbot.use_reranking`)
+3. Confidence check: if `max_score < chatbot.confidence_threshold` → escalate
+4. LLM generation via `get_llm_client(provider)` — supports OpenAI, Anthropic, Google, OpenRouter
+5. Streamed as SSE: `token` events → `done` event (with metadata) or `error` event
+
+**LLM clients**: always use `get_llm_client()` from `app.services.llm`. The app is configured with `OPENROUTER_API_KEY` — use `OpenRouterLLMClient` for internal services (e.g. autoconfig). Never instantiate `AnthropicLLMClient` or `OpenAILLMClient` directly unless the user supplies their own key.
 
 ### Ingestion
-Celery task `ingest_document` → extractors in `backend/app/services/ingestion/extractors/` (PDF, DOCX, sitemap, web, Notion, Google Drive, Dropbox, Zendesk, Salesforce). Uses `defusedxml` for XML parsing (XXE-safe).
+Celery task `ingest_document` → extractors in `backend/app/services/ingestion/extractors/`. Document status: `pending → processing → indexed` (or `failed`). Crawled pages use `source_type="text"` with `raw_content` pre-populated to skip re-fetching.
+
+### UUIDPrimaryKeyMixin gotcha
+`server_default=text("gen_random_uuid()")` is DB-side only. SQLAlchemy will not populate `obj.id` in Python before the INSERT unless you explicitly pass `id=uuid.uuid4()`. Always pass an explicit `id=uuid.uuid4()` when creating model instances in service code; rely on the DB default only for cases where you immediately flush/commit and then refresh.
 
 ## Frontend architecture
 
@@ -94,7 +121,7 @@ Celery task `ingest_document` → extractors in `backend/app/services/ingestion/
 All API calls live in `frontend/src/lib/api-functions.ts`. Every function takes `workspaceId` as first argument. `ApiClient` in `frontend/src/lib/api.ts` handles auth headers, 401 retry with token refresh.
 
 ### State
-- `useWorkspaceStore` (Zustand) — current workspace + workspace list. `ProtectedRoute` populates it on mount; pages access `useWorkspaceStore(s => s.currentWorkspace)` directly.
+- `useWorkspaceStore` (Zustand) — current workspace + workspace list. `ProtectedRoute` populates it on mount by calling `GET /api/v1/workspaces` and setting `currentWorkspace` to the first result. Pages access `useWorkspaceStore(s => s.currentWorkspace)` directly.
 - `useAuthStore` (Zustand) — user + tokens, persisted to localStorage via `frontend/src/lib/auth.ts`.
 
 ### Response shape transforms
@@ -119,6 +146,18 @@ Several backend responses differ from frontend types — transforms happen insid
 - MSW handlers match `http://localhost:8000/api/v1/...`
 - Zustand store reset between tests: `useAuthStore.setState({ user: null, tokens: null, isLoading: true })`
 
+## Test infrastructure
+
+### Backend fixture architecture
+`backend/tests/conftest.py` uses nested transactions (savepoints) for zero-overhead isolation — each test rolls back to its savepoint rather than truncating tables.
+
+- `db` (function-scoped) — `AsyncSession` with `join_transaction_mode="create_savepoint"`; rolls back after every test
+- `workspace` / `agent` / `auth_client` (function-scoped) — pre-seeded entities with a valid JWT
+- `second_workspace` — used for tenant isolation tests (workspace substitution + IDOR)
+
+### Factories
+`backend/tests/factories.py` — `make_chatbot()`, `make_knowledge_base()`, `make_document()`, `make_conversation()`, `make_message()`. All use `await db.flush()` (not commit) — IDs are assigned but data is rolled back after the test.
+
 ## CI/CD
 
 GitHub Actions at `.github/workflows/ci.yml` — 5 jobs on push/PR to `main`:
@@ -137,3 +176,4 @@ CI uses `cp .env.example .env` — no secrets required for the test suite.
 - Sitemaps parsed with `defusedxml` (XXE-safe); URL scheme validated before fetch
 - SOQL queries in Salesforce action sanitize email input before interpolation
 - Input fields validated against null bytes across all schemas
+- Widget public chat endpoint checks `Origin` against `chatbot.widget_config.allowed_domains`
