@@ -5,13 +5,13 @@ import random
 import re
 from dataclasses import dataclass
 
-from app.services.llm.anthropic_client import AnthropicLLMClient
+from app.services.llm.openrouter_client import OpenRouterLLMClient
 
 logger = logging.getLogger(__name__)
 
-_HAIKU_MODEL = "claude-haiku-4-5-20251001"
+_HAIKU_MODEL = "anthropic/claude-haiku-4-5"
 
-_llm_client = AnthropicLLMClient()
+_llm_client = OpenRouterLLMClient()
 
 _DEFAULT_QUESTIONS = [
     "How can I get started?",
