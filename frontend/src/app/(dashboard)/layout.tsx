@@ -3,6 +3,8 @@
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { CommandPalette } from "@/components/CommandPalette";
+import { ToastProvider } from "@/components/ui/Toast";
 
 export default function DashboardLayout({
   children,
@@ -20,6 +22,8 @@ export default function DashboardLayout({
           </main>
         </div>
       </div>
+      <CommandPalette />
+      <ToastProvider />
     </ProtectedRoute>
   );
 }
