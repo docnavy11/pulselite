@@ -52,8 +52,8 @@ async def _cluster_workspace(session, workspace_id: uuid.UUID) -> int:
     queries = [e.query for e in events]
 
     try:
-        from bertopic import BERTopic
-        from sklearn.feature_extraction.text import CountVectorizer
+        from bertopic import BERTopic  # type: ignore[import-untyped]
+        from sklearn.feature_extraction.text import CountVectorizer  # type: ignore[import-untyped]
 
         vectorizer = CountVectorizer(stop_words="english")
         topic_model = BERTopic(

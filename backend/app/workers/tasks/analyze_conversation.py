@@ -3,6 +3,7 @@ import json
 import logging
 import time
 import uuid
+from collections.abc import Sequence
 
 from openai import AsyncOpenAI
 from sqlalchemy import select
@@ -37,7 +38,8 @@ def analyze_conversation(self, conversation_id: str, workspace_id: str) -> dict:
     try:
         return asyncio.run(_analyze(uuid.UUID(conversation_id), uuid.UUID(workspace_id)))
     except Exception as exc:
-        self.retry(exc=exc)
+        self.retry(exc=exc)  # type: ignore[attr-defined]
+        return {}
 
 
 async def _analyze(conversation_id: uuid.UUID, workspace_id: uuid.UUID) -> dict:
@@ -46,7 +48,7 @@ async def _analyze(conversation_id: uuid.UUID, workspace_id: uuid.UUID) -> dict:
             result = await session.execute(
                 select(Message).where(Message.conversation_id == conversation_id).order_by(Message.created_at.asc())
             )
-            messages = result.scalars().all()
+            messages = list(result.scalars().all())
 
             if not messages:
                 return {"status": "skipped", "reason": "no messages"}
@@ -76,7 +78,7 @@ async def _analyze(conversation_id: uuid.UUID, workspace_id: uuid.UUID) -> dict:
             raise
 
 
-def _build_transcript(messages: list[Message]) -> str:
+def _build_transcript(messages: Sequence[Message]) -> str:
     lines = []
     for msg in messages:
         role = msg.author_type.upper()
@@ -97,6 +99,6 @@ async def _call_llm(transcript: str) -> dict:
         temperature=0.1,
         max_tokens=2000,
     )
-    return json.loads(response.choices[0].message.content)
+    return json.loads(response.choices[0].message.content or "{}")
 
 
