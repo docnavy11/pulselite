@@ -65,6 +65,7 @@ async def start_crawl(
 
     # 3. Create CrawlJob and COMMIT before queuing tasks
     job = CrawlJob(
+        id=uuid.uuid4(),
         workspace_id=workspace_id,
         kb_id=kb_id,
         root_url=url,

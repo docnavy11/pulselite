@@ -48,6 +48,13 @@ class TestWorkspaceSubstitution:
         r = await auth_client.get(f"/api/v1/workspaces/{second_workspace.id}/data-retention")
         assert r.status_code == 403
 
+    async def test_cannot_get_crawl_status_in_other_workspace(self, auth_client, second_workspace):
+        import uuid
+        r = await auth_client.get(
+            f"/api/v1/workspaces/{second_workspace.id}/crawl/{uuid.uuid4()}"
+        )
+        assert r.status_code == 403
+
 
 class TestWorkspaceSubstitutionWrites:
     """Agent A cannot create/modify resources in workspace B."""
@@ -63,6 +70,13 @@ class TestWorkspaceSubstitutionWrites:
         r = await auth_client.post(
             f"/api/v1/workspaces/{second_workspace.id}/knowledge-bases",
             json={"name": "Stolen KB", "chatbot_id": "00000000-0000-0000-0000-000000000000"},
+        )
+        assert r.status_code == 403
+
+    async def test_cannot_post_crawl_to_other_workspace(self, auth_client, second_workspace):
+        r = await auth_client.post(
+            f"/api/v1/workspaces/{second_workspace.id}/crawl",
+            json={"url": "https://example.com", "max_pages": 5},
         )
         assert r.status_code == 403
 

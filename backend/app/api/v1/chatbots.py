@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies import get_workspace
 from app.models.knowledge import Chatbot as ChatbotModel
-from app.schemas.chatbots import ChatbotCreate, ChatbotResponse, ChatbotUpdate
+from app.schemas.chatbots import AutoConfigRequest, AutoConfigResponse, ChatbotCreate, ChatbotResponse, ChatbotUpdate
 from app.schemas.widget import LLMConfigUpdate, PersonaUpdate, WidgetConfig
 from app.services import chatbot_service
 from app.services.encryption import encrypt_api_key
@@ -144,3 +144,30 @@ async def update_llm_config(
     if "byoak" in update_data and update_data["byoak"]:
         update_data["byoak"] = encrypt_api_key(update_data["byoak"])
     return await chatbot_service.update_chatbot(db, workspace_id, chatbot_id, **update_data)
+
+
+@router.post("/{chatbot_id}/autoconfig", response_model=AutoConfigResponse)
+async def run_autoconfig(
+    chatbot_id: uuid.UUID,
+    body: AutoConfigRequest,
+    workspace_id: uuid.UUID = Depends(get_workspace),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services import autoconfig_service
+
+    try:
+        chatbot = await autoconfig_service.run(db, chatbot_id, body.knowledge_base_id, workspace_id)
+    except ValueError as e:
+        msg = str(e)
+        if "not found" in msg.lower():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=msg)
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=msg)
+
+    return AutoConfigResponse(
+        name=chatbot.name,
+        welcome_message=chatbot.welcome_message,
+        system_prompt=chatbot.system_prompt,
+        suggested_questions=chatbot.suggested_questions,
+        fallback_message=chatbot.fallback_message,
+        brand_color=chatbot.brand_color,
+    )

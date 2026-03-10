@@ -84,5 +84,21 @@ class ChatbotResponse(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+    brand_color: str | None = None
+    welcome_message: str | None = None
+    suggested_questions: list[str] | None = None
 
     model_config = {"from_attributes": True}
+
+
+class AutoConfigRequest(BaseModel):
+    knowledge_base_id: uuid.UUID
+
+
+class AutoConfigResponse(BaseModel):
+    name: str
+    welcome_message: str | None
+    system_prompt: str | None
+    suggested_questions: list[str] | None
+    fallback_message: str | None
+    brand_color: str | None
