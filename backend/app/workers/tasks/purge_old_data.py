@@ -57,14 +57,6 @@ async def _purge() -> dict:
                     IntelligenceSignal,
                     LeadScore,
                 )
-                from app.models.actions import ActionEvent
-
-                # Nullify nullable FKs before deleting conversations
-                await session.execute(
-                    sql_update(ActionEvent)
-                    .where(ActionEvent.conversation_id.in_(conv_ids))
-                    .values(conversation_id=None)
-                )
                 await session.execute(
                     sql_update(Ticket).where(Ticket.conversation_id.in_(conv_ids)).values(conversation_id=None)
                 )

@@ -8,7 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import get_current_user, get_workspace, get_workspace_admin
-from app.models.api_keys import ApiKey
 from app.models.contacts import Company, Contact, ContactEvent, DataAttribute, Segment
 from app.models.conversations import Conversation, ConversationTag, Message, Tag, Ticket
 from app.models.intelligence import (
@@ -22,12 +21,9 @@ from app.models.intelligence import (
     TopicCluster,
 )
 from app.models.integrations import CreditLedger, IntegrationConfig
-from app.models.actions import ActionEvent, ChatbotAction
-from app.models.audit import AuditLog
 from app.models.invites import WorkspaceInvite
 from app.models.knowledge import Article, ArticleCollection, Chatbot, Chunk, Document, KnowledgeBase
 from app.models.organizational import Agent, Inbox, Team, TeamMember, Workspace, WorkspaceMembership, WorkspaceWebhook
-from app.models.sso import SSOConfig
 from app.workers.tasks.gdpr_export import EXPORT_DIR, export_workspace_data
 
 router = APIRouter(prefix="/workspaces/{workspace_id}", tags=["gdpr"])
@@ -130,17 +126,12 @@ async def delete_workspace(
     await db.execute(delete(ArticleCollection).where(ArticleCollection.workspace_id == workspace_id))
     await db.execute(delete(KnowledgeBase).where(KnowledgeBase.workspace_id == workspace_id))
 
-    # Chatbot actions and events (depend on chatbots)
-    await db.execute(delete(ActionEvent).where(ActionEvent.workspace_id == workspace_id))
-    await db.execute(delete(ChatbotAction).where(ChatbotAction.workspace_id == workspace_id))
-
     # Chatbots, autonomous resolution stats, topic clusters
     await db.execute(delete(AutonomousResolutionStats).where(AutonomousResolutionStats.workspace_id == workspace_id))
     await db.execute(delete(TopicCluster).where(TopicCluster.workspace_id == workspace_id))
     await db.execute(delete(Chatbot).where(Chatbot.workspace_id == workspace_id))
 
-    # API keys, integration configs, credit ledger
-    await db.execute(delete(ApiKey).where(ApiKey.workspace_id == workspace_id))
+    # Integration configs, credit ledger
     await db.execute(delete(IntegrationConfig).where(IntegrationConfig.workspace_id == workspace_id))
     await db.execute(delete(CreditLedger).where(CreditLedger.workspace_id == workspace_id))
 
@@ -162,11 +153,9 @@ async def delete_workspace(
     await db.execute(delete(Team).where(Team.workspace_id == workspace_id))
     await db.execute(delete(Inbox).where(Inbox.workspace_id == workspace_id))
 
-    # Workspace invites, webhooks, SSO configs, audit logs
+    # Workspace invites, webhooks
     await db.execute(delete(WorkspaceInvite).where(WorkspaceInvite.workspace_id == workspace_id))
     await db.execute(delete(WorkspaceWebhook).where(WorkspaceWebhook.workspace_id == workspace_id))
-    await db.execute(delete(SSOConfig).where(SSOConfig.workspace_id == workspace_id))
-    await db.execute(delete(AuditLog).where(AuditLog.workspace_id == workspace_id))
 
     # Workspace memberships (delete this workspace's memberships first)
     await db.execute(delete(WorkspaceMembership).where(WorkspaceMembership.workspace_id == workspace_id))

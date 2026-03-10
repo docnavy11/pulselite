@@ -1,7 +1,4 @@
-from app.models.actions import ActionEvent, ChatbotAction  # noqa: F401
-from app.models.audit import AuditLog  # noqa: F401
 from app.models.organizational import Agent, Inbox, Team, TeamMember, Workspace, WorkspaceMembership
-from app.models.api_keys import ApiKey
 from app.models.invites import WorkspaceInvite  # noqa: F401
 from app.models.integrations import CreditLedger, IntegrationConfig
 from app.models.contacts import Company, Contact, ContactEvent, DataAttribute, Segment
@@ -19,11 +16,7 @@ from app.models.intelligence import (
 )
 
 __all__ = [
-    "ActionEvent",
     "Agent",
-    "AuditLog",
-    "ApiKey",
-    "ChatbotAction",
     "Article",
     "ArticleCollection",
     "AutonomousResolutionStats",

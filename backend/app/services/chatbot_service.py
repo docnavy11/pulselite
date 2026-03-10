@@ -1,10 +1,9 @@
 import uuid
 
 from fastapi import HTTPException, status
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.actions import ActionEvent, ChatbotAction
 from app.models.knowledge import Chatbot
 
 
@@ -40,8 +39,5 @@ async def update_chatbot(db: AsyncSession, workspace_id: uuid.UUID, chatbot_id: 
 
 async def delete_chatbot(db: AsyncSession, workspace_id: uuid.UUID, chatbot_id: uuid.UUID) -> None:
     chatbot = await get_chatbot(db, workspace_id, chatbot_id)
-    # Delete dependent rows before deleting the chatbot to avoid FK violations
-    await db.execute(delete(ActionEvent).where(ActionEvent.chatbot_id == chatbot_id))
-    await db.execute(delete(ChatbotAction).where(ChatbotAction.chatbot_id == chatbot_id))
     await db.delete(chatbot)
     await db.flush()
