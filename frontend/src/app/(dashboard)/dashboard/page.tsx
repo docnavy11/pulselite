@@ -65,6 +65,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const [data, setData] = useState<DashboardData | null>(null);
   const [chatbots, setChatbots] = useState<Chatbot[]>([]);
+  const [selectedChatbotId, setSelectedChatbotId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const userName = user?.name || user?.email || "there";
@@ -80,11 +81,11 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!workspace?.id) return;
     setLoading(true);
-    getDashboardData(workspace.id, "30d")
+    getDashboardData(workspace.id, "30d", selectedChatbotId ?? undefined)
       .then(setData)
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [workspace?.id]);
+  }, [workspace?.id, selectedChatbotId]);
 
   const hasChatbots = chatbots.length > 0;
 
@@ -141,13 +142,28 @@ export default function DashboardPage() {
         {/* Chatbot filter chips — shown when chatbots exist */}
         {hasChatbots && !loading && (
           <div className="flex gap-2 mb-7 flex-wrap">
+            <button
+              onClick={() => setSelectedChatbotId(null)}
+              className={`px-3 py-1 rounded-full text-[12px] font-medium transition-colors ${
+                selectedChatbotId === null
+                  ? "bg-primary-500 text-white"
+                  : "bg-white border border-[#f0ebe3] text-gray-500 hover:border-primary-300 hover:text-primary-500"
+              }`}
+            >
+              All
+            </button>
             {chatbots.map((b) => (
-              <span
+              <button
                 key={b.id}
-                className="px-3 py-1 bg-white border border-[#f0ebe3] text-gray-600 rounded-full text-[12px] font-medium"
+                onClick={() => setSelectedChatbotId(b.id === selectedChatbotId ? null : b.id)}
+                className={`px-3 py-1 rounded-full text-[12px] font-medium transition-colors ${
+                  selectedChatbotId === b.id
+                    ? "bg-primary-500 text-white"
+                    : "bg-white border border-[#f0ebe3] text-gray-500 hover:border-primary-300 hover:text-primary-500"
+                }`}
               >
                 {b.display_name || b.name}
-              </span>
+              </button>
             ))}
           </div>
         )}

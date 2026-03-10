@@ -10,6 +10,7 @@ import {
 } from "@/components/icons/NavIcons";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import type { Workspace } from "@/lib/types";
 
 const SETTINGS_CHILDREN = [
   { href: "/settings",                label: "General" },
@@ -37,9 +38,12 @@ export function Sidebar() {
   const pathname = usePathname();
   const user = useAuthStore((s) => s.user);
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);
+  const workspaces = useWorkspaceStore((s) => s.workspaces);
+  const setCurrentWorkspace = useWorkspaceStore((s) => s.setCurrentWorkspace);
   const plan = workspace?.plan ?? "free";
   const isSettingsActive = pathname.startsWith("/settings");
   const [settingsOpen, setSettingsOpen] = useState(isSettingsActive);
+  const [wsSwitcherOpen, setWsSwitcherOpen] = useState(false);
 
   const wsInitial = workspace?.name?.[0]?.toUpperCase() ?? "W";
   const userName = user?.name ?? user?.email ?? "";
@@ -60,15 +64,42 @@ export function Sidebar() {
         </div>
 
         {/* Workspace switcher */}
-        <button className="flex items-center gap-2 w-full px-2 py-1.5 bg-[#faf8f5] rounded-lg hover:bg-[#f5f0ea] transition-colors">
-          <div className="w-5 h-5 rounded-[5px] bg-gradient-to-br from-primary-500 to-amber-400 flex items-center justify-center text-white text-[9px] font-bold flex-shrink-0">
-            {wsInitial}
-          </div>
-          <span className="text-[11px] font-semibold text-gray-600 flex-1 text-left truncate">
-            {workspace?.name ?? "Loading…"}
-          </span>
-          <IconChevronDown className="stroke-gray-300" />
-        </button>
+        <div className="relative">
+          <button
+            onClick={() => setWsSwitcherOpen((o) => !o)}
+            className="flex items-center gap-2 w-full px-2 py-1.5 bg-[#faf8f5] rounded-lg hover:bg-[#f5f0ea] transition-colors"
+          >
+            <div className="w-5 h-5 rounded-[5px] bg-gradient-to-br from-primary-500 to-amber-400 flex items-center justify-center text-white text-[9px] font-bold flex-shrink-0">
+              {wsInitial}
+            </div>
+            <span className="text-[11px] font-semibold text-gray-600 flex-1 text-left truncate">
+              {workspace?.name ?? "Loading…"}
+            </span>
+            <IconChevronDown className={clsx("transition-transform", wsSwitcherOpen ? "rotate-180" : "", "stroke-gray-300")} />
+          </button>
+
+          {wsSwitcherOpen && workspaces.length > 1 && (
+            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#f0ebe3] rounded-lg shadow-lg z-50 overflow-hidden">
+              {workspaces.map((ws: Workspace) => (
+                <button
+                  key={ws.id}
+                  onClick={() => { setCurrentWorkspace(ws); setWsSwitcherOpen(false); }}
+                  className={clsx(
+                    "flex items-center gap-2 w-full px-3 py-2 text-left text-[11px] transition-colors",
+                    ws.id === workspace?.id
+                      ? "bg-primary-50 text-primary-500 font-semibold"
+                      : "text-gray-600 hover:bg-[#faf8f5]"
+                  )}
+                >
+                  <div className="w-4 h-4 rounded-[4px] bg-gradient-to-br from-primary-500 to-amber-400 flex items-center justify-center text-white text-[8px] font-bold flex-shrink-0">
+                    {ws.name[0]?.toUpperCase()}
+                  </div>
+                  {ws.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Main nav */}

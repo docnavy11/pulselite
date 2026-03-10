@@ -1,42 +1,20 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { IconBell, IconPlus, IconSearch } from "@/components/icons/NavIcons";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 
-const PAGE_TITLES: Record<string, string> = {
-  "/dashboard": "Overview",
-  "/chatbots": "Chatbots",
-  "/conversations": "Conversations",
-  "/intelligence": "Intelligence",
-  "/settings": "Settings",
-  "/settings/team": "Settings",
-  "/settings/billing": "Settings",
-  "/settings/integrations": "Settings",
-  "/settings/llm": "Settings",
-  "/settings/security": "Settings",
-  "/settings/data-retention": "Settings",
-  "/settings/webhooks": "Settings",
+const NEW_BUTTON_ACTIONS: Record<string, { label: string; href: string }> = {
+  "/chatbots":      { label: "New chatbot",  href: "/chatbots/new" },
+  "/conversations": { label: "Export",       href: "/conversations" },
+  "/intelligence":  { label: "Add source",   href: "/intelligence" },
 };
-
-const NEW_BUTTON_LABELS: Record<string, string> = {
-  "/chatbots": "New chatbot",
-  "/conversations": "Export",
-  "/intelligence": "Add source",
-};
-
-function getPageTitle(pathname: string): string {
-  // Exact match first
-  if (PAGE_TITLES[pathname]) return PAGE_TITLES[pathname];
-  // Chatbot sub-pages
-  if (pathname.startsWith("/chatbots/")) return "Chatbots";
-  return "";
-}
 
 export function TopBar() {
   const pathname = usePathname();
-  const pageTitle = getPageTitle(pathname);
-  const newLabel = NEW_BUTTON_LABELS[pathname] ?? "New";
+  const router = useRouter();
+
+  const action = NEW_BUTTON_ACTIONS[pathname] ?? { label: "New chatbot", href: "/chatbots/new" };
 
   const openCommandPalette = () => {
     window.dispatchEvent(new CustomEvent("open-command-palette"));
@@ -65,9 +43,12 @@ export function TopBar() {
       </button>
 
       {/* + New */}
-      <button className="flex items-center gap-1.5 px-3 py-1.5 bg-primary-500 hover:bg-primary-600 text-white rounded-lg text-[11px] font-semibold transition-colors">
+      <button
+        onClick={() => router.push(action.href)}
+        className="flex items-center gap-1.5 px-3 py-1.5 bg-primary-500 hover:bg-primary-600 text-white rounded-lg text-[11px] font-semibold transition-colors"
+      >
         <IconPlus size={11} className="stroke-white" />
-        {newLabel}
+        {action.label}
       </button>
     </header>
   );
