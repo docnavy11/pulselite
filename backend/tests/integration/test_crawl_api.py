@@ -3,113 +3,87 @@
 import pytest
 from unittest.mock import patch
 
-from app.services.crawler import CrawlResult
-from app.services.fetcher import FetchResult
-
-
-def _make_fetch(text: str = "content " * 100) -> FetchResult:
-    return FetchResult(url="https://a.com/page", html="<html></html>",
-                       text=text, title="Page", theme_color=None,
-                       status_code=200, used_playwright=False)
-
 
 class TestCrawlEndpoint:
 
     async def test_crawl_creates_kb_and_job(self, auth_client, workspace):
-        """POST /crawl creates a KnowledgeBase and CrawlJob, returns job_id."""
-        mock_crawl = CrawlResult(
-            urls=["https://a.com/", "https://a.com/about"],
-            total_discovered=2,
-            over_limit=False,
-            used_sitemap=False,
-        )
-        with patch("app.services.crawl_service.discover_urls", return_value=mock_crawl):
-            with patch("app.services.crawl_service.fetch", return_value=_make_fetch()):
-                with patch("app.workers.tasks.ingest_document.ingest_document.delay"):
-                    r = await auth_client.post(
-                        f"/api/v1/workspaces/{workspace.id}/crawl",
-                        json={"url": "https://a.com", "max_pages": 50},
-                    )
+        """POST /crawl returns job_id and kb_id immediately (async — crawl runs in background)."""
+        with patch("app.api.v1.crawl.crawl_website") as mock_task:
+            mock_task.delay.return_value = None
+            r = await auth_client.post(
+                f"/api/v1/workspaces/{workspace.id}/crawl",
+                json={"url": "https://a.com", "max_pages": 50},
+            )
 
         assert r.status_code == 201
         data = r.json()
         assert "job_id" in data
         assert "kb_id" in data
-        assert data["pages_discovered"] == 2
-        assert data["pages_queued"] == 2
-        assert data["over_limit"] is False
+        # Job starts with 0 — crawl runs asynchronously in Celery
+        assert data["pages_discovered"] == 0
+        assert data["pages_queued"] == 0
 
-    async def test_crawl_reports_over_limit(self, auth_client, workspace):
-        mock_crawl = CrawlResult(
-            urls=["https://a.com/p1", "https://a.com/p2"],
-            total_discovered=10,
-            over_limit=True,
-            used_sitemap=True,
-        )
-        with patch("app.services.crawl_service.discover_urls", return_value=mock_crawl):
-            with patch("app.services.crawl_service.fetch", return_value=_make_fetch()):
-                with patch("app.workers.tasks.ingest_document.ingest_document.delay"):
-                    r = await auth_client.post(
-                        f"/api/v1/workspaces/{workspace.id}/crawl",
-                        json={"url": "https://a.com", "max_pages": 2},
-                    )
-
-        assert r.status_code == 201
-        data = r.json()
-        assert data["over_limit"] is True
-        assert data["pages_discovered"] == 10
-        assert data["limit"] == 2
-
-    async def test_crawl_documents_use_source_type_text(self, db, auth_client, workspace):
-        """Crawled Documents must have source_type='text' (not 'url') to avoid re-fetch."""
+    async def test_crawl_job_is_persisted(self, db, auth_client, workspace):
+        """After POST /crawl the CrawlJob row exists in the DB with status=pending."""
         from sqlalchemy import select
-        from app.models.knowledge import Document
+        from app.models.knowledge import CrawlJob
 
-        mock_crawl = CrawlResult(
-            urls=["https://a.com/"],
-            total_discovered=1,
-            over_limit=False,
-            used_sitemap=False,
-        )
-        with patch("app.services.crawl_service.discover_urls", return_value=mock_crawl):
-            with patch("app.services.crawl_service.fetch", return_value=_make_fetch()):
-                with patch("app.workers.tasks.ingest_document.ingest_document.delay"):
-                    r = await auth_client.post(
-                        f"/api/v1/workspaces/{workspace.id}/crawl",
-                        json={"url": "https://a.com", "max_pages": 5},
-                    )
+        with patch("app.api.v1.crawl.crawl_website") as mock_task:
+            mock_task.delay.return_value = None
+            r = await auth_client.post(
+                f"/api/v1/workspaces/{workspace.id}/crawl",
+                json={"url": "https://a.com", "max_pages": 10},
+            )
 
         assert r.status_code == 201
-        result = await db.execute(
-            select(Document).where(Document.workspace_id == workspace.id)
-        )
-        docs = result.scalars().all()
-        assert len(docs) == 1
-        assert docs[0].source_type == "text"
-        assert docs[0].raw_content is not None
+        job_id = r.json()["job_id"]
 
-    async def test_get_crawl_status(self, auth_client, workspace):
+        result = await db.execute(select(CrawlJob).where(CrawlJob.id == job_id))
+        job = result.scalar_one_or_none()
+        assert job is not None
+        assert job.status == "pending"
+        assert job.root_url == "https://a.com"
+
+    async def test_crawl_kb_linked_to_chatbot(self, db, auth_client, workspace):
+        """KB created by crawl is linked to the chatbot_id if provided."""
+        from sqlalchemy import select
+        from app.models.knowledge import KnowledgeBase
+        from tests.factories import make_chatbot
+
+        bot = await make_chatbot(db, workspace)
+
+        with patch("app.api.v1.crawl.crawl_website") as mock_task:
+            mock_task.delay.return_value = None
+            r = await auth_client.post(
+                f"/api/v1/workspaces/{workspace.id}/crawl",
+                json={"url": "https://a.com", "max_pages": 5, "chatbot_id": str(bot.id)},
+            )
+
+        assert r.status_code == 201
+        kb_id = r.json()["kb_id"]
+
+        result = await db.execute(select(KnowledgeBase).where(KnowledgeBase.id == kb_id))
+        kb = result.scalar_one_or_none()
+        assert kb is not None
+        assert str(kb.chatbot_id) == str(bot.id)
+
+    async def test_get_crawl_status(self, db, auth_client, workspace):
         """GET /crawl/{job_id} returns job status."""
-        mock_crawl = CrawlResult(
-            urls=["https://a.com/"],
-            total_discovered=1,
-            over_limit=False,
-            used_sitemap=False,
-        )
-        with patch("app.services.crawl_service.discover_urls", return_value=mock_crawl):
-            with patch("app.services.crawl_service.fetch", return_value=_make_fetch()):
-                with patch("app.workers.tasks.ingest_document.ingest_document.delay"):
-                    post_r = await auth_client.post(
-                        f"/api/v1/workspaces/{workspace.id}/crawl",
-                        json={"url": "https://a.com", "max_pages": 5},
-                    )
+        with patch("app.api.v1.crawl.crawl_website") as mock_task:
+            mock_task.delay.return_value = None
+            post_r = await auth_client.post(
+                f"/api/v1/workspaces/{workspace.id}/crawl",
+                json={"url": "https://a.com", "max_pages": 5},
+            )
         job_id = post_r.json()["job_id"]
 
         r = await auth_client.get(f"/api/v1/workspaces/{workspace.id}/crawl/{job_id}")
         assert r.status_code == 200
         data = r.json()
         assert data["job_id"] == job_id
-        assert data["status"] in ("pending", "running", "completed")
+        assert data["status"] == "pending"
+        assert "docs_indexed" in data
+        assert "docs_total" in data
 
     async def test_get_crawl_status_404_unknown_job(self, auth_client, workspace):
         import uuid

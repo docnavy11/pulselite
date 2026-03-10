@@ -1,5 +1,6 @@
 # backend/app/services/autoconfig_service.py
 import logging
+import re
 import uuid
 
 from sqlalchemy import select
@@ -10,6 +11,8 @@ from app.services.autoconfig import generate
 from app.services.fetcher import fetch
 
 logger = logging.getLogger(__name__)
+
+_LANG_RE = re.compile(r'<html[^>]+lang=["\']([a-zA-Z]{2,3})(?:[_-][a-zA-Z]+)?["\']', re.IGNORECASE)
 
 _MAX_CHUNKS = 20
 
@@ -61,10 +64,17 @@ async def run(
         except Exception as exc:
             logger.warning("Failed to fetch homepage for autoconfig: %s", exc)
 
-    # 4. Generate config
+    # 4. Detect language from homepage HTML lang attribute
+    detected_lang: str | None = None
+    if homepage_html:
+        m = _LANG_RE.search(homepage_html)
+        if m:
+            detected_lang = m.group(1).lower()
+
+    # 5. Generate config
     config = await generate(chunk_texts, homepage_html)
 
-    # 5. Update chatbot fields (only update brand_color if non-None)
+    # 6. Update chatbot fields (only update brand_color if non-None)
     chatbot.name = config.name
     chatbot.welcome_message = config.welcome_message
     chatbot.system_prompt = config.system_prompt
@@ -72,6 +82,8 @@ async def run(
     chatbot.fallback_message = config.fallback_message
     if config.brand_color is not None:
         chatbot.brand_color = config.brand_color
+    if detected_lang:
+        chatbot.language = detected_lang
 
     await db.commit()
     await db.refresh(chatbot)

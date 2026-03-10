@@ -2,16 +2,15 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from sqlalchemy import func
 
 from app.database import get_db
 from app.dependencies import get_workspace
 from app.models.knowledge import CrawlJob, Document
 from app.schemas.crawl import CrawlJobStatusResponse, CrawlRequest, CrawlResponse
-from app.services.crawl_service import start_crawl
+from app.services.crawl_service import prepare_crawl
+from app.workers.tasks.crawl_website import crawl_website
 
 router = APIRouter(prefix="/workspaces/{workspace_id}", tags=["crawl"])
 
@@ -23,16 +22,21 @@ async def crawl_website_endpoint(
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        result = await start_crawl(db, workspace_id, body.url, body.max_pages, body.knowledge_base_id, body.chatbot_id)
+        job_id, kb_id = await prepare_crawl(
+            db, workspace_id, body.url, body.max_pages, body.knowledge_base_id, body.chatbot_id
+        )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    crawl_website.delay(job_id)
+
     return CrawlResponse(
-        job_id=result.job_id,
-        kb_id=result.kb_id,
-        pages_discovered=result.pages_discovered,
-        pages_queued=result.pages_queued,
-        over_limit=result.over_limit,
-        limit=result.limit,
+        job_id=job_id,
+        kb_id=kb_id,
+        pages_discovered=0,
+        pages_queued=0,
+        over_limit=False,
+        limit=body.max_pages,
     )
 
 
@@ -49,7 +53,6 @@ async def get_crawl_status(
     if job is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Crawl job not found")
 
-    # Count ingestion progress for this KB
     docs_total_result = await db.execute(
         select(func.count()).where(Document.knowledge_base_id == job.kb_id)
     )
