@@ -167,21 +167,6 @@ export interface DashboardData {
   };
 }
 
-export interface TopicCluster {
-  id: string;
-  topic_name: string;
-  conversation_count: number;
-  trend: number[];
-  example_questions: string[];
-  is_anomaly: boolean;
-  keywords: string[];
-}
-
-export interface TopicClusterDetail extends TopicCluster {
-  trend_data: { date: string; count: number }[];
-  conversations: Conversation[];
-}
-
 export interface SentimentDataPoint {
   date: string;
   score: number;
@@ -194,20 +179,6 @@ export interface SentimentData {
   negative_pct: number;
   trend: number;
   alerts: { id: string; message: string; triggered_at: string }[];
-}
-
-export interface FeatureRequestCluster {
-  id: string;
-  feature_name: string;
-  request_count: number;
-  trend: number;
-  example_quote: string;
-  pm_push_status?: string;
-}
-
-export interface LeadDetail extends Contact {
-  signals: { signal_type: string; points: number; quote?: string }[];
-  conversations: Conversation[];
 }
 
 export interface IntegrationConfig {

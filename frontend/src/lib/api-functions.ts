@@ -10,13 +10,8 @@ import {
   GapCluster,
   GapClusterDetail,
   DashboardData,
-  TopicCluster,
-  TopicClusterDetail,
   SentimentData,
-  FeatureRequestCluster,
-  Contact,
   Invite,
-  LeadDetail,
   IntegrationConfig,
   BillingPlan,
   CreditBalance,
@@ -287,19 +282,6 @@ export function getDashboardData(
   );
 }
 
-// Topics
-export function getTopics(workspaceId: string) {
-  return api.get<TopicCluster[]>(
-    `/api/v1/workspaces/${workspaceId}/topics`,
-  );
-}
-
-export function getTopicDetail(workspaceId: string, topicId: string) {
-  return api.get<TopicClusterDetail>(
-    `/api/v1/workspaces/${workspaceId}/topics/${topicId}`,
-  );
-}
-
 // Sentiment
 export function getSentimentTrends(workspaceId: string, range: string) {
   const days = range === "7d" ? 7 : range === "90d" ? 90 : 30;
@@ -330,41 +312,6 @@ export function getSentimentTrends(workspaceId: string, range: string) {
     });
 }
 
-// Feature Requests
-export function getFeatureRequests(workspaceId: string) {
-  return api.get<FeatureRequestCluster[]>(
-    `/api/v1/workspaces/${workspaceId}/feature-requests`,
-  );
-}
-
-export function pushFeatureRequest(workspaceId: string, clusterId: string, target: string) {
-  return api.post<void>(
-    `/api/v1/workspaces/${workspaceId}/feature-requests/${clusterId}/push`,
-    { target },
-  );
-}
-
-// Leads
-export function getLeads(workspaceId: string, filters?: { tier?: string }) {
-  const params = new URLSearchParams();
-  if (filters?.tier) params.set("tier", filters.tier);
-  const qs = params.toString();
-  return api.get<Contact[]>(
-    `/api/v1/workspaces/${workspaceId}/leads${qs ? `?${qs}` : ""}`,
-  );
-}
-
-export function getLeadDetail(workspaceId: string, contactId: string) {
-  return api.get<LeadDetail>(
-    `/api/v1/workspaces/${workspaceId}/leads/${contactId}`,
-  );
-}
-
-export function pushLeadToCRM(workspaceId: string, contactId: string) {
-  return api.post<void>(
-    `/api/v1/workspaces/${workspaceId}/leads/${contactId}/push-crm`,
-  );
-}
 
 // Integrations
 export function getIntegrations(workspaceId: string) {
