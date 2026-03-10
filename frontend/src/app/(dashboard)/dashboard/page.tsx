@@ -1,269 +1,244 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import Link from "next/link";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
-  TrendingUp,
-  TrendingDown,
-  MessageSquare,
-  CheckCircle,
-  AlertTriangle,
-  BookOpen,
-  FileQuestion,
-  Users,
-  Zap,
-  Flame,
-} from "lucide-react";
-import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
   BarChart,
   Bar,
   XAxis,
   YAxis,
   Tooltip,
-  CartesianGrid,
+  ResponsiveContainer,
 } from "recharts";
-import { Card, CardContent } from "@/components/ui/Card";
-import { Spinner } from "@/components/ui/Spinner";
-import { DashboardData } from "@/lib/types";
-import { getDashboardData, getChatbots } from "@/lib/api-functions";
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import { Chatbot } from "@/lib/types";
+import { useAuthStore } from "@/stores/auth-store";
+import { SkeletonCard } from "@/components/ui/Skeleton";
+import { getDashboardData, getChatbots } from "@/lib/api-functions";
+import { DashboardData, Chatbot } from "@/lib/types";
+
+function getGreeting(name: string): string {
+  const hour = new Date().getHours();
+  const time = hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
+  const firstName = name.split(" ")[0] || name;
+  return `Good ${time}, ${firstName}`;
+}
+
+function KpiCard({
+  label,
+  value,
+  trend,
+  accent,
+}: {
+  label: string;
+  value: string | number;
+  trend?: string;
+  accent?: boolean;
+}) {
+  return (
+    <div
+      className={`bg-white rounded-xl border p-5 ${
+        accent
+          ? "border-primary-200 ring-1 ring-primary-100"
+          : "border-[#f0ebe3]"
+      }`}
+    >
+      <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">
+        {label}
+      </div>
+      <div
+        className={`text-3xl font-black tracking-tight ${
+          accent ? "text-primary-500" : "text-gray-900"
+        }`}
+      >
+        {value}
+      </div>
+      {trend && (
+        <div className="text-[11px] text-gray-400 mt-1">{trend}</div>
+      )}
+    </div>
+  );
+}
 
 export default function DashboardPage() {
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);
+  const user = useAuthStore((s) => s.user);
+  const router = useRouter();
   const [data, setData] = useState<DashboardData | null>(null);
   const [chatbots, setChatbots] = useState<Chatbot[]>([]);
-  const [range, setRange] = useState("30d");
-  const [chatbotId, setChatbotId] = useState("");
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!workspace) return;
-    getChatbots(workspace.id).then(setChatbots).catch(() => {});
-  }, [workspace]);
+  const userName = user?.name || user?.email || "there";
+  const greeting = getGreeting(userName);
 
   useEffect(() => {
-    if (!workspace) return;
+    if (!workspace?.id) return;
+    getChatbots(workspace.id)
+      .then(setChatbots)
+      .catch(() => {});
+  }, [workspace?.id]);
+
+  useEffect(() => {
+    if (!workspace?.id) return;
     setLoading(true);
-    getDashboardData(workspace.id, range, chatbotId || undefined)
+    getDashboardData(workspace.id, "30d")
       .then(setData)
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [workspace, range, chatbotId]);
+  }, [workspace?.id]);
 
-  if (loading || !data) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Spinner className="h-8 w-8 text-primary-500" />
-      </div>
-    );
-  }
+  const hasChatbots = chatbots.length > 0;
 
-  const rateColor =
-    data.resolution_rate > 0.75
-      ? "text-green-600"
-      : data.resolution_rate > 0.5
-        ? "text-amber-600"
-        : "text-red-600";
+  const resolutionRatePct = data
+    ? Math.round(data.resolution_rate * 100)
+    : 0;
+
+  const trendData = data?.resolution_trend.map((d) => ({
+    week: d.week_start,
+    rate: Math.round(d.rate * 100),
+  }));
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <div className="flex gap-3">
-          <select
-            value={chatbotId}
-            onChange={(e) => setChatbotId(e.target.value)}
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-          >
-            <option value="">All chatbots</option>
-            {chatbots.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.display_name || b.name}
-              </option>
-            ))}
-          </select>
-          <select
-            value={range}
-            onChange={(e) => setRange(e.target.value)}
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-          >
-            <option value="7d">Last 7 days</option>
-            <option value="30d">Last 30 days</option>
-            <option value="90d">Last 90 days</option>
-          </select>
+    <div className="flex-1 overflow-y-auto bg-[#faf8f5]">
+      <div className="max-w-5xl mx-auto px-6 py-7">
+        {/* Greeting */}
+        <div className="mb-7">
+          <h1 className="text-2xl font-black tracking-tight text-gray-900 mb-1">
+            {greeting}
+          </h1>
+          <p className="text-[13px] text-gray-400">
+            {hasChatbots
+              ? `${chatbots.filter((b) => b.is_active).length} bots active · ${
+                  data?.stats.total_conversations ?? 0
+                } total conversations`
+              : "Create your first chatbot to get started"}
+          </p>
         </div>
-      </div>
 
-      {/* Resolution Rate Hero */}
-      <Card className="mb-6">
-        <CardContent className="py-8 text-center">
-          <p className="text-sm font-medium text-gray-500 mb-1">
-            Resolution Rate
-          </p>
-          <p className={`text-5xl font-bold ${rateColor}`}>
-            {Math.round(data.resolution_rate * 100)}%
-          </p>
-          <div className="flex items-center justify-center gap-1 mt-2">
-            {data.resolution_rate_trend >= 0 ? (
-              <TrendingUp className="h-4 w-4 text-green-500" />
-            ) : (
-              <TrendingDown className="h-4 w-4 text-red-500" />
-            )}
-            <span
-              className={`text-sm font-medium ${data.resolution_rate_trend >= 0 ? "text-green-600" : "text-red-600"}`}
+        {/* Quick actions — shown when no chatbots and not loading */}
+        {!hasChatbots && !loading && (
+          <div className="flex gap-3 mb-7">
+            <button
+              onClick={() => router.push("/chatbots/new")}
+              className="flex items-center gap-2 px-4 py-2.5 bg-primary-500 hover:bg-primary-600 text-white rounded-xl text-[13px] font-semibold transition-colors"
             >
-              {data.resolution_rate_trend >= 0 ? "+" : ""}
-              {Math.round(data.resolution_rate_trend * 100)}% vs last period
-            </span>
+              + New chatbot
+            </button>
+            <button
+              onClick={() => router.push("/conversations")}
+              className="px-4 py-2.5 bg-white border border-[#f0ebe3] text-gray-600 rounded-xl text-[13px] font-medium hover:bg-[#faf8f5] transition-colors"
+            >
+              View conversations
+            </button>
+            <button
+              onClick={() => router.push("/knowledge")}
+              className="px-4 py-2.5 bg-white border border-[#f0ebe3] text-gray-600 rounded-xl text-[13px] font-medium hover:bg-[#faf8f5] transition-colors"
+            >
+              Add knowledge
+            </button>
           </div>
-        </CardContent>
-      </Card>
+        )}
 
-      {/* Stats Row */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
-        {[
-          { label: "Total Conversations", value: data.stats.total_conversations, icon: MessageSquare, color: "text-primary-500 bg-primary-50" },
-          { label: "Auto-Resolved", value: data.stats.resolved, icon: CheckCircle, color: "text-green-600 bg-green-50" },
-          { label: "Escalated", value: data.stats.escalated, icon: AlertTriangle, color: "text-amber-600 bg-amber-50" },
-          { label: "New KB Articles", value: data.stats.new_articles, icon: BookOpen, color: "text-purple-600 bg-purple-50" },
-        ].map((stat) => (
-          <Card key={stat.label}>
-            <CardContent className="flex items-center gap-3 py-4">
-              <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${stat.color}`}>
-                <stat.icon className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">{stat.label}</p>
-                <p className="text-xl font-bold text-gray-900">{stat.value}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Knowledge Velocity */}
-      {data.knowledge_velocity > 0 && (
-        <Card className="mb-6">
-          <CardContent className="py-4 flex items-center gap-4">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-50 text-orange-600 shrink-0">
-              <Flame className="h-5 w-5" />
-            </div>
-            <div className="flex-1">
-              <p className="text-xs text-gray-500">Knowledge Velocity</p>
-              <p className="text-lg font-bold text-gray-900">
-                {Math.round(data.knowledge_velocity * 100)}%
-              </p>
-            </div>
-            <p className="text-xs text-gray-400 max-w-xs text-right">
-              % of knowledge gaps resolved vs. discovered this period. Higher = your KB is improving faster than questions arise.
-            </p>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Charts Row */}
-      <div className="grid grid-cols-2 gap-6 mb-6">
-        <Card>
-          <CardContent className="pt-5 pb-5">
-            <h3 className="text-sm font-semibold text-gray-900 mb-4">
-              Resolution Trend
-            </h3>
-            <ResponsiveContainer width="100%" height={220}>
-              <LineChart data={data.resolution_trend.map((d) => ({ ...d, rate_pct: Math.round(d.rate * 100) }))}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="week_start" tick={{ fontSize: 11 }} stroke="#94a3b8" />
-                <YAxis tick={{ fontSize: 11 }} stroke="#94a3b8" domain={[0, 100]} />
-                <Tooltip />
-                <Line
-                  type="monotone"
-                  dataKey="rate_pct"
-                  stroke="#4f46e5"
-                  strokeWidth={2}
-                  dot={false}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-5 pb-5">
-            <h3 className="text-sm font-semibold text-gray-900 mb-4">
-              Escalation Breakdown
-            </h3>
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart
-                data={Object.entries(data.escalation_breakdown).map(([reason, count]) => ({ reason, count }))}
-                layout="vertical"
+        {/* Chatbot filter chips — shown when chatbots exist */}
+        {hasChatbots && !loading && (
+          <div className="flex gap-2 mb-7 flex-wrap">
+            {chatbots.map((b) => (
+              <span
+                key={b.id}
+                className="px-3 py-1 bg-white border border-[#f0ebe3] text-gray-600 rounded-full text-[12px] font-medium"
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis type="number" tick={{ fontSize: 11 }} stroke="#94a3b8" />
-                <YAxis
-                  dataKey="reason"
-                  type="category"
-                  tick={{ fontSize: 11 }}
-                  stroke="#94a3b8"
-                  width={120}
+                {b.display_name || b.name}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* KPI row */}
+        <div className="grid grid-cols-3 gap-4 mb-6">
+          {loading ? (
+            <>
+              <SkeletonCard />
+              <SkeletonCard />
+              <SkeletonCard />
+            </>
+          ) : (
+            <>
+              <KpiCard
+                label="Auto-resolution rate"
+                value={`${resolutionRatePct}%`}
+                trend="Last 30 days"
+                accent
+              />
+              <KpiCard
+                label="Total conversations"
+                value={data?.stats.total_conversations ?? 0}
+                trend="All time"
+              />
+              <KpiCard
+                label="Escalated"
+                value={data?.stats.escalated ?? 0}
+                trend="Last 30 days"
+              />
+            </>
+          )}
+        </div>
+
+        {/* Resolution trend chart */}
+        {!loading && trendData && trendData.length > 0 && (
+          <div className="bg-white border border-[#f0ebe3] rounded-xl p-5 mb-6">
+            <h2 className="text-[12px] font-semibold text-gray-500 uppercase tracking-wide mb-4">
+              Resolution trend — last 12 weeks
+            </h2>
+            <ResponsiveContainer width="100%" height={140}>
+              <BarChart data={trendData} barSize={12}>
+                <XAxis
+                  dataKey="week"
+                  tick={{ fontSize: 10, fill: "#aaa" }}
+                  axisLine={false}
+                  tickLine={false}
                 />
-                <Tooltip />
-                <Bar dataKey="count" fill="#6366f1" radius={[0, 4, 4, 0]} />
+                <YAxis hide />
+                <Tooltip
+                  contentStyle={{
+                    fontSize: 11,
+                    border: "1px solid #f0ebe3",
+                    borderRadius: 8,
+                  }}
+                  cursor={{ fill: "#faf8f5" }}
+                />
+                <Bar dataKey="rate" fill="#ff6b35" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        )}
 
-      {/* Intelligence Highlights */}
-      <div className="grid grid-cols-3 gap-4">
-        <Link href="/intelligence/gaps">
-          <Card className="cursor-pointer hover:shadow-md transition-all duration-200">
-            <CardContent className="flex items-center gap-3 py-5">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-50 text-red-600">
-                <FileQuestion className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Doc Gaps</p>
-                <p className="text-lg font-bold text-gray-900">
-                  {data.intelligence.open_gaps}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </Link>
-        <Link href="/intelligence/leads">
-          <Card className="cursor-pointer hover:shadow-md transition-all duration-200">
-            <CardContent className="flex items-center gap-3 py-5">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-50 text-purple-600">
-                <Users className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Hot Leads</p>
-                <p className="text-lg font-bold text-gray-900">
-                  {data.intelligence.hot_leads}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </Link>
-        <Link href="/intelligence/topics">
-          <Card className="cursor-pointer hover:shadow-md transition-all duration-200">
-            <CardContent className="flex items-center gap-3 py-5">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
-                <Zap className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Topic Anomalies</p>
-                <p className="text-lg font-bold text-gray-900">
-                  {data.intelligence.topic_anomalies}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </Link>
+        {/* Empty state — no chatbots, not loading */}
+        {!loading && !hasChatbots && (
+          <div className="bg-white border border-[#f0ebe3] rounded-2xl p-10 text-center">
+            <div className="flex justify-center mb-4">
+              <svg width="64" height="32" viewBox="0 0 64 32" fill="none">
+                <path
+                  d="M4 16 L14 16 L20 4 L26 28 L32 8 L38 16 L44 16 L50 10 L56 16 L60 16"
+                  stroke="#ff6b35"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </div>
+            <h3 className="text-[15px] font-bold text-gray-800 mb-2">
+              Your first chatbot is one URL away
+            </h3>
+            <p className="text-[13px] text-gray-400 mb-5">
+              Paste a URL, we crawl it and auto-configure your bot in minutes.
+            </p>
+            <button
+              onClick={() => router.push("/chatbots/new")}
+              className="px-5 py-2.5 bg-primary-500 hover:bg-primary-600 text-white rounded-xl text-[13px] font-semibold transition-colors"
+            >
+              Create my first chatbot
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
