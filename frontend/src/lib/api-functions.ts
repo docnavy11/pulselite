@@ -1,6 +1,9 @@
 import { api } from "./api";
 import {
+  AutoConfigResponse,
   Chatbot,
+  CrawlResponse,
+  CrawlStatusResponse,
   KnowledgeBase,
   Document,
   Article,
@@ -63,6 +66,21 @@ export function updateLLMConfig(
 
 export function duplicateChatbot(workspaceId: string, chatbotId: string) {
   return api.post<Chatbot>(`/api/v1/workspaces/${workspaceId}/chatbots/${chatbotId}/duplicate`);
+}
+
+export function startCrawl(workspaceId: string, url: string, maxPages: number) {
+  return api.post<CrawlResponse>(`/api/v1/workspaces/${workspaceId}/crawl`, { url, max_pages: maxPages });
+}
+
+export function getCrawlStatus(workspaceId: string, jobId: string) {
+  return api.get<CrawlStatusResponse>(`/api/v1/workspaces/${workspaceId}/crawl/${jobId}`);
+}
+
+export function runAutoconfig(workspaceId: string, chatbotId: string, knowledgeBaseId: string) {
+  return api.post<AutoConfigResponse>(
+    `/api/v1/workspaces/${workspaceId}/chatbots/${chatbotId}/autoconfig`,
+    { knowledge_base_id: knowledgeBaseId },
+  );
 }
 
 // Knowledge Base

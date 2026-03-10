@@ -59,6 +59,9 @@ class ChatbotUpdate(BaseModel):
     fallback_type: str | None = None
     fallback_message: str | None = None
     is_active: bool | None = None
+    welcome_message: str | None = None
+    brand_color: str | None = None
+    suggested_questions: list[str] | None = None
 
 
 class ChatbotResponse(BaseModel):

@@ -41,6 +41,36 @@ export interface Chatbot {
   use_hybrid_retrieval: boolean;
   is_active: boolean;
   created_at: string;
+  brand_color?: string;
+  welcome_message?: string;
+  suggested_questions?: string[];
+  fallback_message?: string;
+}
+
+export interface CrawlResponse {
+  job_id: string;
+  kb_id: string;
+  pages_discovered: number;
+  pages_queued: number;
+  over_limit: boolean;
+  limit: number;
+}
+
+export interface CrawlStatusResponse {
+  job_id: string;
+  status: string;
+  pages_discovered: number;
+  pages_queued: number;
+  pages_failed: number;
+}
+
+export interface AutoConfigResponse {
+  name: string;
+  welcome_message: string | null;
+  system_prompt: string | null;
+  suggested_questions: string[] | null;
+  fallback_message: string | null;
+  brand_color: string | null;
 }
 
 export interface KnowledgeBase {
