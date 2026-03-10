@@ -9,6 +9,7 @@ from app.api.v1 import (
     billing,
     chat,
     chatbots,
+    crawl,
     dashboard,
     documents,
     gaps,
@@ -53,6 +54,7 @@ def create_app() -> FastAPI:
     application.include_router(knowledge_bases.router, prefix="/api/v1")
     application.include_router(documents.router, prefix="/api/v1")
     application.include_router(articles.router, prefix="/api/v1")
+    application.include_router(crawl.router, prefix="/api/v1")
     application.include_router(chat.router, prefix="/api/v1")
     application.include_router(intelligence.router, prefix="/api/v1")
     application.include_router(gaps.router, prefix="/api/v1")
