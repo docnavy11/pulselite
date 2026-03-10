@@ -7,16 +7,13 @@ import {
   LayoutDashboard,
   Bot,
   MessageSquare,
-  AlertTriangle,
   Brain,
   Settings,
   Users,
   Sparkles,
   Webhook,
-  ShieldCheck,
   ShieldAlert,
   Database,
-  ClipboardList,
   Cpu,
 } from "lucide-react";
 import { useAuthStore } from "@/stores/auth-store";
@@ -26,16 +23,13 @@ const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/chatbots", label: "Chatbots", icon: Bot },
   { href: "/conversations", label: "Conversations", icon: MessageSquare },
-  { href: "/exceptions", label: "Exceptions", icon: AlertTriangle },
   { href: "/intelligence", label: "Intelligence", icon: Brain },
   { href: "/settings", label: "Settings", icon: Settings },
   { href: "/settings/team", label: "Team", icon: Users },
   { href: "/settings/webhooks", label: "Webhooks", icon: Webhook },
-  { href: "/settings/sso", label: "SSO", icon: ShieldCheck },
   { href: "/settings/security", label: "Security", icon: ShieldAlert },
   { href: "/settings/data-retention", label: "Data Retention", icon: Database },
   { href: "/settings/llm", label: "AI Models", icon: Cpu },
-  { href: "/settings/audit-logs", label: "Audit Logs", icon: ClipboardList },
 ];
 
 const PLAN_LABELS: Record<string, string> = {
