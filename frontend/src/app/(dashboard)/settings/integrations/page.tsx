@@ -232,7 +232,7 @@ export default function IntegrationsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Spinner className="h-8 w-8 text-primary-600" />
+        <Spinner className="h-8 w-8 text-primary-500" />
       </div>
     );
   }
@@ -1225,7 +1225,7 @@ function StripeCard({
       <CardContent className="py-5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-50 text-lg font-bold text-indigo-600">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-50 text-lg font-bold text-primary-600">
               $
             </div>
             <div>

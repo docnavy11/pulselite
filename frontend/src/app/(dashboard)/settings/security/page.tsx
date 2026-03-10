@@ -146,7 +146,7 @@ export default function SecuritySettingsPage() {
         <CardContent className="pt-6 pb-6">
           <div className="flex items-start gap-4">
             <div className="rounded-lg bg-primary-50 p-2">
-              <ShieldAlert className="h-6 w-6 text-primary-600" />
+              <ShieldAlert className="h-6 w-6 text-primary-500" />
             </div>
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-1">

@@ -158,9 +158,9 @@ export default function NewBotWizardPage() {
               <div
                 className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold transition-colors ${
                   i < stepIndex
-                    ? "bg-primary-600 text-white"
+                    ? "bg-primary-500 text-white"
                     : i === stepIndex
-                    ? "bg-primary-600 text-white"
+                    ? "bg-primary-500 text-white"
                     : "bg-gray-100 text-gray-400"
                 }`}
               >
@@ -175,7 +175,7 @@ export default function NewBotWizardPage() {
               </span>
             </div>
             {i < STEPS.length - 1 && (
-              <div className={`flex-1 h-px ${i < stepIndex ? "bg-primary-600" : "bg-gray-200"}`} />
+              <div className={`flex-1 h-px ${i < stepIndex ? "bg-primary-500" : "bg-gray-200"}`} />
             )}
           </div>
         ))}
@@ -186,7 +186,7 @@ export default function NewBotWizardPage() {
         <Card>
           <CardContent className="pt-8 pb-8">
             <div className="flex items-center gap-3 mb-6">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-50 text-primary-500">
                 <Globe className="h-5 w-5" />
               </div>
               <div>
@@ -226,7 +226,7 @@ export default function NewBotWizardPage() {
         <Card>
           <CardContent className="pt-8 pb-8">
             <div className="flex flex-col items-center text-center gap-6 py-4">
-              <Spinner className="h-10 w-10 text-primary-600" />
+              <Spinner className="h-10 w-10 text-primary-500" />
               <h2 className="text-lg font-semibold text-gray-900">Setting up your bot…</h2>
 
               {/* Phase 1: Crawling */}
@@ -243,7 +243,7 @@ export default function NewBotWizardPage() {
                 </div>
                 <div className="h-2 w-full rounded-full bg-gray-100">
                   <div
-                    className="h-2 rounded-full bg-primary-600 transition-all duration-500"
+                    className="h-2 rounded-full bg-primary-500 transition-all duration-500"
                     style={{
                       width: !crawlStatus || crawlStatus.status === "pending"
                         ? "5%"
@@ -267,7 +267,7 @@ export default function NewBotWizardPage() {
                 </div>
                 <div className="h-2 w-full rounded-full bg-gray-100">
                   <div
-                    className="h-2 rounded-full bg-indigo-400 transition-all duration-500"
+                    className="h-2 rounded-full bg-primary-400 transition-all duration-500"
                     style={{
                       width: !crawlStatus || crawlStatus.docs_total === 0
                         ? "0%"

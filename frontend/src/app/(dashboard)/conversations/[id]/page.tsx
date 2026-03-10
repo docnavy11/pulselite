@@ -66,7 +66,7 @@ export default function ConversationDetailPage() {
   if (loading || !conversation) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Spinner className="h-8 w-8 text-primary-600" />
+        <Spinner className="h-8 w-8 text-primary-500" />
       </div>
     );
   }
@@ -90,7 +90,7 @@ export default function ConversationDetailPage() {
                 className={clsx(
                   "max-w-[70%] rounded-lg px-4 py-2.5 text-sm",
                   msg.role === "user"
-                    ? "bg-primary-600 text-white"
+                    ? "bg-primary-500 text-white"
                     : "bg-gray-100 text-gray-900",
                 )}
               >

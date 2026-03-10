@@ -75,7 +75,7 @@ export default function GapClusterDetailPage() {
   if (loading || !cluster) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Spinner className="h-8 w-8 text-primary-600" />
+        <Spinner className="h-8 w-8 text-primary-500" />
       </div>
     );
   }
@@ -154,7 +154,7 @@ export default function GapClusterDetailPage() {
               {!editingDraft && (
                 <button
                   onClick={() => setEditingDraft(true)}
-                  className="text-sm text-primary-600 hover:text-primary-700 font-medium"
+                  className="text-sm text-primary-500 hover:text-primary-700 font-medium"
                 >
                   Edit Draft
                 </button>

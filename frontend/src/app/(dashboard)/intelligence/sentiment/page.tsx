@@ -73,7 +73,7 @@ export default function SentimentPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Spinner className="h-8 w-8 text-primary-600" />
+        <Spinner className="h-8 w-8 text-primary-500" />
       </div>
     );
   }
@@ -216,7 +216,7 @@ export default function SentimentPage() {
                 onClick={() => setSegment("chatbot")}
                 className={`px-4 py-1.5 transition-colors ${
                   segment === "chatbot"
-                    ? "bg-primary-600 text-white"
+                    ? "bg-primary-500 text-white"
                     : "bg-white text-gray-600 hover:bg-gray-50"
                 }`}
               >
@@ -226,7 +226,7 @@ export default function SentimentPage() {
                 onClick={() => setSegment("contact")}
                 className={`px-4 py-1.5 transition-colors border-l border-gray-200 ${
                   segment === "contact"
-                    ? "bg-primary-600 text-white"
+                    ? "bg-primary-500 text-white"
                     : "bg-white text-gray-600 hover:bg-gray-50"
                 }`}
               >
@@ -237,7 +237,7 @@ export default function SentimentPage() {
 
           {segmentLoading ? (
             <div className="flex items-center justify-center py-12">
-              <Spinner className="h-6 w-6 text-primary-600" />
+              <Spinner className="h-6 w-6 text-primary-500" />
             </div>
           ) : segmentData.length === 0 ? (
             <div className="flex items-center justify-center py-12 text-gray-400">

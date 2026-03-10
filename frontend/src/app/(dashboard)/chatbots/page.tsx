@@ -29,7 +29,7 @@ export default function ChatbotsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Spinner className="h-8 w-8 text-primary-600" />
+        <Spinner className="h-8 w-8 text-primary-500" />
       </div>
     );
   }
@@ -50,7 +50,7 @@ export default function ChatbotsPage() {
             <Card className="cursor-pointer hover:shadow-md transition-all duration-200">
               <CardContent className="py-5">
                 <div className="flex items-start gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-50 text-primary-500">
                     <Bot className="h-5 w-5" />
                   </div>
                   <div className="flex-1 min-w-0">
@@ -79,7 +79,7 @@ export default function ChatbotsPage() {
               <p className="text-sm font-medium">No chatbots yet</p>
               <p className="text-xs mt-1">
                 <button
-                  className="text-primary-600 hover:underline"
+                  className="text-primary-500 hover:underline"
                   onClick={() => router.push("/chatbots/new")}
                 >
                   Create your first chatbot

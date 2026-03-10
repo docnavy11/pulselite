@@ -86,7 +86,7 @@ export default function WebhooksPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Spinner className="h-8 w-8 text-primary-600" />
+        <Spinner className="h-8 w-8 text-primary-500" />
       </div>
     );
   }
@@ -173,7 +173,7 @@ export default function WebhooksPage() {
                       type="checkbox"
                       checked={selectedEvents.includes(et.value)}
                       onChange={() => toggleEvent(et.value)}
-                      className="h-4 w-4 rounded border-gray-300 text-primary-600"
+                      className="h-4 w-4 rounded border-gray-300 text-primary-500"
                     />
                     <span className="text-sm text-gray-700">{et.label}</span>
                     <code className="text-xs text-gray-400 font-mono">{et.value}</code>

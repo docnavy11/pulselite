@@ -71,7 +71,7 @@ export default function SettingsPage() {
               className={clsx(
                 "pb-3 text-sm font-medium border-b-2 transition-all duration-200",
                 activeTab === tab
-                  ? "border-primary-600 text-primary-600"
+                  ? "border-primary-500 text-primary-500"
                   : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300",
               )}
             >
@@ -117,7 +117,7 @@ export default function SettingsPage() {
               {exportUrl && (
                 <a
                   href={exportUrl}
-                  className="block text-sm text-primary-600 hover:text-primary-700 font-medium"
+                  className="block text-sm text-primary-500 hover:text-primary-700 font-medium"
                 >
                   Download export
                 </a>

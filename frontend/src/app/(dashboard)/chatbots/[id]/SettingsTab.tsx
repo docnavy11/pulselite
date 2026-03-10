@@ -213,7 +213,7 @@ export function SettingsTab({ chatbot, onUpdate }: SettingsTabProps) {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Model</label>
               {!modelsLoaded ? (
-                <Spinner className="h-5 w-5 text-primary-600" />
+                <Spinner className="h-5 w-5 text-primary-500" />
               ) : allowedModels.length > 0 ? (
                 <select
                   value={llmModel}
@@ -238,7 +238,7 @@ export function SettingsTab({ chatbot, onUpdate }: SettingsTabProps) {
               {allowedModels.length === 0 && modelsLoaded && (
                 <p className="mt-1 text-xs text-gray-500">
                   Configure allowed models in{" "}
-                  <a href="/settings/llm" className="text-primary-600 hover:underline">
+                  <a href="/settings/llm" className="text-primary-500 hover:underline">
                     AI Models settings
                   </a>
                   .
@@ -248,7 +248,7 @@ export function SettingsTab({ chatbot, onUpdate }: SettingsTabProps) {
 
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">
-                Temperature: <span className="text-primary-600 font-semibold">{temperature}</span>
+                Temperature: <span className="text-primary-500 font-semibold">{temperature}</span>
               </label>
               <input
                 type="range"
@@ -257,7 +257,7 @@ export function SettingsTab({ chatbot, onUpdate }: SettingsTabProps) {
                 step={0.05}
                 value={temperature}
                 onChange={(e) => setTemperature(parseFloat(e.target.value))}
-                className="w-full accent-primary-600"
+                className="w-full accent-primary-500"
               />
               <div className="flex justify-between text-[10px] text-gray-400 mt-0.5">
                 <span>Precise (0)</span>
@@ -267,7 +267,7 @@ export function SettingsTab({ chatbot, onUpdate }: SettingsTabProps) {
 
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">
-                Confidence Threshold: <span className="text-primary-600 font-semibold">{confidenceThreshold}</span>
+                Confidence Threshold: <span className="text-primary-500 font-semibold">{confidenceThreshold}</span>
               </label>
               <input
                 type="range"
@@ -276,7 +276,7 @@ export function SettingsTab({ chatbot, onUpdate }: SettingsTabProps) {
                 step={0.01}
                 value={confidenceThreshold}
                 onChange={(e) => setConfidenceThreshold(parseFloat(e.target.value))}
-                className="w-full accent-primary-600"
+                className="w-full accent-primary-500"
               />
               <p className="text-[10px] text-gray-400 mt-0.5">
                 Responses below this score escalate to human. Higher = stricter.
@@ -285,7 +285,7 @@ export function SettingsTab({ chatbot, onUpdate }: SettingsTabProps) {
 
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">
-                Retrieved Chunks: <span className="text-primary-600 font-semibold">{retrievalTopK}</span>
+                Retrieved Chunks: <span className="text-primary-500 font-semibold">{retrievalTopK}</span>
               </label>
               <input
                 type="range"
@@ -294,7 +294,7 @@ export function SettingsTab({ chatbot, onUpdate }: SettingsTabProps) {
                 step={1}
                 value={retrievalTopK}
                 onChange={(e) => setRetrievalTopK(parseInt(e.target.value))}
-                className="w-full accent-primary-600"
+                className="w-full accent-primary-500"
               />
             </div>
 
@@ -304,7 +304,7 @@ export function SettingsTab({ chatbot, onUpdate }: SettingsTabProps) {
                   type="checkbox"
                   checked={useReranking}
                   onChange={(e) => setUseReranking(e.target.checked)}
-                  className="rounded accent-primary-600"
+                  className="rounded accent-primary-500"
                 />
                 <span className="text-sm text-gray-700">Use Reranking</span>
               </label>
@@ -313,7 +313,7 @@ export function SettingsTab({ chatbot, onUpdate }: SettingsTabProps) {
                   type="checkbox"
                   checked={useHybrid}
                   onChange={(e) => setUseHybrid(e.target.checked)}
-                  className="rounded accent-primary-600"
+                  className="rounded accent-primary-500"
                 />
                 <span className="text-sm text-gray-700">Hybrid Retrieval</span>
               </label>

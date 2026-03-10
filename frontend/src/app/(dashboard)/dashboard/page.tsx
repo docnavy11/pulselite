@@ -57,7 +57,7 @@ export default function DashboardPage() {
   if (loading || !data) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Spinner className="h-8 w-8 text-primary-600" />
+        <Spinner className="h-8 w-8 text-primary-500" />
       </div>
     );
   }
@@ -126,7 +126,7 @@ export default function DashboardPage() {
       {/* Stats Row */}
       <div className="grid grid-cols-4 gap-4 mb-6">
         {[
-          { label: "Total Conversations", value: data.stats.total_conversations, icon: MessageSquare, color: "text-primary-600 bg-primary-50" },
+          { label: "Total Conversations", value: data.stats.total_conversations, icon: MessageSquare, color: "text-primary-500 bg-primary-50" },
           { label: "Auto-Resolved", value: data.stats.resolved, icon: CheckCircle, color: "text-green-600 bg-green-50" },
           { label: "Escalated", value: data.stats.escalated, icon: AlertTriangle, color: "text-amber-600 bg-amber-50" },
           { label: "New KB Articles", value: data.stats.new_articles, icon: BookOpen, color: "text-purple-600 bg-purple-50" },

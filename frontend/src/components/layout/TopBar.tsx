@@ -68,7 +68,7 @@ export function TopBar() {
           onClick={() => setUserOpen(!userOpen)}
           className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-gray-100 transition-all duration-200"
         >
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-600 text-sm font-medium text-white">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-500 text-sm font-medium text-white">
             {user?.name?.charAt(0)?.toUpperCase() || "U"}
           </div>
         </button>

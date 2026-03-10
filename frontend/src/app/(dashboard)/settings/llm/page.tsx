@@ -108,7 +108,7 @@ export default function LLMSettingsPage() {
   if (pageLoading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Spinner className="h-8 w-8 text-primary-600" />
+        <Spinner className="h-8 w-8 text-primary-500" />
       </div>
     );
   }
@@ -126,7 +126,7 @@ export default function LLMSettingsPage() {
       <Card>
         <CardContent className="pt-6">
           <div className="flex items-center gap-2 mb-4">
-            <Key className="h-5 w-5 text-primary-600" />
+            <Key className="h-5 w-5 text-primary-500" />
             <h2 className="text-base font-semibold text-gray-900">OpenRouter API Key</h2>
             {settings?.openrouter_api_key_set && (
               <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
@@ -178,7 +178,7 @@ export default function LLMSettingsPage() {
         <CardContent className="pt-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <Cpu className="h-5 w-5 text-primary-600" />
+              <Cpu className="h-5 w-5 text-primary-500" />
               <h2 className="text-base font-semibold text-gray-900">Allowed Models</h2>
               {settings && settings.allowed_models.length > 0 && (
                 <span className="rounded-full bg-primary-100 px-2 py-0.5 text-xs font-medium text-primary-700">
@@ -221,7 +221,7 @@ export default function LLMSettingsPage() {
                       type="checkbox"
                       checked={selectedModels.has(model.id)}
                       onChange={() => toggleModel(model.id)}
-                      className="h-4 w-4 text-primary-600 border-gray-300 rounded"
+                      className="h-4 w-4 text-primary-500 border-gray-300 rounded"
                     />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-800 truncate">{model.name}</p>
@@ -247,7 +247,7 @@ export default function LLMSettingsPage() {
                       return new Set(filteredModels.map((m) => m.id));
                     })
                   }
-                  className="text-sm text-primary-600 hover:underline"
+                  className="text-sm text-primary-500 hover:underline"
                 >
                   {selectedModels.size === filteredModels.length ? "Deselect all" : "Select all"}
                 </button>

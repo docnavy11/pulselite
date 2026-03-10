@@ -187,7 +187,7 @@ export default function TestChatPage() {
                   className={clsx(
                     "max-w-[70%] rounded-lg px-4 py-2.5 text-sm",
                     msg.role === "user"
-                      ? "bg-primary-600 text-white"
+                      ? "bg-primary-500 text-white"
                       : "bg-gray-100 text-gray-900",
                   )}
                 >
@@ -232,7 +232,7 @@ export default function TestChatPage() {
             <button
               onClick={handleSend}
               disabled={streaming || !input.trim()}
-              className="flex items-center justify-center rounded-lg bg-primary-600 px-4 py-2.5 text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+              className="flex items-center justify-center rounded-lg bg-primary-500 px-4 py-2.5 text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
             >
               <Send className="h-4 w-4" />
             </button>

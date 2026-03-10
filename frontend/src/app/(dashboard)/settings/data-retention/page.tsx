@@ -70,7 +70,7 @@ export default function DataRetentionPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Spinner className="h-8 w-8 text-primary-600" />
+        <Spinner className="h-8 w-8 text-primary-500" />
       </div>
     );
   }
@@ -104,7 +104,7 @@ export default function DataRetentionPage() {
                   value={opt.value}
                   checked={selectedOption === opt.value}
                   onChange={() => setSelectedOption(opt.value)}
-                  className="h-4 w-4 text-primary-600 border-gray-300"
+                  className="h-4 w-4 text-primary-500 border-gray-300"
                 />
                 <span className="text-sm font-medium text-gray-700">{opt.label}</span>
                 {opt.value === "custom" && selectedOption === "custom" && (

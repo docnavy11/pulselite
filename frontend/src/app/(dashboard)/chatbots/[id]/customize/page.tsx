@@ -86,7 +86,7 @@ export default function CustomizePage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Spinner className="h-8 w-8 text-primary-600" />
+        <Spinner className="h-8 w-8 text-primary-500" />
       </div>
     );
   }
@@ -233,7 +233,7 @@ export default function CustomizePage() {
                   type="checkbox"
                   checked={persistConversation}
                   onChange={(e) => setPersistConversation(e.target.checked)}
-                  className="h-4 w-4 rounded border-gray-300 text-primary-600"
+                  className="h-4 w-4 rounded border-gray-300 text-primary-500"
                 />
               </div>
             </div>
@@ -245,7 +245,7 @@ export default function CustomizePage() {
                   type="checkbox"
                   checked={leadCaptureEnabled}
                   onChange={(e) => setLeadCaptureEnabled(e.target.checked)}
-                  className="h-4 w-4 rounded border-gray-300 text-primary-600"
+                  className="h-4 w-4 rounded border-gray-300 text-primary-500"
                 />
               </div>
               <p className="text-xs text-gray-500 mb-2">Show a form before the first message to capture visitor details</p>
@@ -294,7 +294,7 @@ export default function CustomizePage() {
                   onChange={(e) =>
                     setConfig((prev) => ({ ...prev, gdpr_consent_enabled: e.target.checked }))
                   }
-                  className="h-4 w-4 rounded border-gray-300 text-primary-600"
+                  className="h-4 w-4 rounded border-gray-300 text-primary-500"
                 />
                 <span className="text-sm text-gray-700">Require GDPR consent before chat starts</span>
               </label>

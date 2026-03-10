@@ -64,7 +64,7 @@ export default function RegisterPage() {
     <Card>
       <CardContent className="pt-8 pb-8">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold bg-gradient-to-r from-primary-600 to-primary-400 bg-clip-text text-transparent">
+          <h1 className="text-2xl font-bold bg-gradient-to-r from-primary-500 to-primary-400 bg-clip-text text-transparent">
             Pulse
           </h1>
           <p className="text-gray-500 mt-2 text-sm">Create your account</p>
@@ -155,7 +155,7 @@ export default function RegisterPage() {
           Already have an account?{" "}
           <Link
             href="/login"
-            className="font-medium text-primary-600 hover:text-primary-500"
+            className="font-medium text-primary-500 hover:text-primary-500"
           >
             Sign in
           </Link>

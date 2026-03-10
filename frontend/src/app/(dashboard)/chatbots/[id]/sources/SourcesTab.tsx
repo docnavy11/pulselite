@@ -128,7 +128,7 @@ export function SourcesTab({
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Spinner className="h-6 w-6 text-primary-600" />
+        <Spinner className="h-6 w-6 text-primary-500" />
       </div>
     );
   }

@@ -106,7 +106,7 @@ export default function BillingPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Spinner className="h-8 w-8 text-primary-600" />
+        <Spinner className="h-8 w-8 text-primary-500" />
       </div>
     );
   }
@@ -187,11 +187,11 @@ export default function BillingPage() {
               key={plan.id}
               className={clsx(
                 "relative",
-                plan.is_popular && "ring-2 ring-primary-600",
+                plan.is_popular && "ring-2 ring-primary-500",
               )}
             >
               {plan.is_popular && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-primary-600 px-3 py-0.5 text-[11px] font-medium text-white">
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-primary-500 px-3 py-0.5 text-[11px] font-medium text-white">
                   Most Popular
                 </div>
               )}
@@ -339,7 +339,7 @@ export default function BillingPage() {
                 type="checkbox"
                 checked={autoRecharge.enabled}
                 onChange={(e) => setAutoRecharge(prev => ({ ...prev, enabled: e.target.checked }))}
-                className="h-4 w-4 rounded border-gray-300 text-primary-600"
+                className="h-4 w-4 rounded border-gray-300 text-primary-500"
               />
               <span className="text-sm font-medium text-gray-700">Enable auto-recharge</span>
             </label>

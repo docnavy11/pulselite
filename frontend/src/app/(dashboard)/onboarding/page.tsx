@@ -96,7 +96,7 @@ export default function OnboardingPage() {
   if (loading) {
     return (
       <div className="flex h-[calc(100vh-8rem)] items-center justify-center">
-        <Spinner className="h-8 w-8 text-primary-600" />
+        <Spinner className="h-8 w-8 text-primary-500" />
       </div>
     );
   }
@@ -112,9 +112,9 @@ export default function OnboardingPage() {
                 className={clsx(
                   "flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold transition-all duration-200",
                   i < currentStep
-                    ? "bg-primary-600 text-white"
+                    ? "bg-primary-500 text-white"
                     : i === currentStep
-                      ? "bg-primary-100 text-primary-700 ring-2 ring-primary-600"
+                      ? "bg-primary-100 text-primary-700 ring-2 ring-primary-500"
                       : "bg-gray-100 text-gray-400",
                 )}
               >
@@ -128,7 +128,7 @@ export default function OnboardingPage() {
                 <div
                   className={clsx(
                     "h-0.5 w-8 sm:w-12 mx-1",
-                    i < currentStep ? "bg-primary-600" : "bg-gray-200",
+                    i < currentStep ? "bg-primary-500" : "bg-gray-200",
                   )}
                 />
               )}
@@ -235,7 +235,7 @@ export default function OnboardingPage() {
                   onChange={(e) =>
                     setConfidenceThreshold(Number(e.target.value))
                   }
-                  className="w-full accent-primary-600"
+                  className="w-full accent-primary-500"
                 />
                 <p className="text-xs text-gray-400 mt-1">
                   Below this threshold, conversations will be escalated to a

@@ -47,7 +47,7 @@ export default function TeamPage() {
     setInvites((prev) => prev.filter((i) => i.id !== inviteId));
   }
 
-  if (loading) return <div className="flex justify-center py-20"><Spinner className="h-8 w-8 text-primary-600" /></div>;
+  if (loading) return <div className="flex justify-center py-20"><Spinner className="h-8 w-8 text-primary-500" /></div>;
 
   return (
     <div>
