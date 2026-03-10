@@ -122,17 +122,6 @@ export interface WidgetConfig {
   white_label_enabled?: boolean;
 }
 
-export interface ApiKey {
-  id: string;
-  name: string;
-  key_prefix: string;
-  created_at: string;
-}
-
-export interface ApiKeyCreated extends ApiKey {
-  key: string;
-}
-
 export interface Contact {
   id: string;
   email?: string;
@@ -142,15 +131,6 @@ export interface Contact {
   lead_tier?: string;
   contact_type: string;
   created_at: string;
-}
-
-export interface Exception {
-  conversation: Conversation;
-  contact?: Contact;
-  escalation_reason: string;
-  confidence_avg: number;
-  chatbot_name: string;
-  suggested_action?: string;
 }
 
 export interface GapCluster {
@@ -166,18 +146,6 @@ export interface GapCluster {
 export interface GapClusterDetail extends GapCluster {
   example_queries: string[];
   draft_article?: Article;
-}
-
-export interface ResolutionStats {
-  period_date: string;
-  total_conversations: number;
-  autonomously_resolved: number;
-  escalated_to_human: number;
-  abandoned: number;
-  resolution_rate: number;
-  avg_confidence_score: number;
-  knowledge_velocity: number;
-  documentation_debt: number;
 }
 
 export interface DashboardData {
@@ -290,33 +258,6 @@ export interface UsageBreakdown {
   daily: UsageDailyPoint[];
 }
 
-export interface AuditLogEntry {
-  id: string;
-  action: string;
-  actor_email?: string;
-  resource_type?: string;
-  resource_id?: string;
-  resource_name?: string;
-  ip_address?: string;
-  created_at: string;
-}
-
-export interface CountryDataPoint {
-  country_code: string;
-  country_name: string;
-  count: number;
-}
-
-export interface Action {
-  id: string;
-  action_type: string;
-  name: string;
-  description?: string;
-  trigger_description?: string;
-  config: Record<string, unknown>;
-  is_enabled: boolean;
-}
-
 export interface Invite {
   id: string;
   email: string;
@@ -324,16 +265,6 @@ export interface Invite {
   expires_at?: string;
   accepted_at?: string | null;
   created_at: string;
-}
-
-export interface SSOConfig {
-  id?: string;
-  provider_name: string;
-  client_id: string;
-  client_secret?: string;
-  discovery_url: string;
-  email_domain: string;
-  is_active: boolean;
 }
 
 export interface SegmentSentimentItem {

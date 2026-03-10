@@ -1,7 +1,5 @@
 import { api } from "./api";
 import {
-  Action,
-  AuditLogEntry,
   Chatbot,
   KnowledgeBase,
   Document,
@@ -9,9 +7,6 @@ import {
   Conversation,
   Message,
   WidgetConfig,
-  ApiKey,
-  ApiKeyCreated,
-  Exception,
   GapCluster,
   GapClusterDetail,
   DashboardData,
@@ -27,8 +22,6 @@ import {
   CreditBalance,
   OnboardingState,
   UsageBreakdown,
-  CountryDataPoint,
-  SSOConfig,
   SegmentSentimentItem,
   Webhook,
   LLMSettings,
@@ -247,168 +240,6 @@ export function updateWidgetConfig(workspaceId: string, chatbotId: string, confi
 export function getPublicWidgetConfig(chatbotId: string) {
   return api.get<WidgetConfig & { display_name?: string }>(
     `/api/v1/widget/${chatbotId}/config`,
-  );
-}
-
-// White-label
-export function getWhiteLabel(workspaceId: string) {
-  return api.get<{ white_label_enabled: boolean }>(
-    `/api/v1/workspaces/${workspaceId}/white-label`,
-  );
-}
-
-export function updateWhiteLabel(workspaceId: string, enabled: boolean) {
-  return api.put<{ white_label_enabled: boolean }>(
-    `/api/v1/workspaces/${workspaceId}/white-label`,
-    { white_label_enabled: enabled },
-  );
-}
-
-// API Keys
-export function getApiKeys(workspaceId: string) {
-  return api.get<ApiKey[]>(`/api/v1/workspaces/${workspaceId}/api-keys`);
-}
-
-export function createApiKey(workspaceId: string, name: string) {
-  return api.post<ApiKeyCreated>(`/api/v1/workspaces/${workspaceId}/api-keys`, {
-    name,
-  });
-}
-
-export function revokeApiKey(workspaceId: string, keyId: string) {
-  return api.delete<void>(`/api/v1/workspaces/${workspaceId}/api-keys/${keyId}`);
-}
-
-// Exceptions
-interface BackendExceptionItem {
-  id: string;
-  workspace_id: string;
-  chatbot_id?: string;
-  chatbot_name?: string;
-  contact_id?: string;
-  contact_name?: string;
-  contact_email?: string;
-  escalation_reason?: string;
-  confidence_avg?: number;
-  status: string;
-  last_message_preview?: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export function getExceptions(
-  workspaceId: string,
-  filters?: { escalation_reason?: string; chatbot_id?: string },
-) {
-  const params = new URLSearchParams();
-  if (filters?.escalation_reason)
-    params.set("escalation_reason", filters.escalation_reason);
-  if (filters?.chatbot_id) params.set("chatbot_id", filters.chatbot_id);
-  const qs = params.toString();
-  return api
-    .get<{ items: BackendExceptionItem[]; total: number }>(
-      `/api/v1/workspaces/${workspaceId}/exceptions${qs ? `?${qs}` : ""}`,
-    )
-    .then((r) =>
-      r.items.map(
-        (item): Exception => ({
-          conversation: {
-            id: item.id,
-            chatbot_id: item.chatbot_id ?? "",
-            contact_email: item.contact_email,
-            contact_name: item.contact_name,
-            status: item.status,
-            last_message_preview: item.last_message_preview,
-            created_at: item.created_at,
-            updated_at: item.updated_at,
-          },
-          contact:
-            item.contact_name || item.contact_email
-              ? {
-                  id: item.contact_id ?? "",
-                  name: item.contact_name,
-                  email: item.contact_email,
-                  lead_score: 0,
-                  contact_type: "anonymous",
-                  created_at: item.created_at,
-                }
-              : undefined,
-          escalation_reason: item.escalation_reason ?? "",
-          confidence_avg: item.confidence_avg ?? 0,
-          chatbot_name: item.chatbot_name ?? "",
-        }),
-      ),
-    );
-}
-
-interface BackendExceptionDetail {
-  conversation: BackendExceptionItem;
-  messages: unknown[];
-  contact_context?: {
-    id?: string;
-    name?: string;
-    email?: string;
-    lead_score: number;
-    lead_tier?: string;
-  };
-  suggested_action?: string;
-}
-
-export function getExceptionDetail(
-  workspaceId: string,
-  conversationId: string,
-) {
-  return api
-    .get<BackendExceptionDetail>(
-      `/api/v1/workspaces/${workspaceId}/exceptions/${conversationId}`,
-    )
-    .then((r): Exception => ({
-      conversation: {
-        id: r.conversation.id,
-        chatbot_id: r.conversation.chatbot_id ?? "",
-        contact_email: r.conversation.contact_email,
-        contact_name: r.conversation.contact_name,
-        status: r.conversation.status,
-        last_message_preview: r.conversation.last_message_preview,
-        created_at: r.conversation.created_at,
-        updated_at: r.conversation.updated_at,
-      },
-      contact: r.contact_context
-        ? {
-            id: r.contact_context.id ?? "",
-            name: r.contact_context.name,
-            email: r.contact_context.email,
-            lead_score: r.contact_context.lead_score,
-            lead_tier: r.contact_context.lead_tier,
-            contact_type: "contact",
-            created_at: r.conversation.created_at,
-          }
-        : undefined,
-      escalation_reason: r.conversation.escalation_reason ?? "",
-      confidence_avg: r.conversation.confidence_avg ?? 0,
-      chatbot_name: r.conversation.chatbot_name ?? "",
-      suggested_action: r.suggested_action,
-    }));
-}
-
-export function replyToException(
-  workspaceId: string,
-  conversationId: string,
-  message: string,
-  resolve?: boolean,
-) {
-  return api.post<void>(
-    `/api/v1/workspaces/${workspaceId}/exceptions/${conversationId}/reply`,
-    { message, resolve },
-  );
-}
-
-export function resolveException(
-  workspaceId: string,
-  conversationId: string,
-) {
-  return api.post<void>(
-    `/api/v1/workspaces/${workspaceId}/exceptions/${conversationId}/resolve`,
   );
 }
 
@@ -672,46 +503,6 @@ export function deleteWebhook(workspaceId: string, webhookId: string) {
   return api.delete<void>(`/api/v1/workspaces/${workspaceId}/webhooks/${webhookId}`);
 }
 
-// Geography Analytics
-export function getChatsByCountry(workspaceId: string, days = 30) {
-  return api.get<{ data: CountryDataPoint[] }>(
-    `/api/v1/workspaces/${workspaceId}/analytics/chats-by-country?days=${days}`,
-  );
-}
-
-// Audit Logs
-export function getAuditLogs(
-  workspaceId: string,
-  params?: { limit?: number; offset?: number; action?: string },
-): Promise<{ items: AuditLogEntry[]; total: number }> {
-  const qs = new URLSearchParams();
-  if (params?.limit) qs.set("limit", String(params.limit));
-  if (params?.offset) qs.set("offset", String(params.offset));
-  if (params?.action) qs.set("action", params.action);
-  const query = qs.toString();
-  return api.get(`/api/v1/workspaces/${workspaceId}/audit-logs${query ? `?${query}` : ""}`);
-}
-
-// Actions
-export async function getActions(workspaceId: string, chatbotId: string): Promise<Action[]> {
-  const data = await api.get(`/api/v1/workspaces/${workspaceId}/chatbots/${chatbotId}/actions`);
-  return data as Action[];
-}
-
-export async function createAction(workspaceId: string, chatbotId: string, body: Partial<Action>): Promise<Action> {
-  const data = await api.post(`/api/v1/workspaces/${workspaceId}/chatbots/${chatbotId}/actions`, body);
-  return data as Action;
-}
-
-export async function updateAction(workspaceId: string, chatbotId: string, actionId: string, body: Partial<Action>): Promise<Action> {
-  const data = await api.patch(`/api/v1/workspaces/${workspaceId}/chatbots/${chatbotId}/actions/${actionId}`, body);
-  return data as Action;
-}
-
-export async function deleteAction(workspaceId: string, chatbotId: string, actionId: string): Promise<void> {
-  await api.delete(`/api/v1/workspaces/${workspaceId}/chatbots/${chatbotId}/actions/${actionId}`);
-}
-
 // Invites / Team
 export async function getInvites(workspaceId: string): Promise<Invite[]> {
   const data = await api.get(`/api/v1/workspaces/${workspaceId}/invites`);
@@ -725,25 +516,6 @@ export async function createInvite(workspaceId: string, email: string, role: str
 
 export async function deleteInvite(workspaceId: string, inviteId: string): Promise<void> {
   await api.delete(`/api/v1/workspaces/${workspaceId}/invites/${inviteId}`);
-}
-
-// SSO
-export async function getSSOConfig(workspaceId: string): Promise<SSOConfig | null> {
-  try {
-    const data = await api.get(`/api/v1/workspaces/${workspaceId}/sso`);
-    return data as SSOConfig;
-  } catch {
-    return null;
-  }
-}
-
-export async function updateSSOConfig(workspaceId: string, body: Partial<SSOConfig>): Promise<SSOConfig> {
-  const data = await api.put(`/api/v1/workspaces/${workspaceId}/sso`, body);
-  return data as SSOConfig;
-}
-
-export async function deleteSSOConfig(workspaceId: string): Promise<void> {
-  await api.delete(`/api/v1/workspaces/${workspaceId}/sso`);
 }
 
 // Data retention
