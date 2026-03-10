@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Spinner } from "@/components/ui/Spinner";
 import { Chatbot } from "@/lib/types";
-import { getChatbots } from "@/lib/api-functions";
+import { getChatbots, updateChatbot, deleteChatbot } from "@/lib/api-functions";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 
 export default function ChatbotsPage() {
@@ -17,6 +17,33 @@ export default function ChatbotsPage() {
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);
   const [chatbots, setChatbots] = useState<Chatbot[]>([]);
   const [loading, setLoading] = useState(true);
+  const [actionPending, setActionPending] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+
+  const handleToggle = async (e: { preventDefault: () => void }, chatbot: Chatbot) => {
+    e.preventDefault();
+    if (!workspace) return;
+    setActionPending(chatbot.id);
+    try {
+      const updated = await updateChatbot(workspace.id, chatbot.id, { is_active: !chatbot.is_active });
+      setChatbots((prev) => prev.map((c) => (c.id === chatbot.id ? { ...c, ...updated } : c)));
+    } finally {
+      setActionPending(null);
+    }
+  };
+
+  const handleDelete = async (e: { preventDefault: () => void }, id: string) => {
+    e.preventDefault();
+    if (!workspace) return;
+    setActionPending(id);
+    try {
+      await deleteChatbot(workspace.id, id);
+      setChatbots((prev) => prev.filter((c) => c.id !== id));
+    } finally {
+      setActionPending(null);
+      setConfirmDelete(null);
+    }
+  };
 
   useEffect(() => {
     if (!workspace) return;
@@ -46,30 +73,72 @@ export default function ChatbotsPage() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {chatbots.map((chatbot) => (
-          <Link key={chatbot.id} href={`/chatbots/${chatbot.id}`}>
-            <Card className="cursor-pointer hover:shadow-md transition-all duration-200">
-              <CardContent className="py-5">
-                <div className="flex items-start gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-50 text-primary-500">
-                    <Bot className="h-5 w-5" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-sm font-semibold text-gray-900 truncate">
-                        {chatbot.display_name || chatbot.name}
-                      </h3>
-                      <Badge variant={chatbot.is_active ? "success" : "default"}>
-                        {chatbot.is_active ? "Active" : "Inactive"}
-                      </Badge>
-                    </div>
-                    <p className="mt-1 text-xs text-gray-500">
-                      {chatbot.llm_model} / {chatbot.tone}
-                    </p>
-                  </div>
+          <div key={chatbot.id} className="group relative">
+            {/* Delete confirmation overlay */}
+            {confirmDelete === chatbot.id && (
+              <div className="absolute inset-0 z-10 bg-white border border-red-200 rounded-xl flex flex-col items-center justify-center gap-3 p-4 shadow-lg">
+                <p className="text-[13px] font-semibold text-gray-800 text-center">Delete "{chatbot.display_name || chatbot.name}"?</p>
+                <p className="text-[11px] text-gray-400 text-center">This cannot be undone.</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={(e) => handleDelete(e, chatbot.id)}
+                    disabled={actionPending === chatbot.id}
+                    className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-60"
+                  >
+                    {actionPending === chatbot.id ? "Deleting…" : "Delete"}
+                  </button>
+                  <button
+                    onClick={() => setConfirmDelete(null)}
+                    className="px-3 py-1.5 bg-[#faf8f5] border border-[#f0ebe3] text-gray-600 rounded-lg text-[11px] font-medium"
+                  >
+                    Cancel
+                  </button>
                 </div>
-              </CardContent>
-            </Card>
-          </Link>
+              </div>
+            )}
+
+            <Link href={`/chatbots/${chatbot.id}`}>
+              <Card className="cursor-pointer hover:shadow-md transition-all duration-200">
+                <CardContent className="py-5">
+                  <div className="flex items-start gap-3">
+                    <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${chatbot.is_active ? "bg-primary-50 text-primary-500" : "bg-gray-100 text-gray-400"}`}>
+                      <Bot className="h-5 w-5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h3 className={`text-sm font-semibold truncate ${chatbot.is_active ? "text-gray-900" : "text-gray-400"}`}>
+                          {chatbot.display_name || chatbot.name}
+                        </h3>
+                        <Badge variant={chatbot.is_active ? "success" : "default"}>
+                          {chatbot.is_active ? "Active" : "Inactive"}
+                        </Badge>
+                      </div>
+                      <p className="mt-1 text-xs text-gray-500">
+                        {chatbot.llm_model} / {chatbot.tone}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Hover actions */}
+                  <div className="flex items-center gap-2 mt-3 pt-3 border-t border-[#faf8f5] opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                    <button
+                      onClick={(e) => handleToggle(e, chatbot)}
+                      disabled={actionPending === chatbot.id}
+                      className="flex-1 py-1 text-[11px] font-medium text-gray-500 hover:text-gray-700 border border-[#f0ebe3] rounded-lg hover:bg-[#faf8f5] transition-colors disabled:opacity-50"
+                    >
+                      {actionPending === chatbot.id ? "…" : chatbot.is_active ? "Disable" : "Enable"}
+                    </button>
+                    <button
+                      onClick={(e) => { e.preventDefault(); setConfirmDelete(chatbot.id); }}
+                      className="flex-1 py-1 text-[11px] font-medium text-red-400 hover:text-red-600 border border-[#f0ebe3] rounded-lg hover:bg-red-50 transition-colors"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+          </div>
         ))}
 
         {chatbots.length === 0 && !loading && (
