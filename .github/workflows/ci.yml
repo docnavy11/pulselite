@@ -1,0 +1,203 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── Lint & Static Analysis ─────────────────────────────────────────────────
+  lint:
+    name: Lint & Static Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create .env
+        run: cp .env.example .env
+
+      - name: Start backend
+        run: |
+          docker compose up -d backend
+          sleep 15
+
+      - name: Ruff lint
+        run: docker compose exec -T backend ruff check app/
+
+      - name: Ruff format check
+        run: docker compose exec -T backend ruff format --check app/
+
+      - name: Bandit
+        run: docker compose exec -T backend bandit -r app/ --configfile .bandit -ll
+
+      - name: Semgrep
+        run: |
+          pip install semgrep
+          semgrep scan \
+            --config=p/python \
+            --config=p/owasp-top-ten \
+            --config=p/secrets \
+            backend/app/ \
+            --error
+
+  # ── Backend Tests + Coverage ───────────────────────────────────────────────
+  backend-tests:
+    name: Backend Tests + Coverage
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create .env
+        run: cp .env.example .env
+
+      - name: Start all services
+        run: |
+          docker compose up -d
+          sleep 20
+
+      - name: Wait for postgres
+        run: |
+          for i in $(seq 1 30); do
+            docker compose exec -T postgres pg_isready -U pulse && break || sleep 2
+          done
+
+      - name: Run migrations
+        run: docker compose exec -T backend bash -c "PYTHONPATH=/app alembic upgrade head"
+
+      - name: Seed dev data
+        run: docker compose exec -T backend python scripts/seed.py
+
+      - name: Run tests
+        run: docker compose exec -T backend pytest tests/ -v --tb=short
+
+      - name: Coverage gate
+        run: make test-coverage-gate
+
+  # ── Frontend Unit Tests ────────────────────────────────────────────────────
+  frontend-tests:
+    name: Frontend Unit Tests
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install deps
+        run: npm ci
+        working-directory: frontend
+
+      - name: Vitest
+        run: npx vitest run
+        working-directory: frontend
+
+  # ── E2E Tests ──────────────────────────────────────────────────────────────
+  e2e:
+    name: E2E Tests (Playwright)
+    runs-on: ubuntu-latest
+    needs: [backend-tests, frontend-tests]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create .env
+        run: cp .env.example .env
+
+      - name: Start all services
+        run: |
+          docker compose up -d
+          sleep 25
+
+      - name: Wait for postgres
+        run: |
+          for i in $(seq 1 30); do
+            docker compose exec -T postgres pg_isready -U pulse && break || sleep 2
+          done
+
+      - name: Migrate + seed
+        run: |
+          docker compose exec -T backend bash -c "PYTHONPATH=/app alembic upgrade head"
+          docker compose exec -T backend python scripts/seed.py
+
+      - name: Wait for frontend
+        run: |
+          for i in $(seq 1 40); do
+            curl -sf http://localhost:3001 > /dev/null 2>&1 && break || sleep 3
+          done
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install deps
+        run: npm ci
+        working-directory: frontend
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+        working-directory: frontend
+
+      - name: Run E2E tests
+        run: npx playwright test
+        working-directory: frontend
+        env:
+          CI: true
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+
+  # ── Schema Fuzz + k6 Smoke ─────────────────────────────────────────────────
+  schema-perf:
+    name: Schemathesis + k6 Smoke
+    runs-on: ubuntu-latest
+    needs: backend-tests
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create .env
+        run: cp .env.example .env
+
+      - name: Start all services
+        run: |
+          docker compose up -d
+          sleep 20
+
+      - name: Wait for postgres + migrate + seed
+        run: |
+          for i in $(seq 1 30); do
+            docker compose exec -T postgres pg_isready -U pulse && break || sleep 2
+          done
+          docker compose exec -T backend bash -c "PYTHONPATH=/app alembic upgrade head"
+          docker compose exec -T backend python scripts/seed.py
+
+      - name: Install schemathesis
+        run: pip install schemathesis
+
+      - name: Schemathesis — public endpoints
+        run: make test-schema-public
+
+      - name: Install k6
+        run: |
+          sudo gpg -k
+          sudo gpg --no-default-keyring \
+            --keyring /usr/share/keyrings/k6-archive-keyring.gpg \
+            --keyserver hkp://keyserver.ubuntu.com:80 \
+            --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" \
+            | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install -y k6
+
+      - name: k6 smoke
+        run: make perf-smoke

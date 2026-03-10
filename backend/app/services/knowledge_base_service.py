@@ -1,0 +1,40 @@
+import uuid
+
+from fastapi import HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.knowledge import KnowledgeBase
+
+
+async def create_knowledge_base(db: AsyncSession, workspace_id: uuid.UUID, **kwargs) -> KnowledgeBase:
+    kb = KnowledgeBase(workspace_id=workspace_id, **kwargs)
+    db.add(kb)
+    await db.flush()
+    return kb
+
+
+async def list_knowledge_bases(
+    db: AsyncSession, workspace_id: uuid.UUID, chatbot_id: uuid.UUID | None = None
+) -> list[KnowledgeBase]:
+    query = select(KnowledgeBase).where(KnowledgeBase.workspace_id == workspace_id)
+    if chatbot_id:
+        query = query.where(KnowledgeBase.chatbot_id == chatbot_id)
+    result = await db.execute(query)
+    return list(result.scalars().all())
+
+
+async def get_knowledge_base(db: AsyncSession, workspace_id: uuid.UUID, kb_id: uuid.UUID) -> KnowledgeBase:
+    result = await db.execute(
+        select(KnowledgeBase).where(KnowledgeBase.id == kb_id, KnowledgeBase.workspace_id == workspace_id)
+    )
+    kb = result.scalar_one_or_none()
+    if kb is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Knowledge base not found")
+    return kb
+
+
+async def delete_knowledge_base(db: AsyncSession, workspace_id: uuid.UUID, kb_id: uuid.UUID) -> None:
+    kb = await get_knowledge_base(db, workspace_id, kb_id)
+    await db.delete(kb)
+    await db.flush()

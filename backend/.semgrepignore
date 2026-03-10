@@ -1,0 +1,5 @@
+tests/
+scripts/
+alembic/
+__pycache__/
+*.pyc

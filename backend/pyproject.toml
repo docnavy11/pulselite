@@ -1,0 +1,98 @@
+[project]
+name = "pulse-backend"
+version = "0.1.0"
+description = "Pulse - AI-native autonomous resolution platform"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "asyncpg>=0.30.0",
+    "alembic>=1.14.0",
+    "pydantic[email]>=2.0.0",
+    "pydantic-settings>=2.6.0",
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[argon2]>=1.7.4",
+    "argon2-cffi>=23.1.0",
+    "httpx>=0.28.0",
+    "pgvector>=0.3.6",
+    "celery[redis]>=5.4.0",
+    "redis>=5.2.0",
+    "trafilatura>=1.12.0",
+    "PyMuPDF>=1.24.0",
+    "python-docx>=1.1.0",
+    "openai>=1.0",
+    "tiktoken>=0.7.0",
+    "python-multipart>=0.0.9",
+    "anthropic>=0.40",
+    "google-generativeai>=0.8.0",
+    "sse-starlette>=2.0.0",
+    "sentence-transformers>=3.0.0",
+    "cryptography>=43.0.0",
+    "slowapi>=0.1.9",
+    "bertopic>=0.16.0",
+    "hdbscan>=0.8.33",
+    "umap-learn>=0.5.0",
+    "scikit-learn>=1.5.0",
+    "numpy>=1.26.0",
+    "slack_sdk>=3.27.0",
+    "hubspot-api-client>=9.0.0",
+    "stripe>=8.0.0",
+    "jira>=3.8.0",
+    "resend>=2.0.0",
+    "pyotp>=2.9.0",
+    "qrcode[pil]>=7.4.0",
+    "defusedxml>=0.7.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+    "pytest-mock>=3.14.0",
+    "pytest-xdist>=3.6.0",
+    "faker>=33.0.0",
+    "ruff>=0.8.0",
+    "anyio[trio]>=4.0.0",
+    "bandit[toml]>=1.8.0",
+]
+
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+testpaths = ["tests"]
+pythonpath = ["."]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+[tool.coverage.run]
+source = ["app"]
+omit = [
+    "app/workers/tasks/*",
+    "app/workers/celery_app.py",
+    "alembic/*",
+    "scripts/*",
+    "tests/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "\\.\\.\\.",
+]
+show_missing = true
+skip_covered = false
