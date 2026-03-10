@@ -5,12 +5,10 @@ import { TopBar } from "@/components/layout/TopBar";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { CommandPalette } from "@/components/CommandPalette";
 import { ToastProvider } from "@/components/ui/Toast";
+import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+function DashboardShell({ children }: { children: React.ReactNode }) {
+  useKeyboardShortcuts();
   return (
     <ProtectedRoute>
       <div className="flex h-screen overflow-hidden">
@@ -26,4 +24,12 @@ export default function DashboardLayout({
       <ToastProvider />
     </ProtectedRoute>
   );
+}
+
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return <DashboardShell>{children}</DashboardShell>;
 }

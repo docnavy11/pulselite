@@ -72,22 +72,28 @@ export default function ChatbotsPage() {
           </Link>
         ))}
 
-        {chatbots.length === 0 && (
-          <Card className="col-span-full">
-            <CardContent className="flex flex-col items-center justify-center py-12 text-gray-400">
-              <Bot className="h-12 w-12 mb-3" />
-              <p className="text-sm font-medium">No chatbots yet</p>
-              <p className="text-xs mt-1">
-                <button
-                  className="text-primary-500 hover:underline"
-                  onClick={() => router.push("/chatbots/new")}
-                >
-                  Create your first chatbot
-                </button>{" "}
-                to get started
-              </p>
-            </CardContent>
-          </Card>
+        {chatbots.length === 0 && !loading && (
+          <div className="col-span-full flex flex-col items-center justify-center py-16 text-center">
+            <div className="mb-4">
+              <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+                <path
+                  d="M24 4 L29 18 L44 24 L29 30 L24 44 L19 30 L4 24 L19 18 Z"
+                  stroke="#ff6b35" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                  fill="none"
+                />
+              </svg>
+            </div>
+            <h3 className="text-[16px] font-bold text-gray-800 mb-2">Your first bot is one URL away</h3>
+            <p className="text-[13px] text-gray-400 mb-5 max-w-xs">
+              Paste a URL, we crawl it and auto-configure a chatbot in minutes.
+            </p>
+            <button
+              onClick={() => router.push("/chatbots/new")}
+              className="px-5 py-2.5 bg-primary-500 hover:bg-primary-600 text-white rounded-xl text-[13px] font-semibold transition-colors"
+            >
+              Create my first chatbot
+            </button>
+          </div>
         )}
       </div>
     </div>
