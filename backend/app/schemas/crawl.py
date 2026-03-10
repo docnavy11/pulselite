@@ -24,6 +24,8 @@ class CrawlRequest(BaseModel):
         parsed = urlparse(v)
         if parsed.scheme not in ("http", "https"):
             raise ValueError("URL must be http or https")
+        if not parsed.netloc:
+            raise ValueError("URL must include a valid host")
         return v
 
 
