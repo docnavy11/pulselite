@@ -2,7 +2,7 @@
 """Unit tests for app.services.autoconfig — pure LLM config generation."""
 import json
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 from app.services.autoconfig import AutoConfigResult, extract_brand_color, generate
 
@@ -35,13 +35,6 @@ def test_extract_brand_color_not_found():
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
-def _make_mock_response(content: str) -> MagicMock:
-    mock_response = MagicMock()
-    mock_response.choices = [MagicMock()]
-    mock_response.choices[0].message.content = content
-    return mock_response
-
-
 _VALID_PAYLOAD = {
     "name": "Acme Support Bot",
     "welcome_message": "Welcome to Acme! How can I help you today?",
@@ -60,13 +53,10 @@ _VALID_PAYLOAD = {
 
 @pytest.mark.asyncio
 async def test_generate_returns_all_fields():
-    mock_create = AsyncMock(return_value=_make_mock_response(json.dumps(_VALID_PAYLOAD)))
+    mock_generate = AsyncMock(return_value=json.dumps(_VALID_PAYLOAD))
 
-    with patch("app.services.autoconfig.AsyncOpenAI") as mock_cls:
-        mock_client = MagicMock()
-        mock_client.chat.completions.create = mock_create
-        mock_cls.return_value = mock_client
-
+    with patch("app.services.autoconfig._llm_client") as mock_client:
+        mock_client.generate = mock_generate
         result = await generate(["Some website content about Acme products."], "")
 
     assert isinstance(result, AutoConfigResult)
@@ -75,18 +65,16 @@ async def test_generate_returns_all_fields():
     assert isinstance(result.system_prompt, str) and len(result.system_prompt) > 0
     assert len(result.suggested_questions) == 4
     assert isinstance(result.fallback_message, str) and len(result.fallback_message) > 0
+    assert result.brand_color is None
 
 
 @pytest.mark.asyncio
 async def test_generate_brand_color_from_html():
-    mock_create = AsyncMock(return_value=_make_mock_response(json.dumps(_VALID_PAYLOAD)))
+    mock_generate = AsyncMock(return_value=json.dumps(_VALID_PAYLOAD))
     homepage_html = '<head><meta name="theme-color" content="#FF5733"></head>'
 
-    with patch("app.services.autoconfig.AsyncOpenAI") as mock_cls:
-        mock_client = MagicMock()
-        mock_client.chat.completions.create = mock_create
-        mock_cls.return_value = mock_client
-
+    with patch("app.services.autoconfig._llm_client") as mock_client:
+        mock_client.generate = mock_generate
         result = await generate(["content"], homepage_html)
 
     assert result.brand_color == "#FF5733"
@@ -94,46 +82,34 @@ async def test_generate_brand_color_from_html():
 
 @pytest.mark.asyncio
 async def test_generate_retries_on_bad_json():
-    bad_response = _make_mock_response("This is not JSON at all.")
-    good_response = _make_mock_response(json.dumps(_VALID_PAYLOAD))
-    mock_create = AsyncMock(side_effect=[bad_response, good_response])
+    mock_generate = AsyncMock(side_effect=["This is not JSON at all.", json.dumps(_VALID_PAYLOAD)])
 
-    with patch("app.services.autoconfig.AsyncOpenAI") as mock_cls:
-        mock_client = MagicMock()
-        mock_client.chat.completions.create = mock_create
-        mock_cls.return_value = mock_client
-
+    with patch("app.services.autoconfig._llm_client") as mock_client:
+        mock_client.generate = mock_generate
         result = await generate(["content"], "")
 
-    assert mock_create.call_count == 2
+    assert mock_generate.call_count == 2
     assert result.name == "Acme Support Bot"
 
 
 @pytest.mark.asyncio
 async def test_generate_raises_on_double_failure():
-    bad_response = _make_mock_response("still not json { broken")
-    mock_create = AsyncMock(side_effect=[bad_response, bad_response])
+    mock_generate = AsyncMock(return_value="still not json { broken")
 
-    with patch("app.services.autoconfig.AsyncOpenAI") as mock_cls:
-        mock_client = MagicMock()
-        mock_client.chat.completions.create = mock_create
-        mock_cls.return_value = mock_client
-
+    with patch("app.services.autoconfig._llm_client") as mock_client:
+        mock_client.generate = mock_generate
         with pytest.raises(RuntimeError, match="LLM returned invalid JSON after retry"):
             await generate(["content"], "")
 
-    assert mock_create.call_count == 2
+    assert mock_generate.call_count == 2
 
 
 @pytest.mark.asyncio
 async def test_generate_empty_html_no_brand_color():
-    mock_create = AsyncMock(return_value=_make_mock_response(json.dumps(_VALID_PAYLOAD)))
+    mock_generate = AsyncMock(return_value=json.dumps(_VALID_PAYLOAD))
 
-    with patch("app.services.autoconfig.AsyncOpenAI") as mock_cls:
-        mock_client = MagicMock()
-        mock_client.chat.completions.create = mock_create
-        mock_cls.return_value = mock_client
-
+    with patch("app.services.autoconfig._llm_client") as mock_client:
+        mock_client.generate = mock_generate
         result = await generate(["content"], "")
 
     assert result.brand_color is None

@@ -5,11 +5,13 @@ import random
 import re
 from dataclasses import dataclass
 
-from openai import AsyncOpenAI
-
-from app.config import settings
+from app.services.llm.anthropic_client import AnthropicLLMClient
 
 logger = logging.getLogger(__name__)
+
+_HAIKU_MODEL = "claude-haiku-4-5-20251001"
+
+_llm_client = AnthropicLLMClient()
 
 _DEFAULT_QUESTIONS = [
     "How can I get started?",
@@ -72,11 +74,9 @@ def extract_brand_color(html: str) -> str | None:
     # Fallback: scan inline <style> tags for --primary CSS variable
     style_blocks = re.findall(r'<style[^>]*>(.*?)</style>', html, re.DOTALL | re.IGNORECASE)
     for block in style_blocks:
-        match = re.search(r'--primary\s*:\s*(#[0-9a-fA-F]{3,6})', block, re.IGNORECASE)
+        match = re.search(r'--primary\s*:\s*(#[0-9a-fA-F]{6}|#[0-9a-fA-F]{3})(?=[^0-9a-fA-F]|$)', block, re.IGNORECASE)
         if match:
-            color = match.group(1).strip()
-            if re.match(r'^#[0-9a-fA-F]{3}$', color) or re.match(r'^#[0-9a-fA-F]{6}$', color):
-                return color
+            return match.group(1).strip()
 
     return None
 
@@ -84,17 +84,17 @@ def extract_brand_color(html: str) -> str | None:
 def _parse_llm_response(raw: str) -> dict:
     """Parse JSON from LLM response text. Raises json.JSONDecodeError on failure."""
     text = raw.strip()
-    # Strip markdown code fences if present
-    text = re.sub(r'^```(?:json)?\s*', '', text, flags=re.IGNORECASE)
-    text = re.sub(r'\s*```$', '', text)
+    # Strip markdown code fences if present (with optional trailing newline)
+    text = re.sub(r'^```(?:json)?\s*\n?', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'\n?```\s*$', '', text)
     return json.loads(text.strip())
 
 
 async def generate(chunks: list[str], homepage_html: str) -> AutoConfigResult:
-    """Generate chatbot config from content chunks using LLM.
+    """Generate chatbot config from content chunks using Claude Haiku.
 
     - Sample strategy: first 5 chunks + random sample up to 20 total
-    - Single LLM call (gpt-4o-mini)
+    - Single LLM call (Claude Haiku via AnthropicLLMClient)
     - system_prompt capped at 300 words
     - suggested_questions exactly 4 items
     - If LLM returns malformed JSON: retry once with stricter prompt
@@ -110,28 +110,25 @@ async def generate(chunks: list[str], homepage_html: str) -> AutoConfigResult:
     content = "\n\n---\n\n".join(sampled_chunks)
     brand_color = extract_brand_color(homepage_html)
 
-    client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
     prompt_text = _PROMPT.format(content=content)
 
-    response = await client.chat.completions.create(
-        model="gpt-4o-mini",
+    raw = await _llm_client.generate(
         messages=[{"role": "user", "content": prompt_text}],
+        model=_HAIKU_MODEL,
         temperature=0.3,
         max_tokens=1000,
     )
-    raw = response.choices[0].message.content or ""
 
     try:
         result = _parse_llm_response(raw)
     except (json.JSONDecodeError, ValueError):
         logger.warning("autoconfig: first LLM response was not valid JSON, retrying with stricter prompt")
-        retry_response = await client.chat.completions.create(
-            model="gpt-4o-mini",
+        raw_retry = await _llm_client.generate(
             messages=[{"role": "user", "content": prompt_text + _STRICT_SUFFIX}],
+            model=_HAIKU_MODEL,
             temperature=0.3,
             max_tokens=1000,
         )
-        raw_retry = retry_response.choices[0].message.content or ""
         try:
             result = _parse_llm_response(raw_retry)
         except (json.JSONDecodeError, ValueError) as exc:
