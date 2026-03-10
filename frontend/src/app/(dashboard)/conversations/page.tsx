@@ -1,214 +1,378 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import { useRouter } from "next/navigation";
-import { MessageSquare } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
-import { Spinner } from "@/components/ui/Spinner";
-import { Conversation } from "@/lib/types";
-import { getConversations, exportConversationsCSV } from "@/lib/api-functions";
+import { useEffect, useState, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { clsx } from "clsx";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { Conversation, Message } from "@/lib/types";
+import {
+  getConversations,
+  getConversation,
+  getMessages,
+  updateConversationStatus,
+} from "@/lib/api-functions";
 
-const statusColors: Record<string, string> = {
-  open: "bg-blue-100 text-blue-700",
-  pending: "bg-amber-100 text-amber-700",
-  resolved: "bg-green-100 text-green-700",
-  escalated: "bg-red-100 text-red-700",
-  closed: "bg-gray-100 text-gray-700",
-};
+type StatusFilter = "open" | "all" | "resolved" | "escalated";
 
-const outcomeColors: Record<string, string> = {
-  resolved: "bg-green-100 text-green-700",
-  escalated: "bg-orange-100 text-orange-700",
-  churned: "bg-red-100 text-red-700",
-  upgraded: "bg-blue-100 text-blue-700",
-  pending: "bg-gray-100 text-gray-600",
-};
-
-function OutcomeBadge({ outcome }: { outcome?: string }) {
-  const label = outcome || "pending";
-  const colorClass = outcomeColors[label] ?? outcomeColors.pending;
-  return (
-    <span
-      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${colorClass}`}
-    >
-      {label}
-    </span>
-  );
+interface ConversationDetail extends Conversation {
+  messages: Message[];
 }
 
-function ConfidenceIndicator({ value }: { value?: number }) {
-  if (value == null) return <span className="text-gray-400">-</span>;
-  const pct = Math.round(value * 100);
-  const color =
-    value > 0.75
-      ? "text-green-600"
-      : value > 0.5
-        ? "text-amber-600"
-        : "text-red-600";
-  return <span className={`font-medium ${color}`}>{pct}%</span>;
+function nameToColor(name: string): string {
+  const colors = [
+    "from-orange-400 to-rose-400",
+    "from-blue-400 to-indigo-400",
+    "from-green-400 to-teal-400",
+    "from-purple-400 to-pink-400",
+    "from-amber-400 to-orange-400",
+  ];
+  let hash = 0;
+  for (const c of name) hash = c.charCodeAt(0) + ((hash << 5) - hash);
+  return colors[Math.abs(hash) % colors.length];
 }
+
+function relativeTime(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
+const STATUS_DOT: Record<string, string> = {
+  open: "bg-green-400",
+  resolved: "bg-gray-300",
+  escalated: "bg-red-400",
+  pending: "bg-amber-400",
+  closed: "bg-gray-300",
+};
 
 export default function ConversationsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const selectedId = searchParams.get("id");
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);
+
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("open");
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState("");
-  const [outcomeFilter, setOutcomeFilter] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [exporting, setExporting] = useState(false);
+  const [selected, setSelected] = useState<ConversationDetail | null>(null);
+  const [loadingList, setLoadingList] = useState(true);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [showMeta, setShowMeta] = useState(true);
 
-  async function handleExport() {
-    if (!workspace) return;
-    setExporting(true);
-    try {
-      await exportConversationsCSV(workspace.id);
-    } catch {
-      // ignore
-    } finally {
-      setExporting(false);
-    }
-  }
-
+  // Load conversation list
   useEffect(() => {
-    if (!workspace) {
-      setLoading(false);
+    if (!workspace?.id) return;
+    setLoadingList(true);
+    getConversations(workspace.id, {
+      ...(statusFilter !== "all" ? { status: statusFilter } : {}),
+    })
+      .then((data) => setConversations(data))
+      .catch(() => {})
+      .finally(() => setLoadingList(false));
+  }, [workspace?.id, statusFilter]);
+
+  // Load selected conversation detail + messages
+  useEffect(() => {
+    if (!selectedId || !workspace?.id) {
+      setSelected(null);
       return;
     }
-    setLoading(true);
-    getConversations(workspace.id, {
-      ...(statusFilter ? { status: statusFilter } : {}),
-      ...(dateFrom ? { date_from: dateFrom } : {}),
-      ...(dateTo ? { date_to: dateTo } : {}),
-    })
-      .then(setConversations)
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [workspace, statusFilter, dateFrom, dateTo]);
+    setLoadingDetail(true);
+    Promise.all([
+      getConversation(workspace.id, selectedId),
+      getMessages(workspace.id, selectedId),
+    ])
+      .then(([conv, msgs]) => {
+        setSelected({ ...conv, messages: msgs });
+      })
+      .catch(() => setSelected(null))
+      .finally(() => setLoadingDetail(false));
+  }, [selectedId, workspace?.id]);
 
-  const filteredConversations = useMemo(() => {
-    if (!outcomeFilter) return conversations;
-    return conversations.filter((c) => {
-      if (outcomeFilter === "pending") return !c.outcome || c.outcome === "pending";
-      return c.outcome === outcomeFilter;
-    });
-  }, [conversations, outcomeFilter]);
+  const selectConversation = useCallback(
+    (id: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("id", id);
+      router.replace(`/conversations?${params.toString()}`, { scroll: false });
+    },
+    [router, searchParams],
+  );
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Spinner className="h-8 w-8 text-primary-500" />
-      </div>
-    );
-  }
+  const handleStatusChange = useCallback(
+    async (newStatus: string) => {
+      if (!selected || !workspace?.id) return;
+      try {
+        const updated = await updateConversationStatus(workspace.id, selected.id, newStatus);
+        setSelected((prev) => (prev ? { ...prev, ...updated } : null));
+        setConversations((prev) =>
+          prev.map((c) => (c.id === updated.id ? { ...c, ...updated } : c)),
+        );
+      } catch {
+        // ignore
+      }
+    },
+    [selected, workspace?.id],
+  );
+
+  const filters: { label: string; value: StatusFilter }[] = [
+    { label: "Open", value: "open" },
+    { label: "All", value: "all" },
+    { label: "Resolved", value: "resolved" },
+    { label: "Escalated", value: "escalated" },
+  ];
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Conversations</h1>
-        <div className="flex items-center gap-3">
-          <Button variant="secondary" size="sm" onClick={handleExport} disabled={exporting}>
-            {exporting ? "Exporting..." : "Export CSV"}
-          </Button>
-          <input
-            type="date"
-            value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-            aria-label="From date"
-          />
-          <input
-            type="date"
-            value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-            aria-label="To date"
-          />
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-          >
-            <option value="">All statuses</option>
-            <option value="open">Open</option>
-            <option value="pending">Pending</option>
-            <option value="resolved">Resolved</option>
-            <option value="escalated">Escalated</option>
-            <option value="closed">Closed</option>
-          </select>
-          <select
-            value={outcomeFilter}
-            onChange={(e) => setOutcomeFilter(e.target.value)}
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-          >
-            <option value="">All outcomes</option>
-            <option value="resolved">Resolved</option>
-            <option value="escalated">Escalated</option>
-            <option value="churned">Churned</option>
-            <option value="upgraded">Upgraded</option>
-            <option value="pending">Pending</option>
-          </select>
+    <div className="flex flex-1 overflow-hidden bg-[#faf8f5]">
+      {/* Left: conversation list */}
+      <div className="w-[280px] flex-shrink-0 flex flex-col bg-white border-r border-[#f0ebe3]">
+        {/* Filter chips */}
+        <div className="flex gap-1.5 px-3 py-2.5 border-b border-[#f0ebe3] overflow-x-auto">
+          {filters.map((f) => (
+            <button
+              key={f.value}
+              onClick={() => setStatusFilter(f.value)}
+              className={clsx(
+                "px-2.5 py-1 rounded-full text-[11px] font-medium whitespace-nowrap transition-colors",
+                statusFilter === f.value
+                  ? "bg-primary-500 text-white"
+                  : "bg-[#faf8f5] text-gray-500 hover:bg-[#f0ebe3]",
+              )}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+
+        {/* List */}
+        <div className="flex-1 overflow-y-auto">
+          {loadingList ? (
+            <div className="space-y-0">
+              {[...Array(6)].map((_, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-2.5 px-3 py-3 border-b border-[#faf8f5]"
+                >
+                  <div className="w-8 h-8 rounded-full bg-[#f5f0ea] animate-pulse flex-shrink-0" />
+                  <div className="flex-1 space-y-1.5">
+                    <div className="h-2.5 bg-[#f5f0ea] rounded animate-pulse w-3/4" />
+                    <div className="h-2 bg-[#f5f0ea] rounded animate-pulse w-1/2" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : conversations.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full py-12 px-4 text-center">
+              <div className="text-3xl mb-3 opacity-40">💬</div>
+              <p className="text-[12px] text-gray-400">No conversations yet</p>
+            </div>
+          ) : (
+            conversations.map((conv) => {
+              const isActive = conv.id === selectedId;
+              const contactName =
+                conv.contact_name ?? conv.contact_email?.split("@")[0] ?? "Anonymous";
+              const colorClass = nameToColor(contactName);
+              const initial = contactName[0]?.toUpperCase() ?? "?";
+              const preview = conv.last_message_preview ?? "";
+              const time = conv.updated_at ?? conv.created_at ?? "";
+              const status = conv.status ?? "open";
+
+              return (
+                <button
+                  key={conv.id}
+                  onClick={() => selectConversation(conv.id)}
+                  className={clsx(
+                    "w-full flex items-start gap-2.5 px-3 py-3 border-b border-[#faf8f5] text-left transition-all",
+                    isActive
+                      ? "bg-primary-50 border-l-2 border-l-primary-500 pl-2.5"
+                      : "hover:bg-[#faf8f5]",
+                  )}
+                >
+                  {/* Avatar */}
+                  <div
+                    className={`w-8 h-8 rounded-full bg-gradient-to-br ${colorClass} flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0 mt-0.5`}
+                  >
+                    {initial}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-[12px] font-semibold text-gray-800 truncate">
+                        {contactName}
+                      </span>
+                      <span className="text-[10px] text-gray-400 flex-shrink-0">
+                        {time ? relativeTime(time) : ""}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-gray-400 truncate mt-0.5">{preview}</p>
+                  </div>
+                  <div
+                    className={`w-1.5 h-1.5 rounded-full mt-2 flex-shrink-0 ${STATUS_DOT[status] ?? "bg-gray-300"}`}
+                  />
+                </button>
+              );
+            })
+          )}
         </div>
       </div>
 
-      {filteredConversations.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12 text-gray-400">
-            <MessageSquare className="h-10 w-10 mb-3" />
-            <p className="text-sm font-medium">No conversations yet</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-200 bg-gray-50">
-                <th className="text-left px-4 py-3 font-medium text-gray-500">Contact</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">Status</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">Outcome</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">Confidence</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">Last Message</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">Created</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredConversations.map((conv) => (
-                <tr
-                  key={conv.id}
-                  onClick={() => router.push(`/conversations/${conv.id}`)}
-                  className="border-b border-gray-100 last:border-0 cursor-pointer hover:bg-gray-50 transition-all duration-200"
+      {/* Right: detail panel */}
+      <div className="flex-1 flex overflow-hidden">
+        {!selectedId ? (
+          <div className="flex-1 flex items-center justify-center bg-[#faf8f5]">
+            <div className="text-center">
+              <div className="text-4xl mb-3 opacity-30">👈</div>
+              <p className="text-[13px] text-gray-400">Select a conversation</p>
+            </div>
+          </div>
+        ) : loadingDetail ? (
+          <div className="flex-1 p-6 space-y-3">
+            <div className="h-4 bg-[#f5f0ea] rounded animate-pulse w-48" />
+            <div className="h-16 bg-[#f5f0ea] rounded animate-pulse" />
+            <div className="h-16 bg-[#f5f0ea] rounded animate-pulse w-3/4 ml-auto" />
+          </div>
+        ) : selected ? (
+          <>
+            {/* Chat area */}
+            <div className="flex-1 flex flex-col overflow-hidden">
+              {/* Header */}
+              <div className="flex items-center gap-3 px-5 py-3 border-b border-[#f0ebe3] bg-white">
+                <div
+                  className={`w-8 h-8 rounded-full bg-gradient-to-br ${nameToColor(selected.contact_name ?? selected.contact_email?.split("@")[0] ?? "?")} flex items-center justify-center text-white text-[11px] font-bold`}
                 >
-                  <td className="px-4 py-3 font-medium text-gray-900">
-                    {conv.contact_name || conv.contact_email || "Anonymous"}
-                  </td>
-                  <td className="px-4 py-3">
+                  {(
+                    (selected.contact_name ?? selected.contact_email ?? "?")[0] ?? "?"
+                  ).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[13px] font-semibold text-gray-800">
+                    {selected.contact_name ?? selected.contact_email ?? "Anonymous"}
+                  </div>
+                </div>
+                {/* Inline status dropdown */}
+                <select
+                  value={selected.status ?? "open"}
+                  onChange={(e) => handleStatusChange(e.target.value)}
+                  className="text-[11px] font-medium px-2.5 py-1 rounded-full border border-[#f0ebe3] bg-[#faf8f5] text-gray-600 cursor-pointer"
+                >
+                  <option value="open">Open</option>
+                  <option value="pending">Pending</option>
+                  <option value="resolved">Resolved</option>
+                  <option value="escalated">Escalated</option>
+                  <option value="closed">Closed</option>
+                </select>
+                <button
+                  onClick={() => setShowMeta((s) => !s)}
+                  className="text-[11px] text-gray-400 hover:text-gray-600"
+                >
+                  {showMeta ? "Hide info" : "Show info"}
+                </button>
+              </div>
+
+              {/* Messages */}
+              <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3 bg-[#faf8f5]">
+                {selected.messages.length === 0 ? (
+                  <div className="flex items-center justify-center h-full">
+                    <p className="text-[12px] text-gray-400">No messages in this conversation</p>
+                  </div>
+                ) : (
+                  selected.messages.map((msg) => {
+                    const isBot = msg.role === "assistant";
+                    return (
+                      <div key={msg.id} className={`flex ${isBot ? "justify-start" : "justify-end"}`}>
+                        <div
+                          className={clsx(
+                            "max-w-[70%] px-3.5 py-2.5 rounded-2xl text-[12px] leading-relaxed",
+                            isBot
+                              ? "bg-white border border-[#f0ebe3] text-gray-700 rounded-tl-sm"
+                              : "bg-primary-500 text-white rounded-tr-sm",
+                          )}
+                        >
+                          {msg.content}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* Metadata sidebar */}
+            {showMeta && (
+              <div className="w-[180px] flex-shrink-0 border-l border-[#f0ebe3] bg-white overflow-y-auto px-4 py-4 space-y-4">
+                <div>
+                  <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">
+                    Contact
+                  </div>
+                  <div className="text-[11px] text-gray-600">
+                    {selected.contact_name ?? "Anonymous"}
+                  </div>
+                  {selected.contact_email && (
+                    <div className="text-[10px] text-gray-400 mt-0.5 break-all">
+                      {selected.contact_email}
+                    </div>
+                  )}
+                </div>
+                {selected.confidence != null && (
+                  <div>
+                    <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">
+                      Confidence
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 h-1.5 bg-[#f0ebe3] rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-primary-500 rounded-full"
+                          style={{ width: `${Math.round(selected.confidence * 100)}%` }}
+                        />
+                      </div>
+                      <span className="text-[10px] text-gray-500">
+                        {Math.round(selected.confidence * 100)}%
+                      </span>
+                    </div>
+                  </div>
+                )}
+                {selected.outcome && (
+                  <div>
+                    <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">
+                      Outcome
+                    </div>
+                    <span className="text-[10px] text-gray-600">{selected.outcome}</span>
+                  </div>
+                )}
+                {selected.status && (
+                  <div>
+                    <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">
+                      Status
+                    </div>
                     <span
-                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${statusColors[conv.status] || statusColors.open}`}
+                      className={clsx(
+                        "text-[10px] font-medium px-2 py-0.5 rounded-full",
+                        selected.status === "open"
+                          ? "bg-green-50 text-green-600"
+                          : selected.status === "escalated"
+                            ? "bg-red-50 text-red-500"
+                            : selected.status === "pending"
+                              ? "bg-amber-50 text-amber-600"
+                              : "bg-gray-100 text-gray-500",
+                      )}
                     >
-                      {conv.status}
+                      {selected.status}
                     </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <OutcomeBadge outcome={conv.outcome} />
-                  </td>
-                  <td className="px-4 py-3">
-                    <ConfidenceIndicator value={conv.confidence} />
-                  </td>
-                  <td className="px-4 py-3 text-gray-500 max-w-xs truncate">
-                    {conv.last_message_preview || "-"}
-                  </td>
-                  <td className="px-4 py-3 text-gray-500">
-                    {new Date(conv.created_at).toLocaleDateString()}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+                  </div>
+                )}
+                <div>
+                  <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">
+                    Created
+                  </div>
+                  <span className="text-[10px] text-gray-500">
+                    {new Date(selected.created_at).toLocaleDateString()}
+                  </span>
+                </div>
+              </div>
+            )}
+          </>
+        ) : null}
+      </div>
     </div>
   );
 }
