@@ -69,7 +69,6 @@ class WidgetConfigResponse(BaseModel):
     auto_open_delay: int | None = None
     persist_conversation: bool = False
     custom_css: Optional[str] = None
-    white_label_enabled: bool = False
 
     model_config = {"from_attributes": True}
 

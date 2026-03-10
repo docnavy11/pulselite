@@ -6,7 +6,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.knowledge import Chatbot
-from app.models.organizational import Workspace
 from app.schemas.widget import WidgetConfig, WidgetConfigResponse
 
 router = APIRouter(tags=["widget"])
@@ -18,11 +17,6 @@ async def get_widget_config(chatbot_id: uuid.UUID, db: AsyncSession = Depends(ge
     chatbot = result.scalar_one_or_none()
     if chatbot is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chatbot not found")
-
-    # Fetch workspace to get white_label_enabled
-    ws_result = await db.execute(select(Workspace).where(Workspace.id == chatbot.workspace_id))
-    workspace = ws_result.scalar_one_or_none()
-    white_label_enabled = workspace.white_label_enabled if workspace else False
 
     widget_cfg = chatbot.widget_config or {}
     parsed_cfg = WidgetConfig(**widget_cfg) if widget_cfg else WidgetConfig()
@@ -45,5 +39,4 @@ async def get_widget_config(chatbot_id: uuid.UUID, db: AsyncSession = Depends(ge
         auto_open_delay=parsed_cfg.auto_open_delay,
         persist_conversation=parsed_cfg.persist_conversation,
         custom_css=parsed_cfg.custom_css,
-        white_label_enabled=white_label_enabled,
     )

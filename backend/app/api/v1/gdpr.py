@@ -23,7 +23,7 @@ from app.models.intelligence import (
 from app.models.integrations import CreditLedger, IntegrationConfig
 from app.models.invites import WorkspaceInvite
 from app.models.knowledge import Article, ArticleCollection, Chatbot, Chunk, Document, KnowledgeBase
-from app.models.organizational import Agent, Inbox, Team, TeamMember, Workspace, WorkspaceMembership, WorkspaceWebhook
+from app.models.organizational import Agent, Workspace, WorkspaceMembership, WorkspaceWebhook
 from app.workers.tasks.gdpr_export import EXPORT_DIR, export_workspace_data
 
 router = APIRouter(prefix="/workspaces/{workspace_id}", tags=["gdpr"])
@@ -145,14 +145,6 @@ async def delete_workspace(
     # Tags
     await db.execute(delete(Tag).where(Tag.workspace_id == workspace_id))
 
-    # Team members, teams, inboxes
-    team_result = await db.execute(select(Team.id).where(Team.workspace_id == workspace_id))
-    team_ids = [row[0] for row in team_result.all()]
-    if team_ids:
-        await db.execute(delete(TeamMember).where(TeamMember.team_id.in_(team_ids)))
-    await db.execute(delete(Team).where(Team.workspace_id == workspace_id))
-    await db.execute(delete(Inbox).where(Inbox.workspace_id == workspace_id))
-
     # Workspace invites, webhooks
     await db.execute(delete(WorkspaceInvite).where(WorkspaceInvite.workspace_id == workspace_id))
     await db.execute(delete(WorkspaceWebhook).where(WorkspaceWebhook.workspace_id == workspace_id))
@@ -184,7 +176,6 @@ async def delete_workspace(
                 await db.execute(sa_update(Agent).where(Agent.id == aid).values(workspace_id=agent_other_ws[aid]))
             else:
                 # Agent has no other workspace — safe to delete
-                await db.execute(delete(TeamMember).where(TeamMember.agent_id == aid))
                 await db.execute(delete(Agent).where(Agent.id == aid))
 
     # Workspace

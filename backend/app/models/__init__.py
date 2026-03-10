@@ -1,4 +1,4 @@
-from app.models.organizational import Agent, Inbox, Team, TeamMember, Workspace, WorkspaceMembership
+from app.models.organizational import Agent, Workspace, WorkspaceMembership
 from app.models.invites import WorkspaceInvite  # noqa: F401
 from app.models.integrations import CreditLedger, IntegrationConfig
 from app.models.contacts import Company, Contact, ContactEvent, DataAttribute, Segment
@@ -33,7 +33,6 @@ __all__ = [
     "Document",
     "GapCluster",
     "GapEvent",
-    "Inbox",
     "IntegrationConfig",
     "IntelligenceSignal",
     "KnowledgeBase",
@@ -42,8 +41,6 @@ __all__ = [
     "RetrievalLog",
     "Segment",
     "Tag",
-    "Team",
-    "TeamMember",
     "Ticket",
     "TopicCluster",
     "Workspace",

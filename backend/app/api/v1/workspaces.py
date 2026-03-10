@@ -20,14 +20,6 @@ class DataRetentionResponse(BaseModel):
     data_retention_days: int | None
 
 
-class WhiteLabelResponse(BaseModel):
-    white_label_enabled: bool
-
-
-class WhiteLabelUpdate(BaseModel):
-    white_label_enabled: bool
-
-
 class DataRetentionUpdate(BaseModel):
     data_retention_days: int | None
 
@@ -191,29 +183,3 @@ async def update_data_retention(
     return DataRetentionResponse(data_retention_days=workspace.data_retention_days)
 
 
-@router.get("/{workspace_id}/white-label", response_model=WhiteLabelResponse)
-async def get_white_label(
-    workspace_id: _uuid.UUID = Depends(get_workspace),
-    db: AsyncSession = Depends(get_db),
-):
-    result = await db.execute(select(Workspace).where(Workspace.id == workspace_id))
-    workspace = result.scalar_one_or_none()
-    if workspace is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found")
-    return WhiteLabelResponse(white_label_enabled=workspace.white_label_enabled)
-
-
-@router.put("/{workspace_id}/white-label", response_model=WhiteLabelResponse)
-async def update_white_label(
-    body: WhiteLabelUpdate,
-    workspace_id: _uuid.UUID = Depends(get_workspace),
-    db: AsyncSession = Depends(get_db),
-):
-    result = await db.execute(select(Workspace).where(Workspace.id == workspace_id))
-    workspace = result.scalar_one_or_none()
-    if workspace is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found")
-    workspace.white_label_enabled = body.white_label_enabled
-    await db.commit()
-    await db.refresh(workspace)
-    return WhiteLabelResponse(white_label_enabled=workspace.white_label_enabled)
