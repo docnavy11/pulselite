@@ -51,9 +51,6 @@ class GapCluster(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     gap_count: Mapped[int] = mapped_column(Integer, server_default=text("0"))
     representative_query: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(Text, server_default=text("'open'"))
-    draft_article_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("articles.id"), nullable=True
-    )
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     resolution_impact: Mapped[float | None] = mapped_column(Float, nullable=True)
     clustered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("NOW()"))
