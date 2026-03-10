@@ -37,7 +37,12 @@ async def start_crawl(
 ) -> CrawlStartResult:
     from app.workers.tasks.ingest_document import ingest_document
 
-    # 1. Discover URLs
+    # 1. Validate URL scheme (SSRF guard)
+    parsed_root = urlparse(url)
+    if parsed_root.scheme not in ("http", "https"):
+        raise ValueError("URL must be http or https")
+
+    # 2. Discover URLs
     crawl_result = await discover_urls(url, max_pages)
 
     # 2. Create KB if not provided
@@ -94,7 +99,7 @@ async def start_crawl(
             logger.warning("Fetch exception %s: %s", page_url, result)
             pages_failed += 1
             continue
-        if result.status_code >= 400 or not result.text:
+        if result.status_code >= 400 or result.text == "":
             logger.warning("Skipping %s (status=%d)", page_url, result.status_code)
             pages_failed += 1
             continue
