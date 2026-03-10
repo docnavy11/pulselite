@@ -93,6 +93,7 @@ async def start_crawl(
     # 5. Create Documents and queue ingestion
     pages_queued = 0
     pages_failed = 0
+    doc_ids: list[str] = []
 
     for page_url, result in zip(crawl_result.urls, fetch_results):
         if isinstance(result, Exception):
@@ -100,7 +101,7 @@ async def start_crawl(
             pages_failed += 1
             continue
         if result.status_code >= 400 or result.text == "":
-            logger.warning("Skipping %s (status=%d)", page_url, result.status_code)
+            logger.warning("Skipping %s (status=%d, empty=%s)", page_url, result.status_code, result.text == "")
             pages_failed += 1
             continue
 
@@ -114,15 +115,19 @@ async def start_crawl(
             status="pending",
         )
         db.add(doc)
-        await db.flush()
-        ingest_document.delay(str(doc.id))
+        await db.flush()  # populate doc.id from DB sequence
+        doc_ids.append(str(doc.id))
         pages_queued += 1
 
-    # 6. Update CrawlJob
+    # 6. Update CrawlJob and commit ALL rows before firing Celery tasks
+    # Workers must be able to read Document rows — commit first, then dispatch
     job.pages_queued = pages_queued
     job.pages_failed = pages_failed
     job.status = "running"
     await db.commit()
+
+    for doc_id in doc_ids:
+        ingest_document.delay(doc_id)
 
     return CrawlStartResult(
         job_id=str(job.id),
