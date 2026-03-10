@@ -6,8 +6,6 @@ import {
   Globe,
   FileText,
   Type,
-  RotateCw,
-  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
@@ -168,10 +166,7 @@ export function SourcesTab({
                   Status
                 </th>
                 <th className="text-left px-4 py-3 font-medium text-gray-500">
-                  Chunks
-                </th>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">
-                  Last Indexed
+                  Last synced
                 </th>
                 <th className="text-left px-4 py-3 font-medium text-gray-500">
                   Sync
@@ -187,7 +182,7 @@ export function SourcesTab({
                 return (
                   <tr
                     key={doc.id}
-                    className="border-b border-gray-100 last:border-0"
+                    className="group border-b border-[#faf8f5] last:border-0 hover:bg-[#faf8f5] transition-colors"
                   >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
@@ -201,19 +196,43 @@ export function SourcesTab({
                       {doc.source_type}
                     </td>
                     <td className="px-4 py-3">
-                      <Badge
-                        variant={statusVariant[doc.status] || "default"}
-                        className={
-                          doc.status === "processing" ? "animate-pulse" : ""
-                        }
-                      >
-                        {doc.status}
-                      </Badge>
+                      {doc.status === "failed" && (
+                        <span className="flex items-center gap-1.5 text-red-500 text-[11px]">
+                          <span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block" />
+                          Failed —{" "}
+                          <button
+                            onClick={() => handleReindex(doc.id)}
+                            className="underline hover:text-red-600"
+                          >
+                            Retry
+                          </button>
+                        </span>
+                      )}
+                      {doc.status === "processing" && (
+                        <span className="flex items-center gap-1.5 text-amber-500 text-[11px] animate-pulse">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
+                          Processing…
+                        </span>
+                      )}
+                      {doc.status === "pending" && (
+                        <span className="flex items-center gap-1.5 text-gray-400 text-[11px]">
+                          <span className="w-1.5 h-1.5 rounded-full bg-gray-300 inline-block" />
+                          Pending
+                        </span>
+                      )}
+                      {doc.status === "indexed" && (
+                        <span className="flex items-center gap-1.5 text-green-600 text-[11px]">
+                          <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />
+                          Indexed
+                        </span>
+                      )}
+                      {!["failed", "processing", "pending", "indexed"].includes(doc.status) && (
+                        <Badge variant={statusVariant[doc.status] || "default"}>
+                          {doc.status}
+                        </Badge>
+                      )}
                     </td>
-                    <td className="px-4 py-3 text-gray-500">
-                      {doc.chunk_count}
-                    </td>
-                    <td className="px-4 py-3 text-gray-500">
+                    <td className="px-4 py-3 text-gray-500 text-[11px]">
                       {doc.last_indexed_at
                         ? new Date(doc.last_indexed_at).toLocaleDateString()
                         : "-"}
@@ -236,21 +255,19 @@ export function SourcesTab({
                         <option value="monthly">Monthly</option>
                       </select>
                     </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-1">
+                    <td className="py-3 px-4 text-right">
+                      <div className="flex items-center gap-2 justify-end opacity-0 group-hover:opacity-100 transition-opacity duration-150">
                         <button
                           onClick={() => handleReindex(doc.id)}
-                          className="rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-all duration-200"
-                          title="Reindex"
+                          className="text-[11px] text-gray-400 hover:text-gray-700"
                         >
-                          <RotateCw className="h-4 w-4" />
+                          Reindex
                         </button>
                         <button
                           onClick={() => handleDelete(doc.id)}
-                          className="rounded p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 transition-all duration-200"
-                          title="Delete"
+                          className="text-[11px] text-red-400 hover:text-red-600"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          Delete
                         </button>
                       </div>
                     </td>
