@@ -146,3 +146,60 @@ async def test_bfs_drops_urls_with_query_strings():
 
     assert not any("foo=bar" in u for u in result.urls)
     assert any("clean" in u for u in result.urls)
+
+
+# ── discover_urls: deduplication ─────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_sitemap_deduplicates_urls():
+    sitemap_xml = """<?xml version="1.0"?>
+    <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+      <url><loc>https://a.com/page</loc></url>
+      <url><loc>https://a.com/page</loc></url>
+      <url><loc>https://a.com/other1</loc></url>
+      <url><loc>https://a.com/other2</loc></url>
+    </urlset>"""
+
+    async def mock_fetch(url: str) -> FetchResult:
+        if "sitemap" in url:
+            return FetchResult(url=url, html=sitemap_xml, text="", title=None,
+                               theme_color=None, status_code=200, used_playwright=False)
+        return _make_fetch_result(url)
+
+    with patch("app.services.crawler.fetch", side_effect=mock_fetch):
+        result = await discover_urls("https://a.com", max_pages=10)
+
+    assert result.used_sitemap is True
+    assert len(result.urls) == 3
+
+
+# ── discover_urls: sitemap index recursion ────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_sitemap_index_recurses_into_child_sitemaps():
+    index_xml = """<?xml version="1.0"?>
+    <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+      <sitemap><loc>https://a.com/sitemap-child.xml</loc></sitemap>
+    </sitemapindex>"""
+
+    child_xml = """<?xml version="1.0"?>
+    <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+      <url><loc>https://a.com/page1</loc></url>
+      <url><loc>https://a.com/page2</loc></url>
+      <url><loc>https://a.com/page3</loc></url>
+    </urlset>"""
+
+    async def mock_fetch(url: str) -> FetchResult:
+        if url.endswith("sitemap-child.xml"):
+            return FetchResult(url=url, html=child_xml, text="", title=None,
+                               theme_color=None, status_code=200, used_playwright=False)
+        if "sitemap" in url:
+            return FetchResult(url=url, html=index_xml, text="", title=None,
+                               theme_color=None, status_code=200, used_playwright=False)
+        return _make_fetch_result(url)
+
+    with patch("app.services.crawler.fetch", side_effect=mock_fetch):
+        result = await discover_urls("https://a.com", max_pages=10)
+
+    assert result.used_sitemap is True
+    assert len(result.urls) == 3
