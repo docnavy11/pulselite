@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { useParams } from "next/navigation";
+import { useParams } from "react-router-dom";
 import { Send, MessageCircle } from "lucide-react";
 import { clsx } from "clsx";
 import { Spinner } from "@/components/ui/Spinner";
