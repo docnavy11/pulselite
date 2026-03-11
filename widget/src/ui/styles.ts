@@ -567,6 +567,78 @@ export function getStyles(primaryColor: string, bgColor: string, textColor: stri
     .pulse-mic-btn:disabled { opacity: 0.4; cursor: not-allowed; }
     .pulse-mic-active { color: #ef4444 !important; background: #fee2e2 !important; }
 
+    .pulse-action-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin: 4px 16px 8px;
+      padding: 10px 18px;
+      background: var(--pulse-primary);
+      color: #fff;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: opacity 0.15s, transform 0.15s;
+      align-self: flex-start;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    }
+    .pulse-action-btn:hover {
+      opacity: 0.9;
+      transform: translateY(-1px);
+    }
+    .pulse-action-btn--booking {
+      background: #fff;
+      color: var(--pulse-primary);
+      border: 1.5px solid var(--pulse-primary);
+    }
+    .pulse-action-btn--booking:hover {
+      background: var(--pulse-primary);
+      color: #fff;
+    }
+
+    .pulse-booking-card {
+      margin: 4px 0;
+      border: 1.5px solid var(--pulse-border);
+      border-radius: 12px;
+      overflow: hidden;
+      background: var(--pulse-bg);
+    }
+    .pulse-booking-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+    }
+    .pulse-booking-icon { font-size: 16px; flex-shrink: 0; }
+    .pulse-booking-title {
+      flex: 1;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--pulse-text);
+    }
+    .pulse-booking-toggle {
+      background: var(--pulse-primary);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 5px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: opacity 0.15s;
+    }
+    .pulse-booking-toggle:hover { opacity: 0.85; }
+    .pulse-booking-embed {
+      border-top: 1px solid var(--pulse-border);
+      overflow: hidden;
+    }
+    .pulse-booking-embed iframe {
+      display: block;
+      border: none;
+    }
+
     @media (max-width: 480px) {
       .pulse-window {
         width: 100vw;

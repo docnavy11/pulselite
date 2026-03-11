@@ -1,3 +1,4 @@
+from app.models.actions import ActionEvent, ChatbotAction  # noqa: F401
 from app.models.organizational import Agent, Workspace, WorkspaceMembership
 from app.models.invites import WorkspaceInvite  # noqa: F401
 from app.models.integrations import CreditLedger, IntegrationConfig
@@ -12,8 +13,10 @@ from app.models.intelligence import (
 )
 
 __all__ = [
+    "ActionEvent",
     "Agent",
     "Article",
+    "ChatbotAction",
     "ArticleCollection",
     "Chatbot",
     "Chunk",

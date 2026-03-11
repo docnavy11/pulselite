@@ -23,6 +23,7 @@ export class Widget {
   private leadFormSubmitted = false;
   private leadFormVisible = false;
   private consentGiven = false;
+  private registeredTools: Map<string, (args?: Record<string, unknown>) => unknown> = new Map();
 
   constructor(config: WidgetConfig) {
     this.config = config;
@@ -225,15 +226,33 @@ export class Widget {
             this.renderQuickReplies(replies);
           }
         },
-        onAction: (actionData: { type: string; name: string; fields?: string[]; label?: string; url?: string }) => {
+        onAction: (actionData: { type: string; name: string; config?: Record<string, string> }) => {
+          const cfg = actionData.config ?? {};
           if (actionData.type === "collect_lead") {
-            this.showLeadForm(actionData.fields);
+            const fields = cfg.fields
+              ? cfg.fields.split(",").map((f) => f.trim()).filter(Boolean)
+              : ["name", "email"];
+            this.showLeadForm(fields);
           } else if (actionData.type === "custom_button") {
-            this.showCustomButton(actionData.label as string, actionData.url as string);
-          } else if (actionData.type === "calendly" || actionData.type === "calcom") {
-            this.showCustomButton(actionData.label as string, actionData.url as string);
+            this.showActionButton(cfg.label || actionData.name, cfg.url || "", "link");
+          } else if (actionData.type === "calendly") {
+            this.showBookingCard(cfg.label || "Book a meeting", cfg.calendly_url || "", "calendly");
+          } else if (actionData.type === "calcom") {
+            this.showBookingCard(cfg.label || "Book a meeting", cfg.calcom_url || "", "calcom");
+          } else if (actionData.type === "custom_tool") {
+            const toolName = cfg.tool_name || "";
+            const handler = this.registeredTools.get(toolName);
+            if (handler) {
+              try {
+                handler(cfg);
+              } catch (e) {
+                console.warn(`[PulseLite] Tool "${toolName}" threw an error:`, e);
+              }
+            } else {
+              console.warn(`[PulseLite] No tool registered for "${toolName}"`);
+            }
           }
-          // webhook and slack_message actions are silent from widget perspective
+          // webhook, slack_message, stripe_lookup, salesforce_ticket are server-side — silent in widget
         },
         onError: (_error: string) => {
           if (dots.parentNode) {
@@ -250,13 +269,13 @@ export class Widget {
     );
   }
 
-  private showCustomButton(label: string, url: string): void {
+  private showActionButton(label: string, url: string, variant: "link" | "booking" = "link"): void {
     if (!url) return;
     const btn = document.createElement("a");
     btn.href = url;
     btn.target = "_blank";
     btn.rel = "noopener noreferrer";
-    btn.className = "pulse-action-btn";
+    btn.className = variant === "booking" ? "pulse-action-btn pulse-action-btn--booking" : "pulse-action-btn";
     btn.textContent = label || "Learn more";
     this.chatWindow.messagesContainer.appendChild(btn);
     this.scrollToBottom();
@@ -382,6 +401,76 @@ export class Widget {
     banner.appendChild(declineBtn);
 
     this.chatWindow.element.appendChild(banner);
+  }
+
+  registerTool(name: string, handler: (args?: Record<string, unknown>) => unknown): void {
+    this.registeredTools.set(name, handler);
+  }
+
+  private showBookingCard(label: string, url: string, provider: "calendly" | "calcom"): void {
+    if (!url) return;
+
+    const card = document.createElement("div");
+    card.className = "pulse-booking-card";
+
+    const header = document.createElement("div");
+    header.className = "pulse-booking-header";
+
+    const icon = document.createElement("span");
+    icon.className = "pulse-booking-icon";
+    icon.textContent = "📅";
+
+    const title = document.createElement("span");
+    title.className = "pulse-booking-title";
+    title.textContent = label;
+
+    const toggle = document.createElement("button");
+    toggle.className = "pulse-booking-toggle";
+    toggle.textContent = "Show calendar";
+
+    header.appendChild(icon);
+    header.appendChild(title);
+    header.appendChild(toggle);
+    card.appendChild(header);
+
+    const embedContainer = document.createElement("div");
+    embedContainer.className = "pulse-booking-embed";
+    embedContainer.style.display = "none";
+    card.appendChild(embedContainer);
+
+    let loaded = false;
+    toggle.addEventListener("click", () => {
+      const isOpen = embedContainer.style.display !== "none";
+      if (isOpen) {
+        embedContainer.style.display = "none";
+        toggle.textContent = "Show calendar";
+      } else {
+        embedContainer.style.display = "block";
+        toggle.textContent = "Hide calendar";
+        if (!loaded) {
+          loaded = true;
+          this._loadBookingEmbed(embedContainer, url, provider);
+        }
+        this.scrollToBottom();
+      }
+    });
+
+    this.chatWindow.messagesContainer.appendChild(card);
+    this.scrollToBottom();
+  }
+
+  private _loadBookingEmbed(container: HTMLElement, url: string, provider: "calendly" | "calcom"): void {
+    const embedUrl = provider === "calendly"
+      ? (url.includes("?") ? `${url}&embed_domain=${location.hostname}&embed_type=Inline` : `${url}?embed_domain=${location.hostname}&embed_type=Inline`)
+      : (url.includes("?") ? `${url}&embed=true` : `${url}?embed=true`);
+
+    const iframe = document.createElement("iframe");
+    iframe.src = embedUrl;
+    iframe.width = "100%";
+    iframe.height = "460";
+    iframe.setAttribute("frameborder", "0");
+    iframe.style.borderRadius = "8px";
+    container.appendChild(iframe);
   }
 
   private scrollToBottom(): void {

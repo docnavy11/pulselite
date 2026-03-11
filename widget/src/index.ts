@@ -111,5 +111,13 @@ if (document.readyState === "loading") {
   initFromScript();
 }
 
+// Expose registerTool for page owners — call after widget is initialised
+// Usage: window.__pulseRegisterTool("openCart", (args) => { ... })
+(window as any).__pulseRegisterTool = (name: string, handler: (args?: Record<string, unknown>) => unknown) => {
+  if (widgetInstance) {
+    widgetInstance.registerTool(name, handler);
+  }
+};
+
 // Export for programmatic use
 export { init, destroy };

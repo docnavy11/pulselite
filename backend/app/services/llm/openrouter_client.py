@@ -47,3 +47,36 @@ class OpenRouterLLMClient(BaseLLMClient):
             max_tokens=max_tokens,
         )
         return response.choices[0].message.content or ""
+
+    async def generate_with_tools(
+        self,
+        messages: list[dict],
+        model: str,
+        tools: list[dict],
+        temperature: float = 0.3,
+        max_tokens: int = 1000,
+    ) -> dict:
+        import json as _json
+        response = await self._get_client().chat.completions.create(
+            model=model,
+            messages=messages,  # type: ignore[arg-type]
+            tools=tools,  # type: ignore[arg-type]
+            tool_choice="auto",
+            temperature=temperature,
+            max_tokens=max_tokens,
+            stream=False,
+        )
+        choice = response.choices[0]
+        if choice.finish_reason == "tool_calls" and choice.message.tool_calls:
+            call = choice.message.tool_calls[0]
+            try:
+                args = _json.loads(call.function.arguments)
+            except Exception:
+                args = {}
+            return {
+                "type": "tool_call",
+                "tool_name": call.function.name,
+                "tool_call_id": call.id,
+                "arguments": args,
+            }
+        return {"type": "message", "content": choice.message.content or ""}

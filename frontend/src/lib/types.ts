@@ -64,6 +64,8 @@ export interface CrawlStatusResponse {
   pages_failed: number;
   docs_indexed: number;
   docs_total: number;
+  docs_failed: number;
+  stalled: boolean;
 }
 
 export interface AutoConfigResponse {
@@ -73,6 +75,8 @@ export interface AutoConfigResponse {
   suggested_questions: string[] | null;
   fallback_message: string | null;
   brand_color: string | null;
+  tone: string | null;
+  language: string | null;
 }
 
 export interface KnowledgeBase {
@@ -197,6 +201,11 @@ export interface DashboardData {
     hot_leads: number;
     topic_anomalies: number;
   };
+  feedback: {
+    thumbs_up: number;
+    thumbs_down: number;
+  };
+  top_topics: { topic: string; count: number }[];
 }
 
 export interface SentimentDataPoint {
@@ -294,4 +303,52 @@ export interface OpenRouterModel {
   name: string;
   context_length: number | null;
   pricing: { prompt: string; completion: string } | null;
+}
+
+export type ActionType =
+  | "collect_lead"
+  | "webhook"
+  | "custom_button"
+  | "slack_message"
+  | "calendly"
+  | "calcom"
+  | "custom_tool"
+  | "stripe_lookup"
+  | "salesforce_ticket";
+
+export interface ActionParameter {
+  name: string;
+  type: "string" | "number" | "boolean";
+  required: boolean;
+  description: string;
+}
+
+export interface Action {
+  id: string;
+  chatbot_id: string;
+  workspace_id: string;
+  action_type: ActionType;
+  name: string;
+  trigger_description: string;
+  config: Record<string, string>;
+  is_enabled: boolean;
+  parameters: ActionParameter[];
+  created_at: string;
+}
+
+export interface ActionCreate {
+  action_type: ActionType;
+  name: string;
+  trigger_description: string;
+  config: Record<string, string>;
+  is_enabled?: boolean;
+  parameters?: ActionParameter[];
+}
+
+export interface ActionUpdate {
+  name?: string;
+  trigger_description?: string;
+  config?: Record<string, string>;
+  is_enabled?: boolean;
+  parameters?: ActionParameter[];
 }

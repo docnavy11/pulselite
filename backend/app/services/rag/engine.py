@@ -33,6 +33,7 @@ async def process_query(
     chatbot: Chatbot,
     conversation_id: uuid.UUID | None = None,
     openrouter_key: str | None = None,
+    actions: list | None = None,
 ) -> AsyncGenerator[str | RAGResult, None]:
     result = await db.execute(select(KnowledgeBase).where(KnowledgeBase.chatbot_id == chatbot.id).limit(1))
     kb = result.scalar_one_or_none()
@@ -103,6 +104,61 @@ async def process_query(
         messages.extend(history)
 
     messages.append({"role": "user", "content": f"{context_prompt}\n\nUser question: {query}"})
+
+    # --- Tool calling step (pre-response action detection) ---
+    if actions:
+        from app.services.action_tools import build_tool_definitions, action_id_for_tool_name
+        from app.services.action_service import get_action
+        from app.services.action_executor import execute_action, _get_workspace_slack_webhook
+        from app.services.llm import get_llm_client
+
+        tools = build_tool_definitions(actions)
+        if tools:
+            provider = "openrouter" if openrouter_key else chatbot.llm_provider
+            client = get_llm_client(provider, api_key=openrouter_key)
+            tool_result = await client.generate_with_tools(
+                messages=messages,
+                model=chatbot.llm_model,
+                tools=tools,
+                temperature=0.0,
+                max_tokens=200,
+            )
+
+            if tool_result["type"] == "tool_call":
+                action_id_str = action_id_for_tool_name(tool_result["tool_name"])
+                if action_id_str:
+                    import uuid as _uuid
+                    action = await get_action(db, _uuid.UUID(action_id_str), chatbot.workspace_id)
+                    if action:
+                        slack_webhook = await _get_workspace_slack_webhook(db, chatbot.workspace_id)
+                        context = {
+                            "conversation_id": str(conversation_id) if conversation_id else "",
+                            "message": query,
+                            "response": "",
+                            **tool_result["arguments"],
+                        }
+                        status, client_payload = await execute_action(action, context, slack_webhook)
+
+                        # Log action event
+                        from app.models.actions import ActionEvent
+                        event = ActionEvent(
+                            id=_uuid.uuid4(),
+                            workspace_id=chatbot.workspace_id,
+                            chatbot_id=chatbot.id,
+                            conversation_id=conversation_id,
+                            action_id=action.id,
+                            action_type=action.action_type,
+                            payload=context,
+                            status=status,
+                        )
+                        db.add(event)
+                        await db.flush()
+
+                        if client_payload:
+                            yield client_payload  # resolution_service handles dict items as action payloads
+
+                        tool_note = f"Action '{action.name}' triggered successfully."
+                        messages.append({"role": "assistant", "content": tool_note})
 
     async for token in stream_response(messages, chatbot, openrouter_key=openrouter_key):
         yield token

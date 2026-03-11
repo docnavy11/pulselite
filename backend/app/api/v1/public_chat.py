@@ -3,7 +3,7 @@ import re
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from sqlalchemy import select
@@ -21,6 +21,17 @@ limiter = Limiter(key_func=get_remote_address)
 router = APIRouter(tags=["public_chat"])
 
 
+def _validate_session_id(value: str) -> str:
+    """Validate that session_id is a valid UUID (max 128 chars)."""
+    if len(value) > 128:
+        raise ValueError("session_id exceeds maximum length of 128 characters")
+    try:
+        uuid.UUID(value)
+    except ValueError:
+        raise ValueError("session_id must be a valid UUID")
+    return value
+
+
 class LeadCapture(BaseModel):
     chatbot_id: uuid.UUID
     session_id: str
@@ -28,11 +39,21 @@ class LeadCapture(BaseModel):
     email: str | None = None
     phone: str | None = None
 
+    @field_validator("session_id")
+    @classmethod
+    def validate_session_id(cls, v: str) -> str:
+        return _validate_session_id(v)
+
 
 class PublicChatRequest(BaseModel):
     chatbot_id: uuid.UUID
     session_id: str
     message: str
+
+    @field_validator("session_id")
+    @classmethod
+    def validate_session_id(cls, v: str) -> str:
+        return _validate_session_id(v)
 
 
 @router.post("/public/chat")
@@ -110,6 +131,7 @@ async def capture_lead(
             )
         )
         if existing.scalar_one_or_none():
+            await _fire_lead_notifications(db, chatbot, body)
             return {"status": "existing"}
 
     contact = Contact(
@@ -122,7 +144,50 @@ async def capture_lead(
     )
     db.add(contact)
     await db.commit()
+
+    await _fire_lead_notifications(db, chatbot, body)
     return {"status": "created"}
+
+
+async def _fire_lead_notifications(db: AsyncSession, chatbot: "Chatbot", body: "LeadCapture") -> None:
+    """Fire webhook/slack actions with lead data after form submission (fire-and-forget)."""
+    import asyncio as _asyncio
+    import uuid as _uuid
+    from app.services.action_executor import execute_action, _get_workspace_slack_webhook
+    from app.services.action_service import list_enabled_actions
+    from app.models.actions import ActionEvent
+
+    actions = await list_enabled_actions(db, chatbot.workspace_id, chatbot.id)
+    notifiable = [a for a in actions if a.action_type in ("webhook", "slack_message")]
+    if not notifiable:
+        return
+
+    slack_webhook = await _get_workspace_slack_webhook(db, chatbot.workspace_id)
+    context = {
+        "event": "lead.submit",
+        "name": body.name or "",
+        "email": body.email or "",
+        "phone": body.phone or "",
+        "session_id": body.session_id,
+    }
+
+    async def _run() -> None:
+        for action in notifiable:
+            status, _ = await execute_action(action, context, slack_webhook)
+            event = ActionEvent(
+                id=_uuid.uuid4(),
+                workspace_id=chatbot.workspace_id,
+                chatbot_id=chatbot.id,
+                conversation_id=None,
+                action_id=action.id,
+                action_type=action.action_type,
+                payload=context,
+                status=status,
+            )
+            db.add(event)
+        await db.commit()
+
+    _asyncio.create_task(_run())
 
 
 async def _get_or_create_contact(db: AsyncSession, workspace_id: uuid.UUID, session_id: str) -> Contact:

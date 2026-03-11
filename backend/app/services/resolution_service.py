@@ -1,7 +1,9 @@
+import asyncio
 import logging
 import uuid
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,7 +21,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ResolutionEvent:
     type: str  # "token" | "done" | "error" | "action"
-    data: str
+    data: Any  # str for tokens, dict for action events
     confidence_score: float | None = None
     confidence_avg: float | None = None
     escalated: bool = False
@@ -39,14 +41,14 @@ async def handle_message(
     if conversation_id is None:
         conversation = await conversation_service.create_conversation(db, workspace_id, chatbot.id, contact_id)
         conversation_id = conversation.id
-        await fire_event(
+        asyncio.create_task(fire_event(
             db,
             workspace_id,
             "conversation.created",
             {
                 "conversation_id": str(conversation_id),
             },
-        )
+        ))
     else:
         conversation = await conversation_service.get_conversation(db, conversation_id)
 
@@ -69,12 +71,26 @@ async def handle_message(
         except Exception:
             logger.warning(f"Failed to decrypt workspace OpenRouter key for {workspace_id}")
 
+    # Load enabled actions — those with parameters use function calling; others use post-response trigger
+    from app.services.action_service import list_enabled_actions
+    enabled_actions = await list_enabled_actions(db, workspace_id, chatbot.id)
+    actions_with_params = [a for a in enabled_actions if a.parameters]
+
     rag_result: RAGResult | None = None
     full_response = ""
+    inline_action_payloads: list[dict] = []
 
-    async for item in process_query(db, message, chatbot, conversation_id, openrouter_key=openrouter_key):
+    async for item in process_query(
+        db, message, chatbot, conversation_id,
+        openrouter_key=openrouter_key,
+        actions=actions_with_params if actions_with_params else None,
+    ):
         if isinstance(item, RAGResult):
             rag_result = item
+            continue
+        if isinstance(item, dict):
+            # Triggered action payload (client-side) from function calling
+            inline_action_payloads.append(item)
             continue
         full_response += item
         yield ResolutionEvent(type="token", data=item, conversation_id=conversation_id)
@@ -97,14 +113,14 @@ async def handle_message(
     if escalated:
         conversation.escalation_reason = "low_confidence"
         conversation.outcome = "escalated_to_human"
-        await fire_event(
+        asyncio.create_task(fire_event(
             db,
             workspace_id,
             "conversation.escalated",
             {
                 "conversation_id": str(conversation_id),
             },
-        )
+        ))
     else:
         conversation.autonomous_resolved = True
         conversation.outcome = "resolved_autonomously"
@@ -112,6 +128,28 @@ async def handle_message(
     conversation.confidence_avg = confidence_avg
     conversation.ai_participated = True
     await db.flush()
+
+    # Yield function-call-triggered action payloads (from actions with parameters)
+    for payload in inline_action_payloads:
+        yield ResolutionEvent(type="action", data=payload, conversation_id=conversation_id)
+
+    # Post-response: fire actions WITHOUT parameters (LLM yes/no trigger path)
+    try:
+        from app.services.action_executor import run_actions
+        actions_without_params = [a for a in enabled_actions if not a.parameters]
+        if actions_without_params:
+            client_payloads = await run_actions(
+                db_session=db,
+                workspace_id=workspace_id,
+                chatbot_id=chatbot.id,
+                conversation_id=conversation_id,
+                user_message=message,
+                bot_response=full_response,
+            )
+            for payload in client_payloads:
+                yield ResolutionEvent(type="action", data=payload, conversation_id=conversation_id)
+    except Exception:
+        logger.exception("Action execution failed — continuing without actions")
 
     sources = rag_result.sources if rag_result else []
     yield ResolutionEvent(
