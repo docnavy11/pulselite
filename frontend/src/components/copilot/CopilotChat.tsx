@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useCopilot } from "./CopilotProvider";
@@ -15,6 +15,12 @@ export function CopilotChat() {
   const [streaming, setStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
 
   const scrollToBottom = useCallback(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -35,60 +41,64 @@ export function CopilotChat() {
 
     abortRef.current = new AbortController();
 
-    await streamCopilotChat(
-      workspace.id,
-      nextMessages,
-      context as unknown as Record<string, unknown>,
-      {
-        onToken(token) {
-          setMessages((prev) => {
-            const updated = [...prev];
-            const last = updated[updated.length - 1];
-            if (last.role === "assistant") {
-              updated[updated.length - 1] = {
-                ...last,
-                content: last.content + token,
-              };
-            }
-            return updated;
-          });
-          scrollToBottom();
-        },
-        onAction(tool, args) {
-          if (tool === "render_panel") {
-            setActivePanel({
-              component: args.component as string,
-              props: (args.props as Record<string, unknown>) ?? {},
+    try {
+      await streamCopilotChat(
+        workspace.id,
+        nextMessages,
+        context as unknown as Record<string, unknown>,
+        {
+          onToken(token) {
+            setMessages((prev) => {
+              const updated = [...prev];
+              const last = updated[updated.length - 1];
+              if (last.role === "assistant") {
+                updated[updated.length - 1] = {
+                  ...last,
+                  content: last.content + token,
+                };
+              }
+              return updated;
             });
-          } else if (tool === "close_panel") {
-            setActivePanel(null);
-          } else if (tool === "navigate") {
-            router.push(args.route as string);
-          } else if (tool === "patch_store") {
-            // patch_store is a no-op for now — optimistic UI updates are deferred
-            console.debug("[copilot] patch_store:", args);
-          }
-        },
-        onDone() {
-          setStreaming(false);
-        },
-        onError(msg) {
-          setMessages((prev) => {
-            const updated = [...prev];
-            const last = updated[updated.length - 1];
-            if (last.role === "assistant" && last.content === "") {
-              updated[updated.length - 1] = {
-                ...last,
-                content: `Error: ${msg}`,
-              };
+            scrollToBottom();
+          },
+          onAction(tool, args) {
+            if (tool === "render_panel") {
+              setActivePanel({
+                component: args.component as string,
+                props: (args.props as Record<string, unknown>) ?? {},
+              });
+            } else if (tool === "close_panel") {
+              setActivePanel(null);
+            } else if (tool === "navigate") {
+              const route = args.route as string;
+              if (route.startsWith("/") && !route.startsWith("//")) {
+                router.push(route);
+              }
+            } else if (tool === "patch_store") {
+              // patch_store is a no-op for now — optimistic UI updates are deferred
+              console.debug("[copilot] patch_store:", args);
             }
-            return updated;
-          });
-          setStreaming(false);
+          },
+          onDone() {},
+          onError(msg) {
+            setMessages((prev) => {
+              const updated = [...prev];
+              const last = updated[updated.length - 1];
+              if (last.role === "assistant" && last.content === "") {
+                updated[updated.length - 1] = {
+                  ...last,
+                  content: `Error: ${msg}`,
+                };
+              }
+              return updated;
+            });
+          },
         },
-      },
-      abortRef.current.signal
-    );
+        abortRef.current.signal
+      );
+    } finally {
+      setStreaming(false);
+    }
   }
 
   return (

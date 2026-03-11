@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
 } from "react";
 
@@ -80,10 +81,13 @@ export function CopilotProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [toggle]);
 
+  const value = useMemo(
+    () => ({ isOpen, toggle, open, close, context, registerContext, activePanel, setActivePanel }),
+    [isOpen, toggle, open, close, context, registerContext, activePanel, setActivePanel]
+  );
+
   return (
-    <CopilotContext.Provider
-      value={{ isOpen, toggle, open, close, context, registerContext, activePanel, setActivePanel }}
-    >
+    <CopilotContext.Provider value={value}>
       {children}
     </CopilotContext.Provider>
   );
@@ -97,7 +101,7 @@ export function useCopilot() {
     (pageCtx: CopilotPageContext) => {
       ctx.registerContext(pageCtx);
     },
-    [ctx]
+    [ctx.registerContext]
   );
 
   return { ...ctx, register };

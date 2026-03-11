@@ -77,6 +77,8 @@ export async function streamCopilotChat(
           // ignore malformed lines
         }
         eventType = "message";
+      } else if (line === "") {
+        eventType = "message";
       }
     }
   }

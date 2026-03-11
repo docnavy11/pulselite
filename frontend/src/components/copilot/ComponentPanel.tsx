@@ -6,7 +6,10 @@ import { ComponentRegistry } from "./registry";
 export function ComponentPanel() {
   const { activePanel, setActivePanel } = useCopilot();
 
-  const Component = activePanel ? ComponentRegistry[activePanel.component] : null;
+  const Component =
+    activePanel && Object.hasOwn(ComponentRegistry, activePanel.component)
+      ? ComponentRegistry[activePanel.component]
+      : null;
 
   return (
     <div
