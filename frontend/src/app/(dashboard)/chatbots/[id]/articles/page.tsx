@@ -20,7 +20,7 @@ const stateVariant: Record<string, "default" | "success" | "warning"> = {
 };
 
 export default function ArticlesPage() {
-  const { id: chatbotId } = useParams<{ id: string }>();
+  const { id: chatbotId } = useParams() as { id: string };
   const navigate = useNavigate();
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);
   const [articles, setArticles] = useState<Article[]>([]);

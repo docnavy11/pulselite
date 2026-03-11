@@ -81,7 +81,7 @@ export default function IntelligencePage() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {sections.map((section) => (
-          <Link key={section.label} href={section.href}>
+          <Link key={section.label} to={section.href}>
             <Card className="cursor-pointer hover:shadow-md transition-all duration-200">
               <CardContent className="py-6">
                 <div className="flex items-start gap-4">

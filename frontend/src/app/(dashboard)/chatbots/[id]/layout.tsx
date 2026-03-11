@@ -27,7 +27,7 @@ const TABS = [
 ] as const;
 
 export default function ChatbotLayout() {
-  const { id: chatbotId } = useParams<{ id: string }>();
+  const { id: chatbotId } = useParams() as { id: string };
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);

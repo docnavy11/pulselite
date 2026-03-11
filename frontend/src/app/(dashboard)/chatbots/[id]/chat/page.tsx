@@ -20,7 +20,7 @@ function ConfidenceBadge({ confidence }: { confidence?: number }) {
 }
 
 export default function TestChatPage() {
-  const { id: chatbotId } = useParams<{ id: string }>();
+  const { id: chatbotId } = useParams() as { id: string };
   const [mode, setMode] = useState<"inline" | "bubble">("inline");
   const [bubbleOpen, setBubbleOpen] = useState(false);
   const [primaryColor, setPrimaryColor] = useState("#4f46e5");

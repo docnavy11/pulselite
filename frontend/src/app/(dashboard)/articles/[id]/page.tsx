@@ -14,7 +14,7 @@ import {
 import { useWorkspaceStore } from "@/stores/workspace-store";
 
 export default function ArticleEditorPage() {
-  const { id: articleId } = useParams<{ id: string }>();
+  const { id: articleId } = useParams() as { id: string };
   const navigate = useNavigate();
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);
   const [article, setArticle] = useState<Article | null>(null);

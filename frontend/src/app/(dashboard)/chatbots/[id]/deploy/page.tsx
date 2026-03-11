@@ -96,7 +96,7 @@ const platformGuides: { name: string; steps: string[] }[] = [
 ];
 
 export default function DeployPage() {
-  const { id: chatbotId } = useParams<{ id: string }>();
+  const { id: chatbotId } = useParams() as { id: string };
   const [activeTab, setActiveTab] = useState<DeployTab>("Script Tag");
   const [expandedGuide, setExpandedGuide] = useState<string | null>(null);
   const qrRef = useRef<HTMLDivElement>(null);

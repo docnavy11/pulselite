@@ -306,7 +306,7 @@ export default function DashboardPage() {
                           border: "1px solid #f0ebe3",
                           borderRadius: 8,
                         }}
-                        formatter={(v: number) => [`${v}`, "Score"]}
+                        formatter={(v) => [`${v}`, "Score"]}
                       />
                       <Line
                         type="monotone"

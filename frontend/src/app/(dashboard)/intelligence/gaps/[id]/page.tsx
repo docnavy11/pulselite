@@ -22,7 +22,7 @@ const statusVariant: Record<string, "default" | "success" | "warning" | "danger"
 };
 
 export default function GapClusterDetailPage() {
-  const { id: clusterId } = useParams<{ id: string }>();
+  const { id: clusterId } = useParams() as { id: string };
   const navigate = useNavigate();
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);
   const [cluster, setCluster] = useState<GapClusterDetail | null>(null);

@@ -28,7 +28,7 @@ const DEFAULT_CONFIG: WidgetConfig = {
 };
 
 export default function CustomizePage() {
-  const { id: chatbotId } = useParams<{ id: string }>();
+  const { id: chatbotId } = useParams() as { id: string };
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);
 
   const [config, setConfig] = useState<WidgetConfig>(DEFAULT_CONFIG);

@@ -7,7 +7,7 @@ import { useWorkspaceStore } from "@/stores/workspace-store";
 import { SourcesTab } from "./sources/SourcesTab";
 
 export default function ChatbotSourcesPage() {
-  const { id: chatbotId } = useParams<{ id: string }>();
+  const { id: chatbotId } = useParams() as { id: string };
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBase[]>([]);
   const [loading, setLoading] = useState(true);

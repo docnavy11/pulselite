@@ -277,7 +277,7 @@ function ActionTypeBadge({ type }: { type: string }) {
 }
 
 export default function ActionsPage() {
-  const { id: chatbotId } = useParams<{ id: string }>();
+  const { id: chatbotId } = useParams() as { id: string };
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);
 
   const [actions, setActions] = useState<Action[]>([]);

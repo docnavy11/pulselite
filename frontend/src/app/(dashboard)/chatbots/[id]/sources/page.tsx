@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 
 export default function SourcesPage() {
-  const { id } = useParams<{ id: string }>();
+  const { id } = useParams() as { id: string };
   const navigate = useNavigate();
 
   useEffect(() => {
