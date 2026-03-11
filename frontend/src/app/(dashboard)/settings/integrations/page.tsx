@@ -45,6 +45,8 @@ const integrationMeta: Record<
   },
 };
 
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
 export default function IntegrationsPage() {
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);
   const [integrations, setIntegrations] = useState<IntegrationConfig[]>([]);
@@ -333,7 +335,7 @@ export default function IntegrationsPage() {
                     size="sm"
                     onClick={() => {
                       if (workspace) {
-                        window.location.href = `http://localhost:8000/api/v1/oauth/notion/authorize?workspace_id=${workspace.id}`;
+                        window.location.href = `${API_URL}/api/v1/oauth/notion/authorize?workspace_id=${workspace.id}`;
                       }
                     }}
                   >
@@ -345,7 +347,7 @@ export default function IntegrationsPage() {
                   size="sm"
                   onClick={() => {
                     if (workspace) {
-                      window.location.href = `http://localhost:8000/api/v1/oauth/notion/authorize?workspace_id=${workspace.id}`;
+                      window.location.href = `${API_URL}/api/v1/oauth/notion/authorize?workspace_id=${workspace.id}`;
                     }
                   }}
                 >
@@ -401,7 +403,7 @@ export default function IntegrationsPage() {
                     size="sm"
                     onClick={() => {
                       if (workspace) {
-                        window.location.href = `http://localhost:8000/api/v1/oauth/google/authorize?workspace_id=${workspace.id}`;
+                        window.location.href = `${API_URL}/api/v1/oauth/google/authorize?workspace_id=${workspace.id}`;
                       }
                     }}
                   >
@@ -413,7 +415,7 @@ export default function IntegrationsPage() {
                   size="sm"
                   onClick={() => {
                     if (workspace) {
-                      window.location.href = `http://localhost:8000/api/v1/oauth/google/authorize?workspace_id=${workspace.id}`;
+                      window.location.href = `${API_URL}/api/v1/oauth/google/authorize?workspace_id=${workspace.id}`;
                     }
                   }}
                 >
@@ -470,7 +472,7 @@ export default function IntegrationsPage() {
                     size="sm"
                     onClick={() => {
                       if (workspace) {
-                        window.location.href = `http://localhost:8000/api/v1/oauth/dropbox/authorize?workspace_id=${workspace.id}`;
+                        window.location.href = `${API_URL}/api/v1/oauth/dropbox/authorize?workspace_id=${workspace.id}`;
                       }
                     }}
                   >
@@ -482,7 +484,7 @@ export default function IntegrationsPage() {
                   size="sm"
                   onClick={() => {
                     if (workspace) {
-                      window.location.href = `http://localhost:8000/api/v1/oauth/dropbox/authorize?workspace_id=${workspace.id}`;
+                      window.location.href = `${API_URL}/api/v1/oauth/dropbox/authorize?workspace_id=${workspace.id}`;
                     }
                   }}
                 >
@@ -649,7 +651,7 @@ export default function IntegrationsPage() {
                     size="sm"
                     onClick={() => {
                       if (workspace) {
-                        window.location.href = `http://localhost:8000/api/v1/oauth/slack/authorize?workspace_id=${workspace.id}`;
+                        window.location.href = `${API_URL}/api/v1/oauth/slack/authorize?workspace_id=${workspace.id}`;
                       }
                     }}
                   >
@@ -661,7 +663,7 @@ export default function IntegrationsPage() {
                   size="sm"
                   onClick={() => {
                     if (workspace) {
-                      window.location.href = `http://localhost:8000/api/v1/oauth/slack/authorize?workspace_id=${workspace.id}`;
+                      window.location.href = `${API_URL}/api/v1/oauth/slack/authorize?workspace_id=${workspace.id}`;
                     }
                   }}
                 >
@@ -698,7 +700,7 @@ export default function IntegrationsPage() {
               { key: "phone_number_id", label: "Phone Number ID" },
               { key: "access_token", label: "Access Token", secret: true },
             ]}
-            webhookUrl="http://localhost:8000/api/v1/whatsapp/webhook"
+            webhookUrl={`${API_URL}/api/v1/whatsapp/webhook`}
             onSave={(config) => handleChannelSave("whatsapp", config)}
             saving={saving}
           />
@@ -713,7 +715,7 @@ export default function IntegrationsPage() {
               { key: "page_id", label: "Facebook Page ID" },
               { key: "page_access_token", label: "Page Access Token", secret: true },
             ]}
-            webhookUrl="http://localhost:8000/api/v1/messenger/webhook"
+            webhookUrl={`${API_URL}/api/v1/messenger/webhook`}
             onSave={(config) => handleChannelSave("messenger", config)}
             saving={saving}
           />
@@ -728,7 +730,7 @@ export default function IntegrationsPage() {
               { key: "account_id", label: "Instagram Business Account ID" },
               { key: "page_access_token", label: "Page Access Token", secret: true },
             ]}
-            webhookUrl="http://localhost:8000/api/v1/instagram/webhook"
+            webhookUrl={`${API_URL}/api/v1/instagram/webhook`}
             onSave={(config) => handleChannelSave("instagram", config)}
             saving={saving}
           />
@@ -1320,7 +1322,7 @@ function ShopifyConnectButton({
         size="sm"
         onClick={() => {
           if (workspace && shop) {
-            window.location.href = `http://localhost:8000/api/v1/oauth/shopify/authorize?shop=${encodeURIComponent(shop)}&workspace_id=${workspace.id}`;
+            window.location.href = `${API_URL}/api/v1/oauth/shopify/authorize?shop=${encodeURIComponent(shop)}&workspace_id=${workspace.id}`;
           }
         }}
         disabled={!shop}
@@ -1376,7 +1378,7 @@ function ZendeskConnectButton({
         size="sm"
         onClick={() => {
           if (workspace && subdomain.trim()) {
-            window.location.href = `http://localhost:8000/api/v1/oauth/zendesk/authorize?workspace_id=${workspace.id}&subdomain=${encodeURIComponent(subdomain.trim())}`;
+            window.location.href = `${API_URL}/api/v1/oauth/zendesk/authorize?workspace_id=${workspace.id}&subdomain=${encodeURIComponent(subdomain.trim())}`;
           }
         }}
         disabled={!subdomain.trim()}

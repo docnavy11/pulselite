@@ -323,7 +323,7 @@ export default function LoginPage() {
           </Link>
         </p>
 
-        {process.env.NODE_ENV === "development" && (
+        {import.meta.env.DEV && (
           <div className="mt-4 rounded-lg border border-dashed border-gray-300 bg-gray-50 p-3">
             <p className="text-xs font-medium text-gray-500 mb-2">Dev login</p>
             <button

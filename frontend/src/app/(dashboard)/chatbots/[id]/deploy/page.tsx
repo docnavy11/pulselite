@@ -7,7 +7,7 @@ import { Highlight, themes } from "prism-react-renderer";
 import { Card, CardContent } from "@/components/ui/Card";
 
 
-const APP_URL = import.meta.env.VITE_APP_URL || "http://localhost:3000";
+const APP_URL = import.meta.env.VITE_APP_URL || "http://localhost:3001";
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 const deployTabs = ["Script Tag", "Shareable Link", "REST API"] as const;

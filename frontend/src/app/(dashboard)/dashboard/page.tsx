@@ -165,7 +165,7 @@ export default function DashboardPage() {
               View conversations
             </button>
             <button
-              onClick={() => navigate("/knowledge")}
+              onClick={() => navigate("/chatbots")}
               className="px-4 py-2.5 bg-white border border-[#f0ebe3] text-gray-600 rounded-xl text-[13px] font-medium hover:bg-[#faf8f5] transition-colors"
             >
               Add knowledge
@@ -407,7 +407,7 @@ export default function DashboardPage() {
                 </h2>
                 {topics.length > 0 && (
                   <button
-                    onClick={() => navigate("/gaps")}
+                    onClick={() => navigate("/intelligence/gaps")}
                     className="text-[11px] text-primary-500 hover:text-primary-700 font-medium"
                   >
                     View all →
