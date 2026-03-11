@@ -1,7 +1,5 @@
-"use client";
-
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useNavigate } from "react-router-dom";
 import { FileQuestion } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Spinner } from "@/components/ui/Spinner";
@@ -26,7 +24,7 @@ const statusBadge: Record<string, string> = {
 };
 
 export default function GapsPage() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);
   const [clusters, setClusters] = useState<GapCluster[]>([]);
   const [loading, setLoading] = useState(true);
@@ -96,7 +94,7 @@ export default function GapsPage() {
               key={cluster.id}
               className={`cursor-pointer hover:shadow-md transition-all duration-200 border-l-4 ${statusBorder[cluster.status] || "border-l-gray-300"}`}
               onClick={() =>
-                router.push(`/intelligence/gaps/${cluster.id}`)
+                navigate(`/intelligence/gaps/${cluster.id}`)
               }
             >
               <CardContent className="py-5">

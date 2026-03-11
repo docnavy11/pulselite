@@ -1,5 +1,3 @@
-"use client";
-
 import { useState, useEffect } from "react";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { Card, CardContent } from "@/components/ui/Card";

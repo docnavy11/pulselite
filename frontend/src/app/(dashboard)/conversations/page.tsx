@@ -1,7 +1,5 @@
-"use client";
-
 import { useEffect, useState, useCallback } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { clsx } from "clsx";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useCopilot } from "@/components/copilot/CopilotProvider";
@@ -50,8 +48,8 @@ const STATUS_DOT: Record<string, string> = {
 };
 
 export default function ConversationsPage() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const selectedId = searchParams.get("id");
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);
   const { register } = useCopilot();
@@ -100,9 +98,9 @@ export default function ConversationsPage() {
     (id: string) => {
       const params = new URLSearchParams(searchParams.toString());
       params.set("id", id);
-      router.replace(`/conversations?${params.toString()}`, { scroll: false });
+      navigate(`/conversations?${params.toString()}`, { replace: true });
     },
-    [router, searchParams],
+    [navigate, searchParams],
   );
 
   const handleStatusChange = useCallback(

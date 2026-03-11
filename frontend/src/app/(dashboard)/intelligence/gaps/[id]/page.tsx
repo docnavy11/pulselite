@@ -1,7 +1,5 @@
-"use client";
-
 import { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useNavigate } from "react-router-dom";
 import { Check, X, FileText, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -24,9 +22,8 @@ const statusVariant: Record<string, "default" | "success" | "warning" | "danger"
 };
 
 export default function GapClusterDetailPage() {
-  const params = useParams();
-  const router = useRouter();
-  const clusterId = params.id as string;
+  const { id: clusterId } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);
   const [cluster, setCluster] = useState<GapClusterDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -51,7 +48,7 @@ export default function GapClusterDetailPage() {
     setApproving(true);
     try {
       await approveGapCluster(workspace.id, clusterId);
-      router.push("/intelligence/gaps");
+      navigate("/intelligence/gaps");
     } catch {
       // handle error
     } finally {
@@ -64,7 +61,7 @@ export default function GapClusterDetailPage() {
     setDismissing(true);
     try {
       await dismissGapCluster(workspace.id, clusterId);
-      router.push("/intelligence/gaps");
+      navigate("/intelligence/gaps");
     } catch {
       // handle error
     } finally {

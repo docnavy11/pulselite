@@ -1,7 +1,5 @@
-"use client";
-
 import { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useNavigate } from "react-router-dom";
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -16,10 +14,9 @@ import {
 import { useWorkspaceStore } from "@/stores/workspace-store";
 
 export default function ArticleEditorPage() {
-  const params = useParams();
-  const router = useRouter();
+  const { id: articleId } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);
-  const articleId = params.id as string;
   const [article, setArticle] = useState<Article | null>(null);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -71,7 +68,7 @@ export default function ArticleEditorPage() {
     if (!workspace) return;
     try {
       await deleteArticle(workspace.id, articleId);
-      router.back();
+      navigate(-1);
     } catch {
       // handle error
     }

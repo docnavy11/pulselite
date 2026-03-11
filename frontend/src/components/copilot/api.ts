@@ -1,6 +1,6 @@
 import { useAuthStore } from "@/stores/auth-store";
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 export type CopilotEvent =
   | { type: "token"; data: string }

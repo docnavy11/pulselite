@@ -1,5 +1,3 @@
-"use client";
-
 import { useState, useRef, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { Send, MessageCircle } from "lucide-react";

@@ -1,5 +1,3 @@
-"use client";
-
 import { useCopilot } from "./CopilotProvider";
 import { CopilotChat } from "./CopilotChat";
 import { ComponentPanel } from "./ComponentPanel";

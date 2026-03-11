@@ -1,5 +1,3 @@
-"use client";
-
 import { useCallback } from "react";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { api } from "@/lib/api";

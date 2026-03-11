@@ -1,7 +1,5 @@
-"use client";
-
 import { useState, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams } from "react-router-dom";
 import { Check, X, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -66,7 +64,7 @@ export default function IntegrationsPage() {
   const [salesforceConnectedBanner, setSalesforceConnectedBanner] = useState(false);
   const [dropboxConnectedBanner, setDropboxConnectedBanner] = useState(false);
 
-  const searchParams = useSearchParams();
+  const [searchParams] = useSearchParams();
 
   useEffect(() => {
     if (searchParams.get("notion_connected") === "1") {

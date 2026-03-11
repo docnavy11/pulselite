@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useState } from "react";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { getCreditsBalance } from "@/lib/api-functions";

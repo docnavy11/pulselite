@@ -1,5 +1,3 @@
-"use client";
-
 import { useState, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
 import { X, Plus, Globe, Upload, AlignLeft, Map, HardDrive, Headphones, Cloud, FolderOpen, FileText, ArrowRight, CheckCircle2 } from "lucide-react";

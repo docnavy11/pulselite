@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { useWorkspaceStore } from "@/stores/workspace-store";
