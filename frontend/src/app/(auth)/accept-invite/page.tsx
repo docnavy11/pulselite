@@ -1,15 +1,13 @@
-"use client";
-
 import { useState, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { api } from "@/lib/api";
 
 function AcceptInviteForm() {
-  const params = useSearchParams();
-  const token = params.get("token") || "";
-  const router = useRouter();
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get("token") || "";
+  const navigate = useNavigate();
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -20,7 +18,7 @@ function AcceptInviteForm() {
     setError("");
     try {
       await api.post("/api/v1/invites/accept", { token, full_name: name, password });
-      router.push("/login?accepted=1");
+      navigate("/login?accepted=1");
     } catch {
       setError("Invalid or expired invite link.");
     } finally {

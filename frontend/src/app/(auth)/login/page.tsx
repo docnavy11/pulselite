@@ -1,16 +1,13 @@
-"use client";
-
 import { useState } from "react";
-import Link from "next/link";
+import { Link, useNavigate } from "react-router-dom";
 import { z } from "zod";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card, CardContent } from "@/components/ui/Card";
 import { useAuthStore } from "@/stores/auth-store";
-import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 interface SSOCheckResponse {
   has_sso: boolean;
@@ -29,7 +26,7 @@ const loginSchema = z.object({
 });
 
 export default function LoginPage() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const storeLogin = useAuthStore((s) => s.login);
 
   const [email, setEmail] = useState("");
@@ -82,7 +79,7 @@ export default function LoginPage() {
 
     const data: AuthResponse = await response.json();
     storeLogin(data.user, data.tokens);
-    router.push("/");
+    navigate("/");
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -255,7 +252,7 @@ export default function LoginPage() {
           variant="secondary"
           className="w-full"
           onClick={() => {
-            window.location.href = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/auth/google`;
+            window.location.href = `${import.meta.env.VITE_API_URL || "http://localhost:8000"}/api/v1/auth/google`;
           }}
         >
           <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
@@ -319,7 +316,7 @@ export default function LoginPage() {
         <p className="mt-6 text-center text-sm text-gray-500">
           Don&apos;t have an account?{" "}
           <Link
-            href="/register"
+            to="/register"
             className="font-medium text-primary-500 hover:text-primary-500"
           >
             Sign up

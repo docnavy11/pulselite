@@ -1,7 +1,5 @@
-"use client";
-
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useNavigate } from "react-router-dom";
 import { Plus } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -9,7 +7,7 @@ import { Input } from "@/components/ui/Input";
 import { useWorkspace } from "@/hooks/useWorkspace";
 
 export default function WorkspacesPage() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const { workspaces, fetchWorkspaces, createWorkspace, switchWorkspace } =
     useWorkspace();
   const [showCreate, setShowCreate] = useState(false);
@@ -28,7 +26,7 @@ export default function WorkspacesPage() {
       await createWorkspace(name.trim());
       setShowCreate(false);
       setName("");
-      router.push("/");
+      navigate("/");
     } catch {
       // handle error
     } finally {
@@ -46,7 +44,7 @@ export default function WorkspacesPage() {
             className="cursor-pointer hover:shadow-md transition-all duration-200"
             onClick={() => {
               switchWorkspace(ws);
-              router.push("/");
+              navigate("/");
             }}
           >
             <CardContent className="py-6">

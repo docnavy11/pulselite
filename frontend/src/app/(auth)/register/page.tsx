@@ -1,7 +1,5 @@
-"use client";
-
 import { useState } from "react";
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { z } from "zod";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -127,7 +125,7 @@ export default function RegisterPage() {
           variant="secondary"
           className="w-full"
           onClick={() => {
-            window.location.href = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/auth/google`;
+            window.location.href = `${import.meta.env.VITE_API_URL || "http://localhost:8000"}/api/v1/auth/google`;
           }}
         >
           <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
@@ -154,7 +152,7 @@ export default function RegisterPage() {
         <p className="mt-6 text-center text-sm text-gray-500">
           Already have an account?{" "}
           <Link
-            href="/login"
+            to="/login"
             className="font-medium text-primary-500 hover:text-primary-500"
           >
             Sign in

@@ -1,7 +1,5 @@
-"use client";
-
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useNavigate } from "react-router-dom";
 import {
   BarChart,
   Bar,
@@ -71,7 +69,7 @@ function SentimentLabel({ score }: { score: number }) {
 export default function DashboardPage() {
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);
   const user = useAuthStore((s) => s.user);
-  const router = useRouter();
+  const navigate = useNavigate();
   const { register } = useCopilot();
   const [data, setData] = useState<DashboardData | null>(null);
   const [chatbots, setChatbots] = useState<Chatbot[]>([]);
@@ -155,19 +153,19 @@ export default function DashboardPage() {
         {!hasChatbots && !loading && (
           <div className="flex gap-3 mb-7">
             <button
-              onClick={() => router.push("/chatbots/new")}
+              onClick={() => navigate("/chatbots/new")}
               className="flex items-center gap-2 px-4 py-2.5 bg-primary-500 hover:bg-primary-600 text-white rounded-xl text-[13px] font-semibold transition-colors"
             >
               + New chatbot
             </button>
             <button
-              onClick={() => router.push("/conversations")}
+              onClick={() => navigate("/conversations")}
               className="px-4 py-2.5 bg-white border border-[#f0ebe3] text-gray-600 rounded-xl text-[13px] font-medium hover:bg-[#faf8f5] transition-colors"
             >
               View conversations
             </button>
             <button
-              onClick={() => router.push("/knowledge")}
+              onClick={() => navigate("/knowledge")}
               className="px-4 py-2.5 bg-white border border-[#f0ebe3] text-gray-600 rounded-xl text-[13px] font-medium hover:bg-[#faf8f5] transition-colors"
             >
               Add knowledge
@@ -409,7 +407,7 @@ export default function DashboardPage() {
                 </h2>
                 {topics.length > 0 && (
                   <button
-                    onClick={() => router.push("/gaps")}
+                    onClick={() => navigate("/gaps")}
                     className="text-[11px] text-primary-500 hover:text-primary-700 font-medium"
                   >
                     View all →
@@ -475,7 +473,7 @@ export default function DashboardPage() {
               Paste a URL, we crawl it and auto-configure your bot in minutes.
             </p>
             <button
-              onClick={() => router.push("/chatbots/new")}
+              onClick={() => navigate("/chatbots/new")}
               className="px-5 py-2.5 bg-primary-500 hover:bg-primary-600 text-white rounded-xl text-[13px] font-semibold transition-colors"
             >
               Create my first chatbot

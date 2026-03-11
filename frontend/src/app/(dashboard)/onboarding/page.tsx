@@ -1,7 +1,5 @@
-"use client";
-
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useNavigate } from "react-router-dom";
 import { Check, ChevronRight, SkipForward } from "lucide-react";
 import { clsx } from "clsx";
 import { Button } from "@/components/ui/Button";
@@ -26,7 +24,7 @@ const stepLabels = [
 ];
 
 export default function OnboardingPage() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);
   const [, setState] = useState<OnboardingState | null>(null);
   const [currentStep, setCurrentStep] = useState(0);
@@ -79,7 +77,7 @@ export default function OnboardingPage() {
     setSaving(true);
     try {
       await completeOnboarding(workspace.id);
-      router.push("/dashboard");
+      navigate("/dashboard");
     } catch {
       // handle error
     } finally {
