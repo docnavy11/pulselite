@@ -56,6 +56,18 @@ export interface CrawlResponse {
   limit: number;
 }
 
+export interface CrawlJobSummary {
+  job_id: string;
+  status: string;
+  root_url: string;
+  pages_discovered: number;
+  pages_queued: number;
+  pages_failed: number;
+  docs_indexed: number;
+  created_at: string;
+  completed_at: string | null;
+}
+
 export interface CrawlStatusResponse {
   job_id: string;
   status: string;
@@ -96,6 +108,7 @@ export interface Document {
   chunk_count: number;
   last_indexed_at?: string;
   sync_frequency?: string;
+  metadata_?: Record<string, string>;
 }
 
 export interface Article {
@@ -176,7 +189,6 @@ export interface GapCluster {
   gap_count: number;
   representative_query: string;
   status: string;
-  draft_article_id?: string;
 }
 
 export interface GapClusterDetail extends GapCluster {

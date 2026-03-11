@@ -1,14 +1,14 @@
 import asyncio
-import datetime
 import logging
 import uuid
+from datetime import datetime, timezone
 
 import stripe
 
 from sqlalchemy import select
 
 from app.config import settings
-from app.database import async_session_factory
+from app.database import async_session_factory, engine
 from app.models.organizational import Workspace
 from app.services import credits as credits_service
 from app.workers.celery_app import celery_app
@@ -16,12 +16,16 @@ from app.workers.celery_app import celery_app
 logger = logging.getLogger(__name__)
 
 
-@celery_app.task
-def trigger_auto_recharge(workspace_id: str) -> dict:
-    return asyncio.run(_recharge(uuid.UUID(workspace_id)))
+@celery_app.task(bind=True, max_retries=3, default_retry_delay=60)
+def trigger_auto_recharge(self, workspace_id: str) -> dict:
+    try:
+        return asyncio.run(_recharge(uuid.UUID(workspace_id)))
+    except Exception as exc:
+        raise self.retry(exc=exc)
 
 
 async def _recharge(workspace_id: uuid.UUID) -> dict:
+    await engine.dispose()
     async with async_session_factory() as session:
         try:
             # Re-read workspace from committed DB state to guard against concurrent recharges
@@ -44,7 +48,8 @@ async def _recharge(workspace_id: uuid.UUID) -> dict:
 
             try:
                 stripe.api_key = settings.STRIPE_SECRET_KEY
-                idempotency_key = f"recharge-{workspace_id}-{datetime.date.today().isoformat()}"
+                hour_key = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H")
+                idempotency_key = f"recharge_{workspace_id}_{hour_key}"
 
                 stripe.InvoiceItem.create(
                     customer=workspace.stripe_customer_id,
@@ -62,7 +67,7 @@ async def _recharge(workspace_id: uuid.UUID) -> dict:
 
             except Exception as e:
                 logger.error(f"Stripe auto-recharge failed for {workspace_id}: {e}")
-                return {"status": "error", "detail": str(e)}
+                raise
 
             new_balance = await credits_service.add_credits(
                 session,

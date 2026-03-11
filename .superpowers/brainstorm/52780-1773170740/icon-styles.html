@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Icon Styles</title>
+<script src="/helper.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; background: #faf8f5; color: #1a1a1a; padding: 32px; }
+  h1 { font-size: 22px; font-weight: 800; margin-bottom: 6px; letter-spacing: -0.03em; }
+  .sub { color: #888; font-size: 14px; margin-bottom: 36px; }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .card { background: white; border-radius: 16px; border: 2px solid transparent; padding: 0; overflow: hidden; cursor: pointer; transition: border-color 0.2s, transform 0.15s; }
+  .card:hover { transform: translateY(-2px); }
+  .card.selected { border-color: #ff6b35; }
+  .card.selected .card-top::after { content: '✓ Selected'; position: absolute; top: 14px; right: 14px; background: #ff6b35; color: white; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 20px; }
+
+  .card-top { padding: 24px; border-bottom: 1px solid #f0ebe3; position: relative; min-height: 200px; display: flex; align-items: center; justify-content: center; }
+  .card-label { padding: 16px 20px 20px; }
+  .card-label h3 { font-size: 14px; font-weight: 700; margin-bottom: 4px; letter-spacing: -0.01em; }
+  .card-label p { font-size: 12px; color: #999; line-height: 1.5; }
+
+  /* NAV MOCKUP SHARED */
+  .nav-mock { display: flex; flex-direction: column; gap: 3px; width: 160px; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; font-size: 12px; color: #666; }
+  .nav-item.active { background: #fff3ee; color: #ff6b35; font-weight: 600; }
+  .icon-slot { width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+
+  /* ── A: PURE TYPE ── */
+  .type-nav .nav-item { gap: 0; padding: 8px 10px; }
+  .type-label { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #ccc; }
+  .type-label.active { color: #ff6b35; }
+  .type-dot { width: 5px; height: 5px; border-radius: 50%; background: #ff6b35; margin-right: 10px; flex-shrink: 0; display: none; }
+  .type-label.active + .type-dot { display: block; } /* won't work, restructure */
+  .type-row { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; }
+  .type-row.active { background: #fff3ee; }
+  .type-row.active .tl { color: #ff6b35; font-weight: 700; }
+  .tl { font-size: 11px; letter-spacing: 0.07em; text-transform: uppercase; color: #aaa; font-weight: 600; }
+  .type-accent { width: 4px; height: 4px; border-radius: 50%; background: #ff6b35; flex-shrink: 0; }
+
+  /* ── B: ABSTRACT GLYPHS ── */
+  .glyph-icon { width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; }
+
+  /* ── C: MINI ILLUSTRATIONS ── */
+  .illus-bg { width: 26px; height: 26px; border-radius: 7px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+
+  /* ── D: NUMBER / INITIAL ── */
+  .num-icon { width: 22px; height: 22px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 900; letter-spacing: -0.02em; flex-shrink: 0; }
+</style>
+</head>
+<body>
+<h1>Icon style — pick the vibe</h1>
+<p class="sub">Same navigation, four completely different icon approaches. No robots. No houses.</p>
+
+<div class="grid">
+
+  <!-- A: TYPE ONLY -->
+  <div class="card" data-choice="type-only" onclick="toggleSelect(this)">
+    <div class="card-top" style="background:#faf8f5">
+      <div style="display:flex;flex-direction:column;gap:0;width:170px">
+        <div style="font-size:11px;font-weight:900;letter-spacing:0.05em;color:#ff6b35;margin-bottom:18px;padding-left:10px">PULSE</div>
+        <div class="type-row active"><div class="type-accent"></div><span class="tl" style="color:#ff6b35;font-weight:800">Overview</span></div>
+        <div class="type-row"><div style="width:4px;height:4px;border-radius:50%;background:transparent;flex-shrink:0"></div><span class="tl">Chatbots</span></div>
+        <div class="type-row"><div style="width:4px;height:4px;border-radius:50%;background:transparent;flex-shrink:0"></div><span class="tl">Conversations</span></div>
+        <div class="type-row"><div style="width:4px;height:4px;border-radius:50%;background:transparent;flex-shrink:0"></div><span class="tl">Intelligence</span></div>
+        <div style="height:1px;background:#f0ebe3;margin:8px 10px"></div>
+        <div class="type-row"><div style="width:4px;height:4px;border-radius:50%;background:transparent;flex-shrink:0"></div><span class="tl">Settings</span></div>
+      </div>
+    </div>
+    <div class="card-label">
+      <h3>A — Text only, no icons</h3>
+      <p>Editorial, confident, like a magazine or Basecamp. The dot is the only visual accent. Works when the words are distinctive enough. Bold and minimal.</p>
+    </div>
+  </div>
+
+  <!-- B: ABSTRACT SVG GLYPHS -->
+  <div class="card" data-choice="abstract-glyphs" onclick="toggleSelect(this)">
+    <div class="card-top" style="background:#faf8f5">
+      <div class="nav-mock">
+        <div style="font-size:11px;font-weight:900;letter-spacing:0.05em;color:#ff6b35;margin-bottom:14px;padding-left:4px">PULSE</div>
+
+        <!-- Overview: pulse wave -->
+        <div class="nav-item active">
+          <div class="icon-slot">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <path d="M1 9 L4 9 L6 4 L8 13 L10 7 L12 9 L17 9" stroke="#ff6b35" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          Overview
+        </div>
+
+        <!-- Chatbots: abstract diamond/spark -->
+        <div class="nav-item">
+          <div class="icon-slot">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <path d="M9 2 L11.5 7.5 L17 9 L11.5 10.5 L9 16 L6.5 10.5 L1 9 L6.5 7.5 Z" stroke="#aaa" stroke-width="1.6" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          Chatbots
+        </div>
+
+        <!-- Conversations: flowing line -->
+        <div class="nav-item">
+          <div class="icon-slot">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <path d="M3 5 Q9 2 15 5 Q15 10 9 13 L6 16 L7 13 Q3 11 3 5 Z" stroke="#aaa" stroke-width="1.6" stroke-linejoin="round"/>
+              <circle cx="7" cy="8.5" r="1" fill="#aaa"/>
+              <circle cx="9" cy="8.5" r="1" fill="#aaa"/>
+              <circle cx="11" cy="8.5" r="1" fill="#aaa"/>
+            </svg>
+          </div>
+          Conversations
+        </div>
+
+        <!-- Intelligence: intersecting circles -->
+        <div class="nav-item">
+          <div class="icon-slot">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <circle cx="7" cy="9" r="5" stroke="#aaa" stroke-width="1.6"/>
+              <circle cx="12" cy="7" r="4" stroke="#aaa" stroke-width="1.6"/>
+            </svg>
+          </div>
+          Intelligence
+        </div>
+
+        <div style="height:1px;background:#f0ebe3;margin:4px 0"></div>
+
+        <!-- Settings: abstract grid -->
+        <div class="nav-item">
+          <div class="icon-slot">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <rect x="2" y="2" width="6" height="6" rx="2" stroke="#aaa" stroke-width="1.6"/>
+              <rect x="10" y="2" width="6" height="6" rx="2" stroke="#aaa" stroke-width="1.6"/>
+              <rect x="2" y="10" width="6" height="6" rx="2" stroke="#aaa" stroke-width="1.6"/>
+              <rect x="10" y="10" width="6" height="6" rx="2" stroke="#aaa" stroke-width="1.6"/>
+            </svg>
+          </div>
+          Settings
+        </div>
+      </div>
+    </div>
+    <div class="card-label">
+      <h3>B — Custom SVG glyphs</h3>
+      <p>Bespoke icons where the shape tells the story metaphorically — a pulse wave for Overview, a starburst for Chatbots, overlapping circles for Intelligence. Distinctive and ownable.</p>
+    </div>
+  </div>
+
+  <!-- C: COLOURED BLOBS + INITIALS -->
+  <div class="card" data-choice="color-initials" onclick="toggleSelect(this)">
+    <div class="card-top" style="background:#faf8f5">
+      <div class="nav-mock">
+        <div style="font-size:11px;font-weight:900;letter-spacing:0.05em;color:#ff6b35;margin-bottom:14px;padding-left:4px">PULSE</div>
+
+        <div class="nav-item active">
+          <div class="illus-bg" style="background:#fff3ee">
+            <span style="font-size:11px;font-weight:900;color:#ff6b35">~</span>
+          </div>
+          Overview
+        </div>
+        <div class="nav-item">
+          <div class="illus-bg" style="background:#f0f9ff">
+            <span style="font-size:11px;font-weight:900;color:#0ea5e9">✦</span>
+          </div>
+          Chatbots
+        </div>
+        <div class="nav-item">
+          <div class="illus-bg" style="background:#f0fdf4">
+            <span style="font-size:11px;font-weight:900;color:#22c55e">◎</span>
+          </div>
+          Conversations
+        </div>
+        <div class="nav-item">
+          <div class="illus-bg" style="background:#faf5ff">
+            <span style="font-size:11px;font-weight:900;color:#a855f7">⬡</span>
+          </div>
+          Intelligence
+        </div>
+        <div style="height:1px;background:#f0ebe3;margin:4px 0"></div>
+        <div class="nav-item">
+          <div class="illus-bg" style="background:#f8f8f8">
+            <span style="font-size:11px;font-weight:900;color:#888">▣</span>
+          </div>
+          Settings
+        </div>
+      </div>
+    </div>
+    <div class="card-label">
+      <h3>C — Coloured pill + glyph</h3>
+      <p>Each nav section gets its own accent colour + an abstract Unicode symbol (not emoji, not standard icons). Warm, playful, easily scannable. Each section has a distinct identity.</p>
+    </div>
+  </div>
+
+  <!-- D: SLIM NUMBERS -->
+  <div class="card" data-choice="numbered" onclick="toggleSelect(this)">
+    <div class="card-top" style="background:#faf8f5">
+      <div class="nav-mock">
+        <div style="font-size:11px;font-weight:900;letter-spacing:0.05em;color:#ff6b35;margin-bottom:14px;padding-left:4px">PULSE</div>
+
+        <div class="nav-item active">
+          <div class="num-icon" style="background:#fff3ee;color:#ff6b35">01</div>
+          Overview
+        </div>
+        <div class="nav-item">
+          <div class="num-icon" style="background:#f5f5f5;color:#999">02</div>
+          Chatbots
+        </div>
+        <div class="nav-item">
+          <div class="num-icon" style="background:#f5f5f5;color:#999">03</div>
+          Conversations
+        </div>
+        <div class="nav-item">
+          <div class="num-icon" style="background:#f5f5f5;color:#999">04</div>
+          Intelligence
+        </div>
+        <div style="height:1px;background:#f0ebe3;margin:4px 0"></div>
+        <div class="nav-item">
+          <div class="num-icon" style="background:#f5f5f5;color:#999">–</div>
+          Settings
+        </div>
+      </div>
+    </div>
+    <div class="card-label">
+      <h3>D — Numbered sections</h3>
+      <p>Architectural, editorial. Numbers instead of icons — like a table of contents. Surprising and memorable. Signals a structured, intentional product. Very un-SaaS.</p>
+    </div>
+  </div>
+
+</div>
+
+<p style="margin-top:24px;font-size:12px;color:#bbb;text-align:center">Or mix — e.g. "B icons but with the coloured pill from C"</p>
+</body>
+</html>

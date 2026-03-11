@@ -6,6 +6,7 @@ import { MetricsDashboardPanel } from "@/panels/MetricsDashboardPanel";
 import { ChatbotListPanel } from "@/panels/ChatbotListPanel";
 import { DocumentListPanel } from "@/panels/DocumentListPanel";
 import { CreditBalancePanel } from "@/panels/CreditBalancePanel";
+import { CrawlStatusPanel } from "@/panels/CrawlStatusPanel";
 
 function stub(name: string) {
   return function PanelStub(props: Record<string, unknown>) {
@@ -29,4 +30,5 @@ export const ComponentRegistry: Record<string, React.ComponentType<Record<string
   LLMSettingsPanel: LLMSettingsPanel as unknown as React.ComponentType<Record<string, unknown>>,
   PersonaSettingsPanel: PersonaSettingsPanel as unknown as React.ComponentType<Record<string, unknown>>,
   WidgetSettingsPanel: stub("WidgetSettingsPanel"),
+  CrawlStatusPanel: CrawlStatusPanel as unknown as React.ComponentType<Record<string, unknown>>,
 };

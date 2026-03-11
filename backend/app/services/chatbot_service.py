@@ -1,9 +1,11 @@
 import uuid
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.conversations import Conversation
+from app.models.intelligence import GapCluster, GapEvent, RetrievalLog
 from app.models.knowledge import Chatbot
 
 
@@ -39,5 +41,20 @@ async def update_chatbot(db: AsyncSession, workspace_id: uuid.UUID, chatbot_id: 
 
 async def delete_chatbot(db: AsyncSession, workspace_id: uuid.UUID, chatbot_id: uuid.UUID) -> None:
     chatbot = await get_chatbot(db, workspace_id, chatbot_id)
+    # Delete child records in FK-safe order before deleting chatbot
+    # GapEvents reference RetrievalLogs, so delete them first
+    retrieval_log_subq = select(RetrievalLog.id).where(RetrievalLog.chatbot_id == chatbot_id).scalar_subquery()
+    await db.execute(delete(GapEvent).where(GapEvent.retrieval_log_id.in_(retrieval_log_subq)))
+    await db.execute(
+        delete(RetrievalLog).where(RetrievalLog.chatbot_id == chatbot_id)
+    )
+    await db.execute(
+        delete(GapCluster).where(GapCluster.chatbot_id == chatbot_id)
+    )
+    await db.execute(
+        update(Conversation)
+        .where(Conversation.chatbot_id == chatbot_id)
+        .values(chatbot_id=None)
+    )
     await db.delete(chatbot)
     await db.flush()

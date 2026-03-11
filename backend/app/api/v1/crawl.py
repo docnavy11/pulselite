@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies import get_workspace
 from app.models.knowledge import CrawlJob, Document
-from app.schemas.crawl import CrawlJobStatusResponse, CrawlRequest, CrawlResponse
+from app.schemas.crawl import CrawlJobStatusResponse, CrawlJobSummary, CrawlRequest, CrawlResponse
 from app.services.crawl_service import prepare_crawl
 from app.workers.tasks.crawl_website import crawl_website
 
@@ -40,6 +40,137 @@ async def crawl_website_endpoint(
     )
 
 
+@router.get("/crawl", response_model=CrawlJobStatusResponse | None)
+async def get_latest_crawl_for_chatbot(
+    chatbot_id: uuid.UUID,
+    workspace_id: uuid.UUID = Depends(get_workspace),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the most recent crawl job for a chatbot's knowledge base."""
+    from app.models.knowledge import KnowledgeBase
+
+    kb_result = await db.execute(
+        select(KnowledgeBase).where(
+            KnowledgeBase.workspace_id == workspace_id,
+            KnowledgeBase.chatbot_id == chatbot_id,
+        )
+    )
+    kb = kb_result.scalar_one_or_none()
+    if not kb:
+        return None
+
+    job_result = await db.execute(
+        select(CrawlJob)
+        .where(CrawlJob.kb_id == kb.id)
+        .order_by(CrawlJob.created_at.desc())
+        .limit(1)
+    )
+    job = job_result.scalar_one_or_none()
+    if not job:
+        return None
+
+    from datetime import datetime, timezone
+
+    docs_total_result = await db.execute(
+        select(func.count(Document.id)).where(Document.knowledge_base_id == job.kb_id)
+    )
+    docs_indexed_result = await db.execute(
+        select(func.count(Document.id)).where(
+            Document.knowledge_base_id == job.kb_id,
+            Document.status == "indexed",
+        )
+    )
+    docs_failed_result = await db.execute(
+        select(func.count(Document.id)).where(
+            Document.knowledge_base_id == job.kb_id,
+            Document.status == "failed",
+        )
+    )
+    docs_total = docs_total_result.scalar() or 0
+    docs_indexed = docs_indexed_result.scalar() or 0
+    docs_failed = docs_failed_result.scalar() or 0
+
+    stalled = False
+    if job.status in ("running", "pending") and job.started_at:
+        elapsed = (datetime.now(timezone.utc) - job.started_at).total_seconds()
+        stalled = elapsed > 900
+
+    return CrawlJobStatusResponse(
+        job_id=str(job.id),
+        kb_id=str(job.kb_id),
+        status=job.status,
+        pages_discovered=job.pages_discovered,
+        pages_queued=job.pages_queued,
+        pages_failed=job.pages_failed,
+        docs_indexed=docs_indexed,
+        docs_total=docs_total,
+        docs_failed=docs_failed,
+        stalled=stalled,
+        over_limit=job.over_limit,
+        limit=job.max_pages,
+        created_at=job.created_at.isoformat(),
+        started_at=job.started_at.isoformat() if job.started_at else None,
+        completed_at=job.completed_at.isoformat() if job.completed_at else None,
+    )
+
+
+@router.get("/crawl/history", response_model=list[CrawlJobSummary])
+async def list_crawl_history(
+    chatbot_id: uuid.UUID,
+    workspace_id: uuid.UUID = Depends(get_workspace),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return all crawl jobs for a chatbot, newest first."""
+    from app.models.knowledge import KnowledgeBase
+
+    kb_result = await db.execute(
+        select(KnowledgeBase).where(
+            KnowledgeBase.workspace_id == workspace_id,
+            KnowledgeBase.chatbot_id == chatbot_id,
+        )
+    )
+    kb = kb_result.scalar_one_or_none()
+    if not kb:
+        return []
+
+    jobs_result = await db.execute(
+        select(CrawlJob)
+        .where(CrawlJob.kb_id == kb.id)
+        .order_by(CrawlJob.created_at.desc())
+        .limit(20)
+    )
+    jobs = jobs_result.scalars().all()
+
+    # Fetch indexed doc counts per kb in one query
+    kb_indexed = {}
+    if jobs:
+        indexed_result = await db.execute(
+            select(Document.knowledge_base_id, func.count(Document.id))
+            .where(
+                Document.knowledge_base_id == kb.id,
+                Document.status == "indexed",
+            )
+            .group_by(Document.knowledge_base_id)
+        )
+        for kb_id, cnt in indexed_result:
+            kb_indexed[str(kb_id)] = cnt
+
+    return [
+        CrawlJobSummary(
+            job_id=str(j.id),
+            status=j.status,
+            root_url=j.root_url,
+            pages_discovered=j.pages_discovered,
+            pages_queued=j.pages_queued,
+            pages_failed=j.pages_failed,
+            docs_indexed=kb_indexed.get(str(j.kb_id), 0),
+            created_at=j.created_at.isoformat(),
+            completed_at=j.completed_at.isoformat() if j.completed_at else None,
+        )
+        for j in jobs
+    ]
+
+
 @router.get("/crawl/{job_id}", response_model=CrawlJobStatusResponse)
 async def get_crawl_status(
     job_id: uuid.UUID,
@@ -53,17 +184,32 @@ async def get_crawl_status(
     if job is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Crawl job not found")
 
+    from datetime import datetime, timezone
+
     docs_total_result = await db.execute(
-        select(func.count()).where(Document.knowledge_base_id == job.kb_id)
+        select(func.count(Document.id)).where(Document.knowledge_base_id == job.kb_id)
     )
     docs_indexed_result = await db.execute(
-        select(func.count()).where(
+        select(func.count(Document.id)).where(
             Document.knowledge_base_id == job.kb_id,
             Document.status == "indexed",
         )
     )
+    docs_failed_result = await db.execute(
+        select(func.count(Document.id)).where(
+            Document.knowledge_base_id == job.kb_id,
+            Document.status == "failed",
+        )
+    )
     docs_total = docs_total_result.scalar() or 0
     docs_indexed = docs_indexed_result.scalar() or 0
+    docs_failed = docs_failed_result.scalar() or 0
+
+    # Stalled: still "running" or "pending" with no progress for > 15 minutes
+    stalled = False
+    if job.status in ("running", "pending") and job.started_at:
+        elapsed = (datetime.now(timezone.utc) - job.started_at).total_seconds()
+        stalled = elapsed > 900  # 15 minutes
 
     return CrawlJobStatusResponse(
         job_id=str(job.id),
@@ -74,6 +220,8 @@ async def get_crawl_status(
         pages_failed=job.pages_failed,
         docs_indexed=docs_indexed,
         docs_total=docs_total,
+        docs_failed=docs_failed,
+        stalled=stalled,
         over_limit=job.over_limit,
         limit=job.max_pages,
         created_at=job.created_at.isoformat(),

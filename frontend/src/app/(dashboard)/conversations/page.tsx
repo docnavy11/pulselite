@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { clsx } from "clsx";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { useCopilot } from "@/components/copilot/CopilotProvider";
 import { Conversation, Message } from "@/lib/types";
 import {
   getConversations,
@@ -53,6 +54,7 @@ export default function ConversationsPage() {
   const searchParams = useSearchParams();
   const selectedId = searchParams.get("id");
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);
+  const { register } = useCopilot();
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("open");
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -68,7 +70,10 @@ export default function ConversationsPage() {
     getConversations(workspace.id, {
       ...(statusFilter !== "all" ? { status: statusFilter } : {}),
     })
-      .then((data) => setConversations(data))
+      .then((data) => {
+        setConversations(data);
+        register({ page: "conversations", data: { status_filter: statusFilter } });
+      })
       .catch(() => {})
       .finally(() => setLoadingList(false));
   }, [workspace?.id, statusFilter]);

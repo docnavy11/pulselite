@@ -1,0 +1,118 @@
+<h2>How is the copilot triggered and where does it live?</h2>
+<p class="subtitle">This shapes the entire layout strategy. Pick the pattern that fits how you imagine using it.</p>
+
+<div class="cards">
+
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#faf8f5;padding:16px;height:220px;position:relative;overflow:hidden;">
+      <!-- Sidebar -->
+      <div style="position:absolute;left:0;top:0;bottom:0;width:44px;background:#1a1a1a;display:flex;flex-direction:column;align-items:center;padding:10px 0;gap:8px;">
+        <div style="width:24px;height:24px;background:#ff6b35;border-radius:5px;"></div>
+        <div style="width:28px;height:4px;background:#333;border-radius:2px;margin-top:8px;"></div>
+        <div style="width:28px;height:4px;background:#333;border-radius:2px;"></div>
+        <div style="width:28px;height:4px;background:#333;border-radius:2px;"></div>
+      </div>
+      <!-- Main content -->
+      <div style="position:absolute;left:44px;top:0;right:160px;bottom:0;background:#f5f5f5;padding:10px;">
+        <div style="height:16px;background:#e0e0e0;border-radius:3px;width:60%;margin-bottom:8px;"></div>
+        <div style="height:60px;background:#e8e8e8;border-radius:6px;margin-bottom:6px;"></div>
+        <div style="height:60px;background:#e8e8e8;border-radius:6px;"></div>
+        <div style="position:absolute;bottom:8px;left:10px;right:10px;height:4px;background:#ddd;border-radius:2px;"></div>
+      </div>
+      <!-- Copilot panel -->
+      <div style="position:absolute;right:0;top:0;bottom:0;width:155px;background:white;border-left:1.5px solid #e8e2d9;display:flex;flex-direction:column;">
+        <div style="padding:8px 10px;border-bottom:1px solid #f0ebe3;display:flex;align-items:center;justify-content:space-between;">
+          <span style="font-size:10px;font-weight:700;color:#ff6b35;">✦ Copilot</span>
+          <span style="font-size:9px;color:#aaa;">⌘J</span>
+        </div>
+        <div style="flex:1;padding:8px;display:flex;flex-direction:column;gap:5px;">
+          <div style="background:#faf8f5;border-radius:6px;padding:6px;font-size:8px;color:#666;line-height:1.4;">You have 3 escalated conversations this week.</div>
+          <div style="background:#ff6b35;border-radius:6px;padding:6px;font-size:8px;color:white;align-self:flex-end;max-width:80%;">Show me the worst one</div>
+          <div style="background:#faf8f5;border-radius:6px;padding:6px;font-size:8px;color:#666;">Opening conversation #847…</div>
+        </div>
+        <div style="padding:6px;border-top:1px solid #f0ebe3;">
+          <div style="background:#faf8f5;border:1px solid #e8e2d9;border-radius:6px;padding:5px 8px;font-size:8px;color:#aaa;">Ask anything…</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Persistent side panel</h3>
+      <p>Slides in from the right, sits alongside content. Toggle with ⌘J. Panel narrows the main content area. Always accessible without leaving context.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#faf8f5;padding:16px;height:220px;position:relative;overflow:hidden;">
+      <!-- Sidebar -->
+      <div style="position:absolute;left:0;top:0;bottom:0;width:44px;background:#1a1a1a;display:flex;flex-direction:column;align-items:center;padding:10px 0;gap:8px;">
+        <div style="width:24px;height:24px;background:#ff6b35;border-radius:5px;"></div>
+        <div style="width:28px;height:4px;background:#333;border-radius:2px;margin-top:8px;"></div>
+        <div style="width:28px;height:4px;background:#333;border-radius:2px;"></div>
+        <div style="width:28px;height:4px;background:#333;border-radius:2px;"></div>
+      </div>
+      <!-- Main content (full) -->
+      <div style="position:absolute;left:44px;top:0;right:0;bottom:0;background:#f5f5f5;padding:10px;">
+        <div style="height:16px;background:#e0e0e0;border-radius:3px;width:60%;margin-bottom:8px;"></div>
+        <div style="height:60px;background:#e8e8e8;border-radius:6px;margin-bottom:6px;"></div>
+        <div style="height:60px;background:#e8e8e8;border-radius:6px;"></div>
+      </div>
+      <!-- Floating button -->
+      <div style="position:absolute;bottom:14px;right:14px;width:36px;height:36px;background:#ff6b35;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(255,107,53,0.4);font-size:16px;cursor:pointer;">✦</div>
+      <!-- Floating chat window (open state hint) -->
+      <div style="position:absolute;bottom:58px;right:14px;width:150px;background:white;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.12);overflow:hidden;border:1px solid #e8e2d9;">
+        <div style="padding:8px 10px;background:#ff6b35;color:white;font-size:9px;font-weight:700;">✦ PulseLite Copilot</div>
+        <div style="padding:8px;display:flex;flex-direction:column;gap:4px;">
+          <div style="background:#faf8f5;border-radius:6px;padding:5px;font-size:7.5px;color:#666;">How can I help you today?</div>
+        </div>
+        <div style="padding:5px 6px;border-top:1px solid #f0ebe3;">
+          <div style="background:#faf8f5;border-radius:4px;padding:4px 6px;font-size:7.5px;color:#aaa;">Ask anything…</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Floating overlay</h3>
+      <p>Like the customer widget but for you. Floating button bottom-right. Opens a chat overlay that floats above content. Main layout untouched. More like a helper than a workspace feature.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#faf8f5;padding:16px;height:220px;position:relative;overflow:hidden;">
+      <!-- Sidebar -->
+      <div style="position:absolute;left:0;top:0;bottom:0;width:44px;background:#1a1a1a;display:flex;flex-direction:column;align-items:center;padding:10px 0;gap:8px;">
+        <div style="width:24px;height:24px;background:#ff6b35;border-radius:5px;"></div>
+      </div>
+      <!-- Dimmed main content -->
+      <div style="position:absolute;left:44px;top:0;right:0;bottom:0;background:#f5f5f5;opacity:0.4;padding:10px;">
+        <div style="height:16px;background:#e0e0e0;border-radius:3px;width:60%;margin-bottom:8px;"></div>
+        <div style="height:60px;background:#e8e8e8;border-radius:6px;margin-bottom:6px;"></div>
+        <div style="height:60px;background:#e8e8e8;border-radius:6px;"></div>
+      </div>
+      <!-- Command palette / AI modal -->
+      <div style="position:absolute;top:20px;left:50%;transform:translateX(-50%);width:260px;background:white;border-radius:12px;box-shadow:0 16px 40px rgba(0,0,0,0.18);border:1px solid #e8e2d9;overflow:hidden;">
+        <div style="padding:8px 10px;border-bottom:1px solid #f0ebe3;display:flex;align-items:center;gap:6px;">
+          <span style="font-size:11px;color:#ff6b35;">✦</span>
+          <input style="flex:1;border:none;outline:none;font-size:10px;color:#333;" placeholder="Ask the copilot or search…" />
+          <span style="font-size:8px;color:#aaa;background:#f5f5f5;padding:2px 4px;border-radius:3px;">ESC</span>
+        </div>
+        <div style="padding:6px 0;">
+          <div style="padding:5px 10px;font-size:8px;color:#aaa;text-transform:uppercase;letter-spacing:0.05em;">AI Suggestions</div>
+          <div style="padding:6px 10px;font-size:9px;color:#333;display:flex;align-items:center;gap:6px;background:#faf8f5;">
+            <span style="color:#ff6b35;">✦</span> Show escalated conversations this week
+          </div>
+          <div style="padding:6px 10px;font-size:9px;color:#333;display:flex;align-items:center;gap:6px;">
+            <span style="color:#ff6b35;">✦</span> What's my credit usage trend?
+          </div>
+          <div style="padding:5px 10px;font-size:8px;color:#aaa;text-transform:uppercase;letter-spacing:0.05em;margin-top:4px;">Navigate</div>
+          <div style="padding:6px 10px;font-size:9px;color:#333;display:flex;align-items:center;gap:6px;">
+            <span>⌘</span> Billing settings
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Evolved command palette</h3>
+      <p>Extends the existing ⌘K palette into a full AI assistant. Quick query → instant answer or navigation. No persistent panel — modal dismiss returns to page. Best for quick lookups, less for back-and-forth.</p>
+    </div>
+  </div>
+
+</div>

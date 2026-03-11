@@ -39,6 +39,7 @@ async def _mark_job_failed(job_id: str) -> None:
     from datetime import datetime, timezone
     from sqlalchemy import select
 
+    await engine.dispose()
     async with async_session_factory() as session:
         try:
             result = await session.execute(select(CrawlJob).where(CrawlJob.id == uuid.UUID(job_id)))
@@ -47,5 +48,5 @@ async def _mark_job_failed(job_id: str) -> None:
                 job.status = "failed"
                 job.completed_at = datetime.now(timezone.utc)
                 await session.commit()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error("Failed to mark crawl job %s as failed: %s", job_id, e)

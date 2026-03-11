@@ -93,7 +93,25 @@ async def copilot_chat(
                     ],
                 })
 
-                if tool_name in CLIENT_SIDE_TOOLS:
+                if tool_name == "create_chatbot" and args.get("url"):
+                    # Always redirect to the wizard when a URL is involved —
+                    # don't let the AI silently create + crawl in the background.
+                    from urllib.parse import quote
+                    url = args["url"]
+                    name = args.get("name", "")
+                    route = f"/chatbots/new?url={quote(url, safe='')}"
+                    if name:
+                        route += f"&name={quote(name, safe='')}"
+                    yield {
+                        "event": "action",
+                        "data": json.dumps({"tool": "navigate", "args": {"route": route}}),
+                    }
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call_id,
+                        "content": json.dumps({"ok": True, "navigated_to": route}),
+                    })
+                elif tool_name in CLIENT_SIDE_TOOLS:
                     # Emit action event to frontend
                     yield {
                         "event": "action",

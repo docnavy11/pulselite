@@ -3,21 +3,14 @@ import uuid
 from typing import Optional
 from urllib.parse import urlparse
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class CrawlRequest(BaseModel):
     url: str
-    max_pages: int
+    max_pages: int = Field(..., ge=1, le=500)
     knowledge_base_id: Optional[uuid.UUID] = None
     chatbot_id: Optional[uuid.UUID] = None
-
-    @field_validator("max_pages")
-    @classmethod
-    def max_pages_positive(cls, v: int) -> int:
-        if v < 1:
-            raise ValueError("max_pages must be at least 1")
-        return v
 
     @field_validator("url")
     @classmethod
@@ -39,6 +32,18 @@ class CrawlResponse(BaseModel):
     limit: int
 
 
+class CrawlJobSummary(BaseModel):
+    job_id: str
+    status: str
+    root_url: str
+    pages_discovered: int
+    pages_queued: int
+    pages_failed: int
+    docs_indexed: int
+    created_at: str
+    completed_at: Optional[str] = None
+
+
 class CrawlJobStatusResponse(BaseModel):
     job_id: str
     kb_id: str
@@ -48,6 +53,8 @@ class CrawlJobStatusResponse(BaseModel):
     pages_failed: int
     docs_indexed: int
     docs_total: int
+    docs_failed: int
+    stalled: bool
     over_limit: bool
     limit: int
     created_at: str

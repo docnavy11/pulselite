@@ -54,13 +54,16 @@ async def register_user(
     )
     db.add(membership)
     await db.flush()
+    await db.commit()
+    await db.refresh(agent)
 
     tokens = await _create_tokens(agent)
     return agent, workspace, tokens
 
 
 async def authenticate_user(db: AsyncSession, email: str, password: str) -> tuple[Agent, dict]:
-    result = await db.execute(select(Agent).where(Agent.email == email))
+    # TODO: migrate to global unique email or oauth_identities table for proper multi-workspace fix
+    result = await db.execute(select(Agent).where(Agent.email == email).limit(1))
     agent = result.scalar_one_or_none()
     if agent is None or agent.password_hash is None or not verify_password(password, agent.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
@@ -75,22 +78,41 @@ async def refresh_tokens(refresh_token: str) -> dict:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
 
     agent_id = payload.get("sub")
-    stored = await redis_client.get(f"refresh_token:{agent_id}")
-    if stored != refresh_token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token revoked or expired")
 
     new_access = create_access_token({"sub": agent_id})
     new_refresh = create_refresh_token({"sub": agent_id})
 
     ttl = int(timedelta(days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS).total_seconds())
-    await redis_client.set(f"refresh_token:{agent_id}", new_refresh, ex=ttl)
+
+    lua_script = """
+local current = redis.call('GET', KEYS[1])
+if current == ARGV[1] then
+    redis.call('SET', KEYS[1], ARGV[2], 'EX', ARGV[3])
+    return 1
+end
+return 0
+"""
+    replaced = await redis_client.eval(  # type: ignore[misc]
+        lua_script,
+        1,
+        f"refresh_token:{agent_id}",
+        refresh_token,      # ARGV[1] — expected current value
+        new_refresh,        # ARGV[2] — new value
+        str(ttl),           # ARGV[3] — TTL in seconds
+    )
+    if not replaced:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
 
     return {"access_token": new_access, "refresh_token": new_refresh, "token_type": "bearer"}
 
 
 async def google_oauth_callback(db: AsyncSession, google_user: dict) -> tuple[Agent, dict]:
+    if not google_user.get("email_verified", False):
+        raise HTTPException(status_code=400, detail="Google account email not verified")
+
     email = google_user["email"]
-    result = await db.execute(select(Agent).where(Agent.email == email))
+    # TODO: migrate to global unique email or oauth_identities table for proper multi-workspace fix
+    result = await db.execute(select(Agent).where(Agent.email == email).limit(1))
     agent = result.scalar_one_or_none()
 
     if agent is None:
@@ -111,6 +133,8 @@ async def google_oauth_callback(db: AsyncSession, google_user: dict) -> tuple[Ag
         membership = WorkspaceMembership(agent_id=agent.id, workspace_id=workspace.id, role="owner")
         db.add(membership)
         await db.flush()
+        await db.commit()
+        await db.refresh(agent)
 
     tokens = await _create_tokens(agent)
     return agent, tokens

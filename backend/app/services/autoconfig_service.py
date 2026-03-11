@@ -71,15 +71,16 @@ async def run(
         if m:
             detected_lang = m.group(1).lower()
 
-    # 5. Generate config
-    config = await generate(chunk_texts, homepage_html)
+    # 5. Generate config (pass detected language so all text is in the right language)
+    config = await generate(chunk_texts, homepage_html, language=detected_lang)
 
-    # 6. Update chatbot fields (only update brand_color if non-None)
+    # 6. Update chatbot fields
     chatbot.name = config.name
     chatbot.welcome_message = config.welcome_message
     chatbot.system_prompt = config.system_prompt
     chatbot.suggested_questions = config.suggested_questions
     chatbot.fallback_message = config.fallback_message
+    chatbot.tone = config.tone
     if config.brand_color is not None:
         chatbot.brand_color = config.brand_color
     if detected_lang:

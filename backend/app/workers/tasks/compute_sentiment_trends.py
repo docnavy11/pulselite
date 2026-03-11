@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import func, select
 
-from app.database import async_session_factory
+from app.database import async_session_factory, engine
 from app.models.intelligence import ConversationAnalysis
 from app.models.organizational import Workspace
 from app.workers.celery_app import celery_app
@@ -21,6 +21,7 @@ def compute_sentiment_trends() -> dict:
 
 
 async def _compute() -> dict:
+    await engine.dispose()
     async with async_session_factory() as session:
         try:
             result = await session.execute(select(Workspace.id))

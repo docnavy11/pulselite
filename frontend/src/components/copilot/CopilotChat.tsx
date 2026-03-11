@@ -1,12 +1,27 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useCopilot } from "./CopilotProvider";
 import { streamCopilotChat, CopilotMessage } from "./api";
+
+const CHIPS: Record<string, string[]> = {
+  dashboard:     ["Show metrics", "Show my chatbots", "Check credits"],
+  chatbots:      ["Show my chatbots", "Create a chatbot", "Check credits"],
+  chatbot:       ["Show conversations", "Update persona", "Show documents", "Crawl a new URL"],
+  conversations: ["Show escalated conversations", "Show metrics", "Show my chatbots"],
+  intelligence:  ["Show metrics", "Show my chatbots"],
+  settings:      ["Check credits", "Show my chatbots", "Show metrics"],
+  default:       ["Show my chatbots", "Show metrics", "Check credits"],
+};
+
+function getChips(context: unknown): string[] {
+  const page = (context as Record<string, unknown>)?.page as string | undefined;
+  return CHIPS[page ?? ""] ?? CHIPS.default;
+}
 
 const MIN_WIDTH = 220;
 const MAX_WIDTH = 520;
@@ -25,7 +40,6 @@ export function CopilotChat() {
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState<number>(getStoredWidth);
   const dragStartX = useRef<number | null>(null);
   const dragStartWidth = useRef<number>(width);
@@ -62,12 +76,16 @@ export function CopilotChat() {
     };
   }, []);
 
-  const scrollToBottom = useCallback(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, []);
 
-  async function handleSend() {
-    const text = input.trim();
+  function handleClear() {
+    abortRef.current?.abort();
+    setMessages([]);
+    setStreaming(false);
+    setInput("");
+  }
+
+  async function handleSend(override?: string) {
+    const text = (override ?? input).trim();
     if (!text || streaming || !workspace) return;
 
     const userMsg: CopilotMessage = { role: "user", content: text };
@@ -99,7 +117,6 @@ export function CopilotChat() {
               }
               return updated;
             });
-            scrollToBottom();
           },
           onAction(tool, args) {
             if (tool === "render_panel") {
@@ -154,6 +171,16 @@ export function CopilotChat() {
         <span className="text-[13px] font-bold text-primary-500">✦ Copilot</span>
         <div className="flex items-center gap-2">
           <span className="text-[10px] text-gray-400">⌘J</span>
+          {messages.length > 0 && (
+            <button
+              onClick={handleClear}
+              className="text-gray-400 hover:text-gray-600 transition-colors text-[10px] leading-none"
+              aria-label="Clear chat"
+              title="Clear chat"
+            >
+              Clear
+            </button>
+          )}
           <button
             onClick={close}
             className="text-gray-400 hover:text-gray-600 transition-colors text-sm leading-none"
@@ -165,51 +192,67 @@ export function CopilotChat() {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-2">
+      <div className="flex-1 overflow-y-auto p-3 flex flex-col-reverse gap-2">
         {messages.length === 0 && (
-          <p className="text-xs text-gray-400 text-center mt-4">
+          <p className="text-xs text-gray-400 text-center mb-4">
             Ask me anything about this workspace.
           </p>
         )}
-        {messages.map((msg, i) => (
-          <div
-            key={i}
-            className={`rounded-lg px-3 py-2 text-xs leading-relaxed max-w-[95%] whitespace-pre-wrap ${
-              msg.role === "user"
-                ? "ml-auto bg-primary-500 text-white"
-                : "bg-[#faf8f5] text-gray-700"
-            }`}
+        {[...messages].reverse().map((msg, i) => {
+          const isLastStreaming = streaming && i === 0;
+          return (
+            <div
+              key={i}
+              className={`rounded-lg px-3 py-2 text-xs leading-relaxed max-w-[95%] whitespace-pre-wrap ${
+                msg.role === "user"
+                  ? "ml-auto bg-primary-500 text-white"
+                  : "bg-[#faf8f5] text-gray-700"
+              }`}
+            >
+              {msg.role === "user" ? (
+                msg.content
+              ) : msg.content ? (
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    p: ({ children }) => <p className="mb-1 last:mb-0">{children}</p>,
+                    ul: ({ children }) => <ul className="list-disc pl-4 mb-1 space-y-0.5">{children}</ul>,
+                    ol: ({ children }) => <ol className="list-decimal pl-4 mb-1 space-y-0.5">{children}</ol>,
+                    li: ({ children }) => <li className="[&>p]:mb-0">{children}</li>,
+                    code: ({ children, className }) =>
+                      className ? (
+                        <pre className="bg-gray-100 rounded p-2 text-[10px] overflow-auto my-1"><code>{children}</code></pre>
+                      ) : (
+                        <code className="bg-gray-100 rounded px-1 text-[10px]">{children}</code>
+                      ),
+                    a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="underline text-primary-500">{children}</a>,
+                    strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                  }}
+                >
+                  {msg.content}
+                </ReactMarkdown>
+              ) : isLastStreaming ? "▍" : ""}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Chips */}
+      <div className="flex flex-wrap gap-1.5 px-2.5 pt-2 pb-0">
+        {getChips(context).map((chip) => (
+          <button
+            key={chip}
+            onClick={() => handleSend(chip)}
+            disabled={streaming}
+            className="rounded-full border border-[#e8e2d9] bg-[#faf8f5] px-2.5 py-1 text-[10px] text-gray-500 hover:border-primary-300 hover:text-primary-500 hover:bg-primary-50 disabled:opacity-40 transition-colors"
           >
-            {msg.role === "user" ? (
-              msg.content
-            ) : msg.content ? (
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                components={{
-                  p: ({ children }) => <p className="mb-1 last:mb-0">{children}</p>,
-                  ul: ({ children }) => <ul className="list-disc pl-4 mb-1 space-y-0.5">{children}</ul>,
-                  ol: ({ children }) => <ol className="list-decimal pl-4 mb-1 space-y-0.5">{children}</ol>,
-                  li: ({ children }) => <li>{children}</li>,
-                  code: ({ children, className }) =>
-                    className ? (
-                      <pre className="bg-gray-100 rounded p-2 text-[10px] overflow-auto my-1"><code>{children}</code></pre>
-                    ) : (
-                      <code className="bg-gray-100 rounded px-1 text-[10px]">{children}</code>
-                    ),
-                  a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="underline text-primary-500">{children}</a>,
-                  strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
-                }}
-              >
-                {msg.content}
-              </ReactMarkdown>
-            ) : streaming && i === messages.length - 1 ? "▍" : ""}
-          </div>
+            {chip}
+          </button>
         ))}
-        <div ref={bottomRef} />
       </div>
 
       {/* Input */}
-      <div className="border-t border-[#f0ebe3] p-2.5">
+      <div className="border-t border-[#f0ebe3] p-2.5 mt-2">
         <div className="flex gap-1.5">
           <input
             value={input}
@@ -225,7 +268,7 @@ export function CopilotChat() {
             className="flex-1 rounded-lg border border-gray-200 bg-[#faf8f5] px-3 py-1.5 text-xs placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-400 disabled:opacity-50"
           />
           <button
-            onClick={handleSend}
+            onClick={() => handleSend()}
             disabled={!input.trim() || streaming}
             className="rounded-lg bg-primary-500 px-2.5 py-1.5 text-xs text-white hover:bg-primary-600 disabled:opacity-40 transition-colors"
           >

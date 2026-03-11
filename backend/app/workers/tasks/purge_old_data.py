@@ -6,7 +6,7 @@ from datetime import datetime, timezone, timedelta
 
 from sqlalchemy import delete, select
 
-from app.database import async_session_factory
+from app.database import async_session_factory, engine
 from app.models.organizational import Workspace
 from app.models.conversations import Conversation
 from app.workers.celery_app import celery_app
@@ -20,6 +20,7 @@ def purge_old_data() -> dict:
 
 
 async def _purge() -> dict:
+    await engine.dispose()          # REQUIRED — clear stale pool from previous event loop
     async with async_session_factory() as session:
         try:
             result = await session.execute(

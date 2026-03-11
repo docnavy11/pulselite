@@ -13,7 +13,6 @@ class GapClusterResponse(BaseModel):
     gap_count: int
     representative_query: str | None
     status: str
-    draft_article_id: uuid.UUID | None
     resolved_at: datetime | None
     clustered_at: datetime
     created_at: datetime

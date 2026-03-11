@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from cryptography.fernet import Fernet
 
 from app.config import settings
+from app.services.encryption import decrypt_api_key
 from app.database import get_db
 from app.dependencies import get_current_user, get_workspace
 from app.models.integrations import IntegrationConfig
@@ -139,7 +140,8 @@ async def test_integration(
         try:
             from slack_sdk.webhook import WebhookClient
 
-            webhook_url = config.config.get("webhook_url")
+            raw_webhook_url = config.config.get("webhook_url")
+            webhook_url = decrypt_api_key(raw_webhook_url) if raw_webhook_url else None
             if not webhook_url:
                 detail = "Missing webhook_url"
             else:
@@ -154,7 +156,9 @@ async def test_integration(
         try:
             from hubspot import HubSpot
 
-            client = HubSpot(access_token=config.config.get("access_token"))
+            raw_access_token = config.config.get("access_token")
+            access_token = decrypt_api_key(raw_access_token) if raw_access_token else None
+            client = HubSpot(access_token=access_token)
             client.crm.contacts.basic_api.get_page(limit=1)
             success = True
             detail = "Connected"

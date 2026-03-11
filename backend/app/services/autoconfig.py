@@ -20,6 +20,18 @@ _DEFAULT_QUESTIONS = [
     "What pricing plans do you offer?",
 ]
 
+_TONE_OPTIONS = ["professional", "friendly", "casual", "formal"]
+
+_LANG_NAMES: dict[str, str] = {
+    "en": "English", "nl": "Dutch", "fr": "French", "de": "German",
+    "es": "Spanish", "pt": "Portuguese", "it": "Italian", "pl": "Polish",
+    "ru": "Russian", "tr": "Turkish", "ar": "Arabic", "zh": "Chinese",
+    "ja": "Japanese", "ko": "Korean", "sv": "Swedish", "da": "Danish",
+    "no": "Norwegian", "fi": "Finnish", "cs": "Czech", "ro": "Romanian",
+    "hu": "Hungarian", "sk": "Slovak", "bg": "Bulgarian", "hr": "Croatian",
+    "uk": "Ukrainian", "el": "Greek", "he": "Hebrew", "th": "Thai",
+}
+
 _PROMPT = """You are a chatbot configuration assistant. Based on the website content below, generate a chatbot configuration.
 
 Respond with ONLY a JSON object in this exact format:
@@ -28,7 +40,8 @@ Respond with ONLY a JSON object in this exact format:
   "welcome_message": "...",
   "system_prompt": "...",
   "suggested_questions": ["...", "...", "...", "..."],
-  "fallback_message": "..."
+  "fallback_message": "...",
+  "tone": "..."
 }}
 
 Rules:
@@ -37,7 +50,8 @@ Rules:
 - system_prompt: helpful assistant context, max 300 words
 - suggested_questions: exactly 4 questions visitors might ask
 - fallback_message: polite message for questions outside scope
-
+- tone: infer from the website — must be exactly one of: professional, friendly, casual, formal
+{language_instruction}
 Website content:
 {content}"""
 
@@ -52,6 +66,7 @@ class AutoConfigResult:
     suggested_questions: list[str]   # exactly 4 items
     fallback_message: str
     brand_color: str | None          # hex "#RRGGBB" or None
+    tone: str                        # professional | friendly | casual | formal
 
 
 def extract_brand_color(html: str) -> str | None:
@@ -90,7 +105,7 @@ def _parse_llm_response(raw: str) -> dict:
     return json.loads(text.strip())
 
 
-async def generate(chunks: list[str], homepage_html: str) -> AutoConfigResult:
+async def generate(chunks: list[str], homepage_html: str, language: str | None = None) -> AutoConfigResult:
     """Generate chatbot config from content chunks using Claude Haiku.
 
     - Sample strategy: first 5 chunks + random sample up to 20 total
@@ -110,7 +125,12 @@ async def generate(chunks: list[str], homepage_html: str) -> AutoConfigResult:
     content = "\n\n---\n\n".join(sampled_chunks)
     brand_color = extract_brand_color(homepage_html)
 
-    prompt_text = _PROMPT.format(content=content)
+    lang_name = _LANG_NAMES.get(language or "", "") if language else ""
+    language_instruction = (
+        f"- IMPORTANT: Write ALL text fields (welcome_message, system_prompt, suggested_questions, fallback_message) in {lang_name}. Do NOT use English unless the website language is English.\n"
+        if lang_name else ""
+    )
+    prompt_text = _PROMPT.format(content=content, language_instruction=language_instruction)
 
     raw = await _llm_client.generate(
         messages=[{"role": "user", "content": prompt_text}],
@@ -145,6 +165,9 @@ async def generate(chunks: list[str], homepage_html: str) -> AutoConfigResult:
     elif len(questions) > 4:
         questions = questions[:4]
 
+    raw_tone = result.get("tone", "professional")
+    tone = raw_tone if raw_tone in _TONE_OPTIONS else "professional"
+
     return AutoConfigResult(
         name=result.get("name", "Support Bot"),
         welcome_message=result.get("welcome_message", "Hello! How can I help you today?"),
@@ -152,4 +175,5 @@ async def generate(chunks: list[str], homepage_html: str) -> AutoConfigResult:
         suggested_questions=questions,
         fallback_message=result.get("fallback_message", "I'm sorry, I don't have information on that topic."),
         brand_color=brand_color,
+        tone=tone,
     )

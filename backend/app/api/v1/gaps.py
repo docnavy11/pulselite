@@ -8,10 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies import get_current_user, get_workspace
 from app.models.intelligence import GapCluster, GapEvent
-from app.models.knowledge import Article
 from app.models.organizational import Agent
-from app.schemas.gaps import GapClusterArticleUpdate, GapClusterDetailResponse, GapClusterResponse
-from app.workers.tasks.reindex_article import reindex_article
+from app.schemas.gaps import GapClusterDetailResponse, GapClusterResponse
 
 router = APIRouter(tags=["gaps"])
 
@@ -66,7 +64,7 @@ async def get_gap_cluster(
     events_result = await db.execute(select(GapEvent.query).where(GapEvent.gap_cluster_id == cluster_id).limit(20))
     example_queries = [row[0] for row in events_result.all()]
 
-    response_data = {
+    return {
         "id": cluster.id,
         "workspace_id": cluster.workspace_id,
         "chatbot_id": cluster.chatbot_id,
@@ -75,21 +73,11 @@ async def get_gap_cluster(
         "gap_count": cluster.gap_count,
         "representative_query": cluster.representative_query,
         "status": cluster.status,
-        "draft_article_id": cluster.draft_article_id,
         "resolved_at": cluster.resolved_at,
         "clustered_at": cluster.clustered_at,
         "created_at": cluster.created_at,
         "example_queries": example_queries,
     }
-
-    if cluster.draft_article_id:
-        article_result = await db.execute(select(Article).where(Article.id == cluster.draft_article_id))
-        article = article_result.scalar_one_or_none()
-        if article:
-            response_data["draft_article_title"] = article.title
-            response_data["draft_article_body"] = article.body
-
-    return response_data
 
 
 @router.post(
@@ -112,22 +100,9 @@ async def approve_gap_cluster(
     if cluster is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gap cluster not found")
 
-    if not cluster.draft_article_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No draft article to approve")
-
-    article_result = await db.execute(select(Article).where(Article.id == cluster.draft_article_id))
-    article = article_result.scalar_one_or_none()
-    if article:
-        article.state = "published"
-        article.approved_by = current_user.id
-        article.approved_at = datetime.now(timezone.utc)
-
     cluster.status = "approved"
     cluster.resolved_at = datetime.now(timezone.utc)
     await db.commit()
-
-    reindex_article.delay(str(cluster.draft_article_id))
-
     return cluster
 
 
@@ -163,52 +138,8 @@ async def dismiss_gap_cluster(
 )
 async def update_draft_article(
     cluster_id: uuid.UUID,
-    body: GapClusterArticleUpdate,
     workspace_id: uuid.UUID = Depends(get_workspace),
     db: AsyncSession = Depends(get_db),
     current_user: Agent = Depends(get_current_user),
 ):
-    result = await db.execute(
-        select(GapCluster).where(
-            GapCluster.id == cluster_id,
-            GapCluster.workspace_id == workspace_id,
-        )
-    )
-    cluster = result.scalar_one_or_none()
-    if cluster is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gap cluster not found")
-
-    if not cluster.draft_article_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No draft article to edit")
-
-    article_result = await db.execute(select(Article).where(Article.id == cluster.draft_article_id))
-    article = article_result.scalar_one_or_none()
-    if article is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Draft article not found")
-
-    if body.title is not None:
-        article.title = body.title
-    if body.body is not None:
-        article.body = body.body
-    await db.commit()
-
-    events_result = await db.execute(select(GapEvent.query).where(GapEvent.gap_cluster_id == cluster_id).limit(20))
-    example_queries = [row[0] for row in events_result.all()]
-
-    return {
-        "id": cluster.id,
-        "workspace_id": cluster.workspace_id,
-        "chatbot_id": cluster.chatbot_id,
-        "topic_label": cluster.topic_label,
-        "topic_keywords": cluster.topic_keywords,
-        "gap_count": cluster.gap_count,
-        "representative_query": cluster.representative_query,
-        "status": cluster.status,
-        "draft_article_id": cluster.draft_article_id,
-        "resolved_at": cluster.resolved_at,
-        "clustered_at": cluster.clustered_at,
-        "created_at": cluster.created_at,
-        "example_queries": example_queries,
-        "draft_article_title": article.title,
-        "draft_article_body": article.body,
-    }
+    raise HTTPException(status_code=status.HTTP_410_GONE, detail="Draft article editing is no longer supported")

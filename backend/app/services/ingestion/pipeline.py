@@ -61,15 +61,17 @@ async def run_ingestion(db: AsyncSession, document_id: uuid.UUID) -> None:
                 new_children.append(child)
 
             await db.flush()  # assign IDs
-
-            from app.workers.tasks.ingest_document import ingest_document
-
-            for child in new_children:
-                ingest_document.delay(str(child.id))  # type: ignore[attr-defined]
+            child_ids = [str(child.id) for child in new_children]
 
             document.status = "indexed"
             document.chunk_count = len(urls)
             document.last_indexed_at = datetime.now(timezone.utc)
+            await db.commit()
+
+            from app.workers.tasks.ingest_document import ingest_document
+
+            for child_id in child_ids:
+                ingest_document.delay(child_id)  # type: ignore[attr-defined]
             return
 
         # NOTION: fetch page content via Notion API
@@ -223,18 +225,22 @@ async def run_ingestion(db: AsyncSession, document_id: uuid.UUID) -> None:
 
             await db.flush()  # assign IDs
 
-            # Ingest each article child asynchronously
-            from app.workers.tasks.ingest_document import ingest_document
-
+            # Override source_type to "text" so _extract() reads raw_content
             for child in new_children:
-                # Override source_type to "text" so _extract() reads raw_content
                 child.source_type = "text"
-                await db.flush()
-                ingest_document.delay(str(child.id))  # type: ignore[attr-defined]
+            await db.flush()
+            child_ids = [str(child.id) for child in new_children]
 
             document.status = "indexed"
             document.chunk_count = len(new_children)
             document.last_indexed_at = datetime.now(timezone.utc)
+            await db.commit()
+
+            # Ingest each article child asynchronously
+            from app.workers.tasks.ingest_document import ingest_document
+
+            for child_id in child_ids:
+                ingest_document.delay(child_id)  # type: ignore[attr-defined]
             return
 
         # ZENDESK: fan out to one child Document per Help Center article
@@ -261,18 +267,22 @@ async def run_ingestion(db: AsyncSession, document_id: uuid.UUID) -> None:
 
             await db.flush()  # assign IDs
 
-            # Ingest each article child asynchronously
-            from app.workers.tasks.ingest_document import ingest_document
-
+            # Override source_type to "text" so _extract() reads raw_content
             for child in new_children:
-                # Override source_type to "text" so _extract() reads raw_content
                 child.source_type = "text"
-                await db.flush()
-                ingest_document.delay(str(child.id))  # type: ignore[attr-defined]
+            await db.flush()
+            child_ids = [str(child.id) for child in new_children]
 
             document.status = "indexed"
             document.chunk_count = len(new_children)
             document.last_indexed_at = datetime.now(timezone.utc)
+            await db.commit()
+
+            # Ingest each article child asynchronously
+            from app.workers.tasks.ingest_document import ingest_document
+
+            for child_id in child_ids:
+                ingest_document.delay(child_id)  # type: ignore[attr-defined]
             return
 
         content = _extract(document)

@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies import get_current_user, get_workspace
 from app.models.organizational import Agent, WorkspaceWebhook
+from app.services.encryption import encrypt_api_key
 
 router = APIRouter(tags=["webhooks"])
 
@@ -61,7 +62,7 @@ async def create_webhook(
         workspace_id=workspace_id,
         url=body.url,
         event_types=body.event_types,
-        secret=body.secret,
+        secret=encrypt_api_key(body.secret) if body.secret else None,
     )
     db.add(hook)
     await db.commit()

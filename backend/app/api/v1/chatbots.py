@@ -1,11 +1,13 @@
 import uuid
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import get_workspace
+from app.models.conversations import Conversation
 from app.models.knowledge import Chatbot as ChatbotModel
 from app.schemas.chatbots import AutoConfigRequest, AutoConfigResponse, ChatbotCreate, ChatbotResponse, ChatbotUpdate
 from app.schemas.widget import LLMConfigUpdate, PersonaUpdate, WidgetConfig
@@ -31,6 +33,37 @@ async def list_chatbots(
     db: AsyncSession = Depends(get_db),
 ):
     return await chatbot_service.list_chatbots(db, workspace_id)
+
+
+@router.get("/stats/summary")
+async def get_chatbot_stats(
+    workspace_id: uuid.UUID = Depends(get_workspace),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return per-chatbot stats: conversations (30d), resolution rate (30d), last active."""
+    cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+    rows = await db.execute(
+        select(
+            Conversation.chatbot_id,
+            func.count().label("total"),
+            func.count().filter(Conversation.autonomous_resolved == True).label("resolved"),  # noqa: E712
+            func.max(Conversation.created_at).label("last_active"),
+        )
+        .where(
+            Conversation.workspace_id == workspace_id,
+            Conversation.created_at >= cutoff,
+            Conversation.chatbot_id.isnot(None),
+        )
+        .group_by(Conversation.chatbot_id)
+    )
+    result = {}
+    for row in rows.all():
+        result[str(row.chatbot_id)] = {
+            "conversations_30d": row.total,
+            "resolution_rate": round(row.resolved / row.total, 3) if row.total else 0.0,
+            "last_active": row.last_active.isoformat() if row.last_active else None,
+        }
+    return result
 
 
 @router.get("/{chatbot_id}", response_model=ChatbotResponse)
@@ -162,6 +195,16 @@ async def run_autoconfig(
         if "not found" in msg.lower():
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=msg)
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=msg)
+    except RuntimeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"AI configuration failed: {e}. Please try again.",
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unexpected error during configuration: {e}",
+        )
 
     return AutoConfigResponse(
         name=chatbot.name,
@@ -170,4 +213,6 @@ async def run_autoconfig(
         suggested_questions=chatbot.suggested_questions,
         fallback_message=chatbot.fallback_message,
         brand_color=chatbot.brand_color,
+        tone=chatbot.tone,
+        language=chatbot.language,
     )

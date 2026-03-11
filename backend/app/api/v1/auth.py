@@ -1,3 +1,5 @@
+import urllib.parse
+
 import httpx
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -82,7 +84,7 @@ async def google_login():
         "access_type": "offline",
         "state": state,
     }
-    query = "&".join(f"{k}={v}" for k, v in params.items())
+    query = urllib.parse.urlencode(params)
     return RedirectResponse(f"https://accounts.google.com/o/oauth2/v2/auth?{query}")
 
 
@@ -98,7 +100,7 @@ async def google_callback(code: str = Query(...), state: str = Query(...), db: A
     await r.close()
     if not valid:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired OAuth state")
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=10.0) as client:
         token_resp = await client.post(
             "https://oauth2.googleapis.com/token",
             data={

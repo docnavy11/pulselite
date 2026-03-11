@@ -142,7 +142,13 @@ def get_tool_definitions() -> list[dict]:
             "type": "function",
             "function": {
                 "name": "create_chatbot",
-                "description": "Create a new chatbot, optionally trigger a web crawl.",
+                "description": (
+                    "Create a new chatbot silently (no UI wizard). "
+                    "IMPORTANT: When the user asks to create a chatbot interactively or mentions a URL to crawl, "
+                    "prefer the navigate tool with route='/chatbots/new?url=<url>&name=<name>' so the user "
+                    "sees the visual setup wizard with crawl progress. "
+                    "Only use this tool for fully automated/headless creation."
+                ),
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -208,6 +214,7 @@ def get_client_side_tool_definitions() -> list[dict]:
                                 "LLMSettingsPanel",
                                 "PersonaSettingsPanel",
                                 "WidgetSettingsPanel",
+                                "CrawlStatusPanel",
                             ],
                         },
                         "props": {"type": "object", "description": "Props to pass to the component"},
@@ -228,10 +235,14 @@ def get_client_side_tool_definitions() -> list[dict]:
             "type": "function",
             "function": {
                 "name": "navigate",
-                "description": "Navigate to a dashboard route.",
+                "description": (
+                    "Navigate to a dashboard route. "
+                    "Use '/chatbots/new?url=<encoded_url>&name=<encoded_name>' to open the chatbot "
+                    "creation wizard with pre-filled values and auto-start the crawl."
+                ),
                 "parameters": {
                     "type": "object",
-                    "properties": {"route": {"type": "string", "description": "Next.js route path"}},
+                    "properties": {"route": {"type": "string", "description": "Next.js route path, may include query params"}},
                     "required": ["route"],
                 },
             },

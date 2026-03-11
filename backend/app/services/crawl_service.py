@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.knowledge import CrawlJob, Document, KnowledgeBase
@@ -101,46 +101,117 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
     await db.commit()
     await db.refresh(job)
 
-    # Phase 2: fetch + create Document for each URL, update progress per page
+    # Phase 2: fetch pages concurrently (with live DB progress updates).
+    # AsyncSession is not concurrency-safe, so fetches run concurrently but
+    # DB writes happen one at a time via asyncio.as_completed.
     semaphore = asyncio.Semaphore(_FETCH_CONCURRENCY)
-    doc_ids: list[str] = []
+    _MAX_RETRIES = 3
 
-    async def _fetch_and_store(page_url: str) -> None:
-        async with semaphore:
-            try:
-                result = await fetch(page_url)
-            except Exception as exc:
-                logger.warning("Fetch exception %s: %s", page_url, exc)
-                job.pages_failed = (job.pages_failed or 0) + 1
-                await db.commit()
-                return
+    @dataclass
+    class _FetchResult:
+        url: str
+        text: str
+        title: str
+        failed: bool
+        error: str = ""
 
-            if result.status_code >= 400 or result.text == "":
+    async def _fetch(page_url: str) -> _FetchResult:
+        for attempt in range(_MAX_RETRIES + 1):
+            async with semaphore:
+                try:
+                    result = await fetch(page_url)
+                except Exception as exc:
+                    logger.warning("Fetch exception %s: %s", page_url, exc)
+                    return _FetchResult(url=page_url, text="", title="", failed=True, error=str(exc))
+
+            if result.status_code == 429:
+                if attempt < _MAX_RETRIES:
+                    wait = min(5 * (2**attempt), 60)
+                    logger.warning(
+                        "Rate limited on %s, retrying in %ds (attempt %d/%d)",
+                        page_url,
+                        wait,
+                        attempt + 1,
+                        _MAX_RETRIES,
+                    )
+                    await asyncio.sleep(wait)
+                    continue
+                return _FetchResult(
+                    url=page_url,
+                    text="",
+                    title="",
+                    failed=True,
+                    error="HTTP 429 (rate limited, max retries exceeded)",
+                )
+
+            if result.status_code >= 400:
                 logger.warning("Skipping %s (status=%d)", page_url, result.status_code)
-                job.pages_failed = (job.pages_failed or 0) + 1
+                return _FetchResult(url=page_url, text="", title="", failed=True, error=f"HTTP {result.status_code}")
+            if result.text == "":
+                return _FetchResult(url=page_url, text="", title="", failed=True, error="Empty response")
+            return _FetchResult(url=page_url, text=result.text, title=result.title, failed=False)
+
+        return _FetchResult(url=page_url, text="", title="", failed=True, error="HTTP 429 (rate limited)")
+
+    # Write to DB as each fetch completes — gives live pages_queued progress
+    doc_ids: list[str] = []
+    fetch_tasks = [asyncio.create_task(_fetch(u)) for u in crawl_result.urls]
+
+    try:
+        for coro in asyncio.as_completed(fetch_tasks):
+            fr = await coro
+            if fr.failed:
+                # Store as a failed document so the user can see which URLs failed and why
+                failed_doc = Document(
+                    workspace_id=job.workspace_id,
+                    knowledge_base_id=job.kb_id,
+                    source_type="url",
+                    source_url=fr.url,
+                    title=fr.url,
+                    status="failed",
+                    metadata_={"error": fr.error},
+                )
+                db.add(failed_doc)
+                await db.flush()
+                await db.execute(
+                    update(CrawlJob)
+                    .where(CrawlJob.id == job_id)
+                    .values(pages_failed=CrawlJob.pages_failed + 1)
+                )
                 await db.commit()
-                return
+                continue
 
             doc = Document(
                 workspace_id=job.workspace_id,
                 knowledge_base_id=job.kb_id,
                 source_type="text",
-                source_url=page_url,
-                raw_content=result.text,
-                title=result.title,
+                source_url=fr.url,
+                raw_content=fr.text,
+                title=fr.title,
                 status="pending",
             )
             db.add(doc)
             await db.flush()
             doc_ids.append(str(doc.id))
-            job.pages_queued = (job.pages_queued or 0) + 1
+            await db.execute(
+                update(CrawlJob)
+                .where(CrawlJob.id == job_id)
+                .values(pages_queued=CrawlJob.pages_queued + 1)
+            )
             await db.commit()
-
-    await asyncio.gather(*[_fetch_and_store(u) for u in crawl_result.urls])
+    except Exception:
+        for task in fetch_tasks:
+            task.cancel()
+        raise
 
     # Fire ingest tasks — all docs committed, workers can read them
     for doc_id in doc_ids:
         ingest_document.delay(doc_id)
+
+    # Mark job as completed
+    job.status = "completed"
+    job.completed_at = datetime.now(timezone.utc)
+    await db.commit()
 
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,72 @@
+<h2>UX Audit — Where are the friction points?</h2>
+<p class="subtitle">Based on a full codebase scan. Pick the areas you want to tackle first (multi-select).</p>
+
+<div class="options" data-multiselect>
+
+  <div class="option" data-choice="nav" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Navigation & Information Architecture</h3>
+      <p>Sidebar has 10 flat items — no grouping. Settings sub-pages (Team, Webhooks, Security, Data Retention, AI Models) all live at top level alongside core nav. Hard to scan, especially for new users. The active search bar in the topbar does nothing.</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="chatbot-tabs" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Chatbot Detail — Tab Order & Labels</h3>
+      <p>Current order: Sources → Settings → Actions → Chat → Customize → Deploy. "Chat" (internal test) is buried as tab 4. "Deploy" is last but should feel like a reward after setup. "Actions" label is vague. Tab order doesn't follow the natural setup flow.</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="dashboard" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Dashboard — Signal vs. Noise</h3>
+      <p>Big resolution rate hero dominates, but there's no "what to do next" CTA. First-time users see an empty dashboard with zeros everywhere. Intelligence highlights exist but feel disconnected. No quick-launch actions from the main screen.</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="conversations" onclick="toggleSelect(this)">
+    <div class="letter">D</div>
+    <div class="content">
+      <h3>Conversations — Discoverability & Speed</h3>
+      <p>No bulk actions, no keyboard shortcuts, no row preview on hover. Clicking a conversation navigates away (no slide-over panel). Status updates require going into the detail view. Filters reset on navigation. Export is buried.</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="onboarding" onclick="toggleSelect(this)">
+    <div class="letter">E</div>
+    <div class="content">
+      <h3>First-Time User Experience</h3>
+      <p>Onboarding wizard exists at /onboarding but it's unclear when or if it's triggered. After wizard, users land on dashboard with no context. The new bot wizard (4 steps) is good but the "Done" state has no clear next step. Empty states are minimal — no guided actions.</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="sources" onclick="toggleSelect(this)">
+    <div class="letter">F</div>
+    <div class="content">
+      <h3>Knowledge Base / Sources Tab</h3>
+      <p>Adding a source opens a modal — fine. But the table only shows status badges with no inline retry for failed docs. Reindexing gives no progress feedback. Sync frequency dropdown is per-row but no bulk-change. "Chunks" count shown but means nothing to most users.</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="customize" onclick="toggleSelect(this)">
+    <div class="letter">G</div>
+    <div class="content">
+      <h3>Widget Customization — Live Preview UX</h3>
+      <p>Two-column with live preview is good. But the form is long and unsectioned — color, positioning, text, avatar, lead capture, GDPR, custom CSS all in one scroll. No "reset to defaults". Preview doesn't show mobile vs desktop. Save is a single button at the bottom of a long form.</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="quick-wins" onclick="toggleSelect(this)">
+    <div class="letter">H</div>
+    <div class="content">
+      <h3>Quick Wins — Micro-interactions & Polish</h3>
+      <p>Copy buttons with no feedback, loading states that block the whole page, no toast notifications on save, table rows with no hover action hints, breadcrumbs missing on sub-pages, page titles don't update in browser tab, no keyboard shortcuts anywhere.</p>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:24px">Select all that apply — or just tell me in the terminal which areas matter most.</p>

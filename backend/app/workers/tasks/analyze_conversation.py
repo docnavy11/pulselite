@@ -9,7 +9,7 @@ from openai import AsyncOpenAI
 from sqlalchemy import select
 
 from app.config import settings
-from app.database import async_session_factory
+from app.database import async_session_factory, engine
 from app.models.conversations import Message
 from app.models.intelligence import ConversationAnalysis
 from app.workers.celery_app import celery_app
@@ -38,11 +38,11 @@ def analyze_conversation(self, conversation_id: str, workspace_id: str) -> dict:
     try:
         return asyncio.run(_analyze(uuid.UUID(conversation_id), uuid.UUID(workspace_id)))
     except Exception as exc:
-        self.retry(exc=exc)  # type: ignore[attr-defined]
-        return {}
+        raise self.retry(exc=exc)  # type: ignore[attr-defined]
 
 
 async def _analyze(conversation_id: uuid.UUID, workspace_id: uuid.UUID) -> dict:
+    await engine.dispose()
     async with async_session_factory() as session:
         try:
             result = await session.execute(

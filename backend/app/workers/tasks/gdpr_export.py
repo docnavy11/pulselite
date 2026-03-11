@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from app.database import async_session_factory
+from app.database import async_session_factory, engine
 from app.models.contacts import Contact
 from app.models.conversations import Conversation
 from app.models.organizational import Workspace
@@ -19,12 +19,16 @@ logger = logging.getLogger(__name__)
 EXPORT_DIR = "/app/data/exports"
 
 
-@celery_app.task
-def export_workspace_data(workspace_id: str, export_id: str) -> dict:
-    return asyncio.run(_export(uuid.UUID(workspace_id), export_id))
+@celery_app.task(bind=True, max_retries=3, default_retry_delay=30)
+def export_workspace_data(self, workspace_id: str, export_id: str) -> dict:
+    try:
+        return asyncio.run(_export(uuid.UUID(workspace_id), export_id))
+    except Exception as exc:
+        raise self.retry(exc=exc)
 
 
 async def _export(workspace_id: uuid.UUID, export_id: str) -> dict:
+    await engine.dispose()
     os.makedirs(EXPORT_DIR, mode=0o700, exist_ok=True)
     export_path = os.path.join(EXPORT_DIR, f"{export_id}.json")
 

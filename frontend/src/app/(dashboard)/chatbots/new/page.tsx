@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
-import { Globe, CheckCircle, ChevronRight, Copy, Check } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Globe, CheckCircle, ChevronRight, Copy, Check, Sparkles, AlertTriangle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card, CardContent } from "@/components/ui/Card";
@@ -26,8 +26,90 @@ const STEPS: { id: Step; label: string }[] = [
   { id: "done", label: "Done" },
 ];
 
+const TONE_OPTIONS: { value: string; label: string; description: string }[] = [
+  { value: "professional", label: "Professional", description: "Formal and business-like" },
+  { value: "friendly",     label: "Friendly",     description: "Warm and approachable" },
+  { value: "casual",       label: "Casual",       description: "Relaxed and conversational" },
+  { value: "formal",       label: "Formal",       description: "Strict and authoritative" },
+];
+
+const LANG_NAMES: Record<string, string> = {
+  en: "English", nl: "Dutch", fr: "French", de: "German",
+  es: "Spanish", pt: "Portuguese", it: "Italian", pl: "Polish",
+  ru: "Russian", tr: "Turkish", ar: "Arabic", zh: "Chinese",
+  ja: "Japanese", ko: "Korean", sv: "Swedish", da: "Danish",
+  no: "Norwegian", fi: "Finnish", cs: "Czech", ro: "Romanian",
+};
+
+const PLATFORM_GUIDES: { id: string; name: string; logo: string; steps: string[] }[] = [
+  {
+    id: "wordpress",
+    name: "WordPress",
+    logo: "W",
+    steps: [
+      "Install the free plugin <strong>Insert Headers and Footers</strong> (WPCode).",
+      "Go to <strong>Code Snippets → Header & Footer</strong> in your WP admin.",
+      "Paste the snippet into the <strong>Footer</strong> section.",
+      "Click <strong>Save Changes</strong>. The widget appears on all pages.",
+    ],
+  },
+  {
+    id: "shopify",
+    name: "Shopify",
+    logo: "S",
+    steps: [
+      "In your Shopify admin, go to <strong>Online Store → Themes</strong>.",
+      "Click <strong>⋯ Actions → Edit code</strong> on your active theme.",
+      "Open <strong>Layout → theme.liquid</strong>.",
+      "Paste the snippet just before <code>&lt;/body&gt;</code> and click <strong>Save</strong>.",
+    ],
+  },
+  {
+    id: "wix",
+    name: "Wix",
+    logo: "X",
+    steps: [
+      "In the Wix Editor, click <strong>Settings → Custom Code</strong>.",
+      "Click <strong>+ Add Custom Code</strong> at the bottom of the page.",
+      "Paste the snippet, set placement to <strong>Body — end</strong>.",
+      "Set it to load on <strong>All pages</strong> and click <strong>Apply</strong>.",
+    ],
+  },
+  {
+    id: "squarespace",
+    name: "Squarespace",
+    logo: "⬜",
+    steps: [
+      "Go to <strong>Settings → Advanced → Code Injection</strong>.",
+      "Paste the snippet into the <strong>Footer</strong> text area.",
+      "Click <strong>Save</strong>. Changes apply site-wide instantly.",
+    ],
+  },
+  {
+    id: "webflow",
+    name: "Webflow",
+    logo: "W",
+    steps: [
+      "Open your project and go to <strong>Project Settings → Custom Code</strong>.",
+      "Paste the snippet into the <strong>Footer Code</strong> box.",
+      "Click <strong>Save Changes</strong>, then <strong>Publish</strong> your site.",
+    ],
+  },
+  {
+    id: "html",
+    name: "Plain HTML",
+    logo: "</> ",
+    steps: [
+      "Open your HTML file (e.g., <code>index.html</code>).",
+      "Paste the snippet just before the closing <code>&lt;/body&gt;</code> tag.",
+      "Save the file and upload it to your hosting provider.",
+    ],
+  },
+];
+
 export default function NewBotWizardPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);
 
   const [step, setStep] = useState<Step>("url");
@@ -37,18 +119,27 @@ export default function NewBotWizardPage() {
 
   // crawling state
   const [crawlStatus, setCrawlStatus] = useState<CrawlStatusResponse | null>(null);
+  const [autoconfigRunning, setAutoconfigRunning] = useState(false);
+  const [autoconfigError, setAutoconfigError] = useState("");
+  const [crawlJobId, setCrawlJobId] = useState("");
+  const [crawlKbId, setCrawlKbId] = useState("");
   const pollRef = useRef<NodeJS.Timeout | null>(null);
+  const pollStartRef = useRef<number>(0);
+  const POLL_TIMEOUT_MS = 10 * 60 * 1000; // 10 min client-side safety net
 
   // result state
   const [config, setConfig] = useState<AutoConfigResponse | null>(null);
   const [chatbotId, setChatbotId] = useState("");
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [activePlatform, setActivePlatform] = useState("wordpress");
 
   // editable review fields
   const [reviewName, setReviewName] = useState("");
   const [reviewWelcome, setReviewWelcome] = useState("");
   const [reviewColor, setReviewColor] = useState("");
+  const [reviewTone, setReviewTone] = useState("professional");
+  const [reviewLanguage, setReviewLanguage] = useState("en");
 
   useEffect(() => {
     return () => {
@@ -65,53 +156,101 @@ export default function NewBotWizardPage() {
     }
   }
 
-  async function handleStart(e: React.FormEvent) {
-    e.preventDefault();
+  const autoStarted = useRef(false);
+
+  useEffect(() => {
+    const prefillUrl = searchParams.get("url") ?? "";
+    const prefillName = searchParams.get("name") ?? "";
+    if (!prefillUrl || !workspace || autoStarted.current) return;
+    autoStarted.current = true;
+    setUrl(prefillUrl);
+    if (prefillName) setBotName(prefillName);
+    handleStart(undefined, prefillUrl, prefillName);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspace]);
+
+  async function handleStart(
+    e?: { preventDefault: () => void },
+    overrideUrl?: string,
+    overrideName?: string,
+  ) {
+    e?.preventDefault();
     if (!workspace) return;
     setError("");
 
-    const normalized = url.startsWith("http") ? url : `https://${url}`;
-    const name = botName.trim() || inferName(normalized) || "My Bot";
+    const rawUrl = overrideUrl ?? url;
+    const rawName = overrideName ?? botName;
+    const normalized = rawUrl.startsWith("http") ? rawUrl : `https://${rawUrl}`;
+    const name = rawName.trim() || inferName(normalized) || "My Bot";
 
     try {
       setStep("crawling");
 
-      // Create chatbot first
       const chatbot = await createChatbot(workspace.id, { name });
       setChatbotId(chatbot.id);
 
-      // Start crawl — pass chatbot_id so KB gets linked
       const crawl = await startCrawl(workspace.id, normalized, 50, chatbot.id);
-      setCrawlStatus({ job_id: crawl.job_id, status: "pending", pages_discovered: crawl.pages_discovered, pages_queued: 0, pages_failed: 0, docs_indexed: 0, docs_total: 0 });
+      setCrawlJobId(crawl.job_id);
+      setCrawlKbId(crawl.kb_id);
+      setCrawlStatus({ job_id: crawl.job_id, status: "pending", pages_discovered: crawl.pages_discovered, pages_queued: 0, pages_failed: 0, docs_indexed: 0, docs_total: 0, docs_failed: 0, stalled: false });
 
-      // Poll for completion
+      pollStartRef.current = Date.now();
       pollRef.current = setInterval(async () => {
+        // Client-side timeout safety net
+        if (Date.now() - pollStartRef.current > POLL_TIMEOUT_MS) {
+          clearInterval(pollRef.current!);
+          setCrawlStatus((prev: CrawlStatusResponse | null) => prev ? { ...prev, stalled: true } : prev);
+          return;
+        }
         try {
           const status = await getCrawlStatus(workspace.id, crawl.job_id);
           setCrawlStatus(status);
+
           if (status.status === "failed") {
             clearInterval(pollRef.current!);
-            setError("Crawl failed. Please try again.");
+            setError("The crawl failed. Check that the URL is reachable and try again.");
             setStep("url");
             return;
           }
-          // Wait for crawl to finish AND all docs indexed
-          const crawlDone = status.status === "completed" || status.status === "running";
-          const indexingDone = status.docs_total > 0 && status.docs_indexed >= status.docs_total;
-          if (crawlDone && indexingDone) {
+
+          // Backend-detected stall — stop polling, let UI show the stalled state
+          if (status.stalled) {
             clearInterval(pollRef.current!);
-            // Run autoconfig
-            const result = await runAutoconfig(workspace.id, chatbot.id, crawl.kb_id);
-            setConfig(result);
-            setReviewName(result.name);
-            setReviewWelcome(result.welcome_message ?? "");
-            setReviewColor(result.brand_color ?? "#4F46E5");
-            setStep("review");
+            return;
+          }
+
+          // All docs settled (indexed + failed) — ready to proceed even if some failed
+          const crawlDone = status.status === "completed";
+          const docsSettled = status.docs_total > 0 &&
+            (status.docs_indexed + status.docs_failed) >= status.docs_total;
+
+          if (crawlDone && docsSettled) {
+            clearInterval(pollRef.current!);
+            if (status.docs_indexed === 0) {
+              setError("All pages failed to index. The site may block crawlers.");
+              setStep("url");
+              return;
+            }
+            setAutoconfigRunning(true);
+            setAutoconfigError("");
+            try {
+              const result = await runAutoconfig(workspace.id, chatbot.id, crawl.kb_id);
+              setConfig(result);
+              setReviewName(result.name);
+              setReviewWelcome(result.welcome_message ?? "");
+              setReviewColor(result.brand_color ?? "#ff6b35");
+              setReviewTone(result.tone ?? "professional");
+              setReviewLanguage(result.language ?? "en");
+              setStep("review");
+            } catch (acErr: unknown) {
+              const msg = acErr instanceof Error ? acErr.message : "AI configuration failed.";
+              setAutoconfigError(msg);
+            } finally {
+              setAutoconfigRunning(false);
+            }
           }
         } catch {
-          clearInterval(pollRef.current!);
-          setError("Something went wrong. Please try again.");
-          setStep("url");
+          // Network blip — don't abort, just keep polling
         }
       }, 2000);
     } catch (err: unknown) {
@@ -129,6 +268,8 @@ export default function NewBotWizardPage() {
         name: reviewName,
         welcome_message: reviewWelcome,
         brand_color: reviewColor,
+        tone: reviewTone,
+        language: reviewLanguage,
       } as Parameters<typeof updateChatbot>[2]);
       setStep("done");
     } catch {
@@ -146,7 +287,22 @@ export default function NewBotWizardPage() {
   }
 
   const stepIndex = STEPS.findIndex((s) => s.id === step);
-  const embedCode = `<script src="${typeof window !== "undefined" ? window.location.origin : ""}/widget.js" data-key="${chatbotId}"></script>`;
+  const embedCode = `<script src="https://cdn.pulse.ai/widget.js" data-key="${chatbotId}"></script>`;
+  const activePlatformGuide = PLATFORM_GUIDES.find((p) => p.id === activePlatform)!;
+
+  // Phase states for crawling step
+  const crawlPct = !crawlStatus || crawlStatus.status === "pending"
+    ? 5
+    : crawlStatus.status === "completed"
+    ? 100
+    : Math.min(95, (crawlStatus.pages_queued / Math.max(crawlStatus.pages_discovered, 1)) * 100);
+
+  const indexPct = !crawlStatus || crawlStatus.docs_total === 0
+    ? 0
+    : Math.round((crawlStatus.docs_indexed / crawlStatus.docs_total) * 100);
+
+  const crawlComplete = crawlStatus?.status === "completed" || (crawlStatus?.status === "running" && crawlPct === 100);
+  const indexComplete = indexPct === 100 && crawlStatus!?.docs_total > 0;
 
   return (
     <div className="max-w-2xl mx-auto py-10 px-4">
@@ -166,11 +322,7 @@ export default function NewBotWizardPage() {
               >
                 {i < stepIndex ? <Check className="h-3.5 w-3.5" /> : i + 1}
               </div>
-              <span
-                className={`text-sm font-medium hidden sm:block ${
-                  i === stepIndex ? "text-gray-900" : "text-gray-400"
-                }`}
-              >
+              <span className={`text-sm font-medium hidden sm:block ${i === stepIndex ? "text-gray-900" : "text-gray-400"}`}>
                 {s.label}
               </span>
             </div>
@@ -195,7 +347,7 @@ export default function NewBotWizardPage() {
               </div>
             </div>
 
-            <form onSubmit={handleStart} className="space-y-4">
+            <form onSubmit={(e) => handleStart(e)} className="space-y-4">
               <Input
                 label="Website URL"
                 placeholder="https://acmecorp.com"
@@ -226,58 +378,151 @@ export default function NewBotWizardPage() {
         <Card>
           <CardContent className="pt-8 pb-8">
             <div className="flex flex-col items-center text-center gap-6 py-4">
-              <Spinner className="h-10 w-10 text-primary-500" />
-              <h2 className="text-lg font-semibold text-gray-900">Setting up your bot…</h2>
+              {crawlStatus?.stalled
+                ? <AlertTriangle className="h-10 w-10 text-amber-400" />
+                : autoconfigError
+                ? <AlertTriangle className="h-10 w-10 text-amber-400" />
+                : <Spinner className="h-10 w-10 text-primary-500" />
+              }
+
+              <h2 className="text-lg font-semibold text-gray-900">
+                {crawlStatus?.stalled
+                  ? "Taking longer than expected"
+                  : autoconfigError
+                  ? "Almost there…"
+                  : "Setting up your bot…"}
+              </h2>
 
               {/* Phase 1: Crawling */}
               <div className="w-full max-w-sm space-y-1.5">
                 <div className="flex justify-between text-sm">
-                  <span className="font-medium text-gray-700">Crawling pages</span>
+                  <span className={`font-medium ${crawlComplete ? "text-gray-400 line-through" : "text-gray-700"}`}>
+                    Crawling pages
+                  </span>
                   <span className="text-gray-500">
-                    {crawlStatus
-                      ? crawlStatus.status === "pending"
-                        ? "Starting…"
-                        : `${crawlStatus.pages_queued} / ${crawlStatus.pages_discovered} pages`
-                      : "Starting…"}
+                    {!crawlStatus || crawlStatus.status === "pending"
+                      ? "Starting…"
+                      : crawlComplete
+                      ? `${crawlStatus.pages_queued} pages ✓`
+                      : `${crawlStatus.pages_queued} / ${crawlStatus.pages_discovered} pages`}
                   </span>
                 </div>
                 <div className="h-2 w-full rounded-full bg-gray-100">
-                  <div
-                    className="h-2 rounded-full bg-primary-500 transition-all duration-500"
-                    style={{
-                      width: !crawlStatus || crawlStatus.status === "pending"
-                        ? "5%"
-                        : crawlStatus.status === "running"
-                        ? `${Math.min(95, (crawlStatus.pages_queued / Math.max(crawlStatus.pages_discovered, 1)) * 100)}%`
-                        : "100%",
-                    }}
-                  />
+                  <div className="h-2 rounded-full bg-primary-500 transition-all duration-500" style={{ width: `${crawlPct}%` }} />
                 </div>
+                {crawlStatus && crawlStatus.pages_failed > 0 && (
+                  <p className="text-[11px] text-amber-600 text-left flex items-center gap-1">
+                    <AlertTriangle className="h-3 w-3 flex-shrink-0" />
+                    {crawlStatus.pages_failed} page{crawlStatus.pages_failed > 1 ? "s" : ""} couldn't be fetched
+                  </p>
+                )}
               </div>
 
               {/* Phase 2: Indexing */}
               <div className="w-full max-w-sm space-y-1.5">
                 <div className="flex justify-between text-sm">
-                  <span className="font-medium text-gray-700">Indexing content</span>
+                  <span className={`font-medium ${indexComplete ? "text-gray-400 line-through" : "text-gray-700"}`}>
+                    Indexing content
+                  </span>
                   <span className="text-gray-500">
                     {!crawlStatus || crawlStatus.docs_total === 0
                       ? "Waiting…"
+                      : indexComplete
+                      ? `${crawlStatus.docs_indexed} pages ✓`
                       : `${crawlStatus.docs_indexed} / ${crawlStatus.docs_total} pages`}
                   </span>
                 </div>
                 <div className="h-2 w-full rounded-full bg-gray-100">
+                  <div className="h-2 rounded-full bg-primary-400 transition-all duration-500" style={{ width: `${indexPct}%` }} />
+                </div>
+                {crawlStatus && crawlStatus.docs_failed > 0 && (
+                  <p className="text-[11px] text-amber-600 text-left flex items-center gap-1">
+                    <AlertTriangle className="h-3 w-3 flex-shrink-0" />
+                    {crawlStatus.docs_failed} page{crawlStatus.docs_failed > 1 ? "s" : ""} failed to index
+                  </p>
+                )}
+              </div>
+
+              {/* Phase 3: Analysing */}
+              <div className="w-full max-w-sm space-y-1.5">
+                <div className="flex justify-between text-sm">
+                  <span className={`font-medium flex items-center gap-1.5 ${autoconfigRunning ? "text-primary-600" : "text-gray-400"}`}>
+                    {autoconfigRunning && <Sparkles className="h-3.5 w-3.5 animate-pulse" />}
+                    Analysing content
+                  </span>
+                  <span className="text-gray-500">
+                    {autoconfigRunning ? "Generating config…" : indexComplete ? "Queued" : "Waiting…"}
+                  </span>
+                </div>
+                <div className="h-2 w-full rounded-full bg-gray-100">
                   <div
-                    className="h-2 rounded-full bg-primary-400 transition-all duration-500"
-                    style={{
-                      width: !crawlStatus || crawlStatus.docs_total === 0
-                        ? "0%"
-                        : `${Math.round((crawlStatus.docs_indexed / crawlStatus.docs_total) * 100)}%`,
-                    }}
+                    className={`h-2 rounded-full bg-primary-300 transition-all duration-1000 ${autoconfigRunning ? "animate-pulse" : ""}`}
+                    style={{ width: autoconfigRunning ? "60%" : "0%" }}
                   />
                 </div>
               </div>
 
-              <p className="text-xs text-gray-400">This usually takes under a minute.</p>
+              {/* Stalled state */}
+              {crawlStatus?.stalled && !autoconfigError && (
+                <div className="w-full max-w-sm bg-amber-50 border border-amber-200 rounded-lg p-3 text-left space-y-2">
+                  <p className="text-[12px] text-amber-800 font-medium">The crawl is taking longer than usual.</p>
+                  <p className="text-[11px] text-amber-600">The site may be slow or blocking crawlers. You can wait or start over.</p>
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      onClick={() => { clearInterval(pollRef.current!); setStep("url"); setError(""); }}
+                      className="px-3 py-1.5 text-[11px] font-medium text-amber-700 border border-amber-300 rounded-lg hover:bg-amber-100 transition-colors"
+                    >
+                      Start over
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Autoconfig error with retry */}
+              {autoconfigError && !autoconfigRunning && (
+                <div className="w-full max-w-sm bg-amber-50 border border-amber-200 rounded-lg p-3 text-left space-y-2">
+                  <p className="text-[12px] text-amber-800 font-medium">AI configuration failed.</p>
+                  <p className="text-[11px] text-amber-600">{autoconfigError}</p>
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      onClick={async () => {
+                        if (!workspace || !chatbotId || !crawlKbId) return;
+                        setAutoconfigRunning(true);
+                        setAutoconfigError("");
+                        try {
+                          const result = await runAutoconfig(workspace.id, chatbotId, crawlKbId);
+                          setConfig(result);
+                          setReviewName(result.name);
+                          setReviewWelcome(result.welcome_message ?? "");
+                          setReviewColor(result.brand_color ?? "#ff6b35");
+                          setReviewTone(result.tone ?? "professional");
+                          setReviewLanguage(result.language ?? "en");
+                          setStep("review");
+                        } catch (acErr: unknown) {
+                          const msg = acErr instanceof Error ? acErr.message : "AI configuration failed.";
+                          setAutoconfigError(msg);
+                        } finally {
+                          setAutoconfigRunning(false);
+                        }
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-white bg-primary-500 hover:bg-primary-600 rounded-lg transition-colors"
+                    >
+                      <RefreshCw className="h-3 w-3" />
+                      Retry
+                    </button>
+                    <button
+                      onClick={() => { clearInterval(pollRef.current!); setStep("url"); setError(""); }}
+                      className="px-3 py-1.5 text-[11px] font-medium text-gray-600 border border-[#f0ebe3] rounded-lg hover:bg-[#faf8f5] transition-colors"
+                    >
+                      Start over
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {!crawlStatus?.stalled && !autoconfigError && (
+                <p className="text-xs text-gray-400">This usually takes under a minute.</p>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -287,17 +532,27 @@ export default function NewBotWizardPage() {
       {step === "review" && config && (
         <Card>
           <CardContent className="pt-8 pb-8">
-            <div className="mb-6">
-              <h2 className="text-lg font-semibold text-gray-900">Your bot is ready</h2>
-              <p className="text-sm text-gray-500 mt-1">We've configured it from your site. Review and save.</p>
+            <div className="flex items-start justify-between mb-6">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Your bot is ready</h2>
+                <p className="text-sm text-gray-500 mt-1">Configured from your site. Review and adjust.</p>
+              </div>
+              {reviewLanguage && (
+                <span className="flex items-center gap-1.5 px-2.5 py-1 bg-primary-50 text-primary-600 rounded-full text-[11px] font-semibold">
+                  🌐 {LANG_NAMES[reviewLanguage] ?? reviewLanguage.toUpperCase()}
+                </span>
+              )}
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-5">
+              {/* Name */}
               <Input
                 label="Bot name"
                 value={reviewName}
                 onChange={(e) => setReviewName(e.target.value)}
               />
+
+              {/* Welcome message */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Welcome message</label>
                 <textarea
@@ -307,6 +562,45 @@ export default function NewBotWizardPage() {
                   onChange={(e) => setReviewWelcome(e.target.value)}
                 />
               </div>
+
+              {/* Tone */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Tone</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {TONE_OPTIONS.map((t) => (
+                    <button
+                      key={t.value}
+                      onClick={() => setReviewTone(t.value)}
+                      className={`flex flex-col items-start px-3 py-2.5 rounded-lg border text-left transition-all ${
+                        reviewTone === t.value
+                          ? "border-primary-400 bg-primary-50 ring-1 ring-primary-300"
+                          : "border-[#f0ebe3] hover:border-gray-300 hover:bg-[#faf8f5]"
+                      }`}
+                    >
+                      <span className={`text-[12px] font-semibold ${reviewTone === t.value ? "text-primary-600" : "text-gray-700"}`}>
+                        {t.label}
+                      </span>
+                      <span className="text-[11px] text-gray-400 mt-0.5">{t.description}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Suggested questions */}
+              {config.suggested_questions && config.suggested_questions.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Suggested questions</label>
+                  <div className="flex flex-wrap gap-2">
+                    {config.suggested_questions.map((q, i) => (
+                      <span key={i} className="rounded-full bg-[#faf8f5] border border-[#f0ebe3] px-3 py-1 text-xs text-gray-600">
+                        {q}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Brand color */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Brand color</label>
                 <div className="flex items-center gap-3">
@@ -319,18 +613,6 @@ export default function NewBotWizardPage() {
                   <span className="text-sm text-gray-500 font-mono">{reviewColor}</span>
                 </div>
               </div>
-              {config.suggested_questions && config.suggested_questions.length > 0 && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Suggested questions</label>
-                  <div className="flex flex-wrap gap-2">
-                    {config.suggested_questions.map((q, i) => (
-                      <span key={i} className="rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-600">
-                        {q}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
 
             {error && <p className="text-sm text-red-600 mt-4">{error}</p>}
@@ -350,35 +632,76 @@ export default function NewBotWizardPage() {
 
       {/* Step: Done */}
       {step === "done" && (
-        <Card>
-          <CardContent className="pt-8 pb-8">
-            <div className="flex flex-col items-center text-center gap-3 mb-8">
-              <CheckCircle className="h-12 w-12 text-green-500" />
-              <h2 className="text-lg font-semibold text-gray-900">You're live!</h2>
-              <p className="text-sm text-gray-500">Add this snippet to your site to activate the widget.</p>
-            </div>
+        <div className="space-y-6">
+          <Card>
+            <CardContent className="pt-8 pb-8">
+              <div className="flex flex-col items-center text-center gap-3 mb-8">
+                <CheckCircle className="h-12 w-12 text-green-500" />
+                <h2 className="text-lg font-semibold text-gray-900">You're live!</h2>
+                <p className="text-sm text-gray-500">Add this snippet to your site to activate the widget.</p>
+              </div>
 
-            <div className="relative rounded-lg bg-gray-50 border border-gray-200 p-4">
-              <code className="text-xs text-gray-700 break-all font-mono">{embedCode}</code>
-              <button
-                onClick={() => handleCopy(embedCode)}
-                className="absolute top-3 right-3 flex items-center gap-1 rounded-md bg-white border border-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 transition-colors"
-              >
-                {copied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
-                {copied ? "Copied" : "Copy"}
-              </button>
-            </div>
+              <div className="relative rounded-lg bg-gray-50 border border-gray-200 p-4">
+                <code className="text-xs text-gray-700 break-all font-mono">{embedCode}</code>
+                <button
+                  onClick={() => handleCopy(embedCode)}
+                  className="absolute top-3 right-3 flex items-center gap-1 rounded-md bg-white border border-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 transition-colors"
+                >
+                  {copied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
+                  {copied ? "Copied" : "Copy"}
+                </button>
+              </div>
 
-            <div className="flex justify-end gap-3 pt-6">
-              <Button variant="secondary" onClick={() => router.push("/chatbots")}>
-                Back to bots
-              </Button>
-              <Button onClick={() => router.push(`/chatbots/${chatbotId}`)}>
-                Open bot settings
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+              <div className="flex justify-end gap-3 pt-6">
+                <Button variant="secondary" onClick={() => router.push("/chatbots")}>
+                  Back to bots
+                </Button>
+                <Button onClick={() => router.push(`/chatbots/${chatbotId}`)}>
+                  Open bot settings
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Platform install guides */}
+          <Card>
+            <CardContent className="pt-6 pb-6">
+              <h3 className="text-[13px] font-semibold text-gray-900 mb-4">How to add it to your site</h3>
+
+              {/* Platform tabs */}
+              <div className="flex flex-wrap gap-2 mb-5">
+                {PLATFORM_GUIDES.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => setActivePlatform(p.id)}
+                    className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all ${
+                      activePlatform === p.id
+                        ? "bg-primary-500 text-white"
+                        : "bg-[#faf8f5] border border-[#f0ebe3] text-gray-500 hover:border-gray-300 hover:text-gray-700"
+                    }`}
+                  >
+                    {p.name}
+                  </button>
+                ))}
+              </div>
+
+              {/* Steps for active platform */}
+              <ol className="space-y-3">
+                {activePlatformGuide.steps.map((s, i) => (
+                  <li key={i} className="flex gap-3">
+                    <span className="flex-shrink-0 flex h-5 w-5 items-center justify-center rounded-full bg-primary-100 text-primary-600 text-[10px] font-bold mt-0.5">
+                      {i + 1}
+                    </span>
+                    <p
+                      className="text-[13px] text-gray-600 leading-relaxed"
+                      dangerouslySetInnerHTML={{ __html: s }}
+                    />
+                  </li>
+                ))}
+              </ol>
+            </CardContent>
+          </Card>
+        </div>
       )}
     </div>
   );

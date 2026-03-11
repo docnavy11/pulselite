@@ -40,5 +40,6 @@ class DocumentResponse(BaseModel):
     sync_frequency: str
     created_at: datetime
     updated_at: datetime
+    metadata_: dict = {}
 
     model_config = {"from_attributes": True}

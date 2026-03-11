@@ -32,7 +32,8 @@ export default function SettingsPage() {
     setExporting(true);
     try {
       const result = await requestDataExport(workspace.id);
-      setExportUrl(result.download_url);
+      const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      setExportUrl(`${BASE_URL}/api/v1/workspaces/${workspace.id}/export/${result.export_id}/download`);
     } catch {
       // handle error
     } finally {

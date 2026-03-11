@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func, select
 
-from app.database import async_session_factory
+from app.database import async_session_factory, engine
 from app.models.conversations import Conversation
 from app.models.knowledge import Article
 from app.models.organizational import Workspace
@@ -22,6 +22,7 @@ def send_weekly_digest_task() -> dict:
 
 
 async def _send_digests() -> dict:
+    await engine.dispose()
     async with async_session_factory() as session:
         try:
             result = await session.execute(select(Workspace.id))
@@ -38,9 +39,9 @@ async def _send_digests() -> dict:
                 sent += 1
 
             return {"status": "success", "digests_sent": sent}
-        except Exception as e:
-            logger.error(f"Weekly digest failed: {e}")
-            return {"status": "error", "detail": str(e)}
+        except Exception:
+            logger.exception("Weekly digest failed")
+            raise
 
 
 async def _compute_weekly_stats(session, workspace_id: uuid.UUID) -> dict:

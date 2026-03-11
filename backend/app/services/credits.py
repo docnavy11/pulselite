@@ -1,9 +1,11 @@
 import logging
 import uuid
 
+import redis.asyncio as aioredis
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.models.integrations import CreditLedger
 from app.models.organizational import Workspace
 
@@ -53,7 +55,14 @@ async def debit_credits(
     if auto_recharge_enabled and new_balance <= threshold:
         from app.workers.tasks.auto_recharge import trigger_auto_recharge
 
-        trigger_auto_recharge.delay(str(workspace_id))  # type: ignore[attr-defined]
+        lock_key = f"pulse:recharge_lock:{workspace_id}"
+        r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+        try:
+            acquired = await r.set(lock_key, "1", nx=True, ex=300)  # 5-min TTL
+            if acquired:
+                trigger_auto_recharge.delay(str(workspace_id))  # type: ignore[attr-defined]
+        finally:
+            await r.aclose()
 
     return new_balance
 
@@ -65,22 +74,25 @@ async def add_credits(
     reason: str,
     reference_id: str | None = None,
 ) -> int:
-    result = await db.execute(select(Workspace).where(Workspace.id == workspace_id))
-    workspace = result.scalar_one()
-
-    workspace.credit_balance += amount
+    result = await db.execute(
+        update(Workspace)
+        .where(Workspace.id == workspace_id)
+        .values(credit_balance=Workspace.credit_balance + amount)
+        .returning(Workspace.credit_balance)
+    )
+    new_balance = result.scalar_one()
 
     ledger_entry = CreditLedger(
         workspace_id=workspace_id,
         amount=amount,
         reason=reason,
         reference_id=reference_id,
-        balance_after=workspace.credit_balance,
+        balance_after=new_balance,
     )
     db.add(ledger_entry)
     await db.flush()
 
-    return workspace.credit_balance
+    return new_balance
 
 
 async def get_balance(db: AsyncSession, workspace_id: uuid.UUID) -> int:

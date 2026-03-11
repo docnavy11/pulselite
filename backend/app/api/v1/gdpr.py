@@ -1,11 +1,14 @@
+import json
 import os
 import uuid
 
+import redis.asyncio as aioredis
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db
 from app.dependencies import get_current_user, get_workspace, get_workspace_admin
 from app.models.contacts import Company, Contact, ContactEvent, DataAttribute, Segment
@@ -32,6 +35,9 @@ async def trigger_export(
     current_user: Agent = Depends(get_current_user),
 ):
     export_id = str(uuid.uuid4())
+    r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+    await r.set(f"gdpr_export:{export_id}", json.dumps({"workspace_id": str(workspace_id)}), ex=86400)
+    await r.aclose()
     export_workspace_data.delay(str(workspace_id), export_id)
     return {"export_id": export_id, "status": "processing"}
 
@@ -42,6 +48,14 @@ async def download_export(
     workspace_id: uuid.UUID = Depends(get_workspace),
     current_user: Agent = Depends(get_current_user),
 ):
+    r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+    stored = await r.get(f"gdpr_export:{str(export_id)}")
+    await r.aclose()
+    if not stored:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Export not found or still processing")
+    stored_workspace_id = json.loads(stored).get("workspace_id")
+    if stored_workspace_id != str(workspace_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Export not found or still processing")
     file_path = os.path.join(EXPORT_DIR, f"{str(export_id)}.json")
     if not os.path.exists(file_path):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Export not found or still processing")
@@ -72,6 +86,7 @@ async def delete_contact(
 
     await db.execute(delete(Contact).where(Contact.id == contact_id))
     await db.flush()
+    await db.commit()
 
     return {"status": "deleted", "contact_id": str(contact_id)}
 
@@ -168,5 +183,6 @@ async def delete_workspace(
     # Workspace
     await db.delete(workspace)
     await db.flush()
+    await db.commit()
 
     return {"status": "deleted", "workspace_id": str(workspace_id)}

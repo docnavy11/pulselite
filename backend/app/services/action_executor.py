@@ -15,6 +15,7 @@ from typing import Any
 import httpx
 
 from app.models.actions import ActionEvent, ChatbotAction
+from app.services.encryption import decrypt_api_key
 from app.services.llm import get_llm_client
 
 logger = logging.getLogger(__name__)
@@ -68,6 +69,8 @@ async def _execute_webhook(action: ChatbotAction, context: dict[str, Any]) -> st
     url = action.config.get("url", "").strip()
     if not url:
         return "error:no_url"
+    if not url.startswith("https://"):
+        return "error:url_must_be_https"
     method = action.config.get("method", "POST").upper()
     payload = {"action": action.name, "action_id": str(action.id), **context}
 
@@ -138,7 +141,7 @@ async def _execute_stripe_lookup(action: ChatbotAction, context: dict[str, Any],
 
     try:
         import stripe  # type: ignore[import]
-        stripe.api_key = integration.config["api_key"]
+        stripe.api_key = decrypt_api_key(integration.config["api_key"])
         customers = stripe.Customer.list(email=email, limit=1)
         if not customers.data:
             return "ok:no_customer"
@@ -174,9 +177,9 @@ async def _execute_salesforce_ticket(action: ChatbotAction, context: dict[str, A
     try:
         from simple_salesforce import Salesforce  # type: ignore[import]
         sf = Salesforce(
-            username=cfg.get("username"),
-            password=cfg.get("password"),
-            security_token=cfg.get("security_token"),
+            username=decrypt_api_key(cfg["username"]) if cfg.get("username") else None,
+            password=decrypt_api_key(cfg["password"]) if cfg.get("password") else None,
+            security_token=decrypt_api_key(cfg["security_token"]) if cfg.get("security_token") else None,
         )
         sf.Case.create({
             "Subject": f"Chat inquiry: {context.get('message', '')[:80]}",
@@ -239,7 +242,7 @@ async def _get_workspace_slack_webhook(db_session, workspace_id: uuid.UUID) -> s
     )
     config = result.scalar_one_or_none()
     if config and config.config.get("webhook_url"):
-        return str(config.config["webhook_url"])
+        return decrypt_api_key(config.config["webhook_url"])
     return None
 
 

@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Full Redesign</title>
+<script src="/helper.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; background: #f0ece6; color: #1a1a1a; padding: 28px; }
+h1 { font-size: 20px; font-weight: 800; margin-bottom: 4px; letter-spacing: -0.03em; }
+.sub { color: #999; font-size: 13px; margin-bottom: 28px; }
+
+.section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #bbb; margin: 28px 0 12px; }
+
+/* ─── APP SHELL ─── */
+.app { display: flex; height: 520px; background: #faf8f5; border-radius: 16px; overflow: hidden; border: 1px solid #e8e3db; box-shadow: 0 8px 40px rgba(0,0,0,0.08); }
+
+/* SIDEBAR */
+.sidebar { width: 220px; background: #fff; border-right: 1px solid #f0ebe3; display: flex; flex-direction: column; padding: 0; flex-shrink: 0; }
+.sidebar-top { padding: 20px 18px 16px; border-bottom: 1px solid #f5f0ea; }
+.logo { font-size: 17px; font-weight: 900; letter-spacing: -0.04em; color: #1a1a1a; display: flex; align-items: center; gap: 8px; }
+.logo-mark { width: 26px; height: 26px; background: #ff6b35; border-radius: 7px; display: flex; align-items: center; justify-content: center; }
+.ws-switcher { display: flex; align-items: center; gap: 6px; margin-top: 10px; padding: 5px 7px; background: #faf8f5; border-radius: 7px; cursor: pointer; }
+.ws-dot { width: 18px; height: 18px; background: linear-gradient(135deg, #ff6b35, #f59e0b); border-radius: 5px; font-size: 9px; font-weight: 800; color: white; display: flex; align-items: center; justify-content: center; }
+.ws-name { font-size: 11px; font-weight: 600; color: #444; flex: 1; }
+.ws-chevron { font-size: 9px; color: #ccc; }
+
+.nav-section { padding: 10px 12px 4px; }
+.nav-label { font-size: 9px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #ccc; padding: 0 6px; margin-bottom: 3px; }
+.nav-item { display: flex; align-items: center; gap: 9px; padding: 7px 8px; border-radius: 8px; font-size: 12px; font-weight: 500; color: #777; cursor: pointer; transition: all 0.15s; margin-bottom: 1px; position: relative; }
+.nav-item:hover { background: #faf8f5; color: #444; }
+.nav-item.active { background: #fff3ee; color: #ff6b35; font-weight: 600; }
+.nav-item .badge { margin-left: auto; font-size: 9px; font-weight: 700; background: #ff6b35; color: white; padding: 1px 5px; border-radius: 20px; }
+.nav-item .badge.gray { background: #f0ebe3; color: #999; }
+
+.nav-icon { width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+
+.settings-group { padding: 4px 12px; }
+.settings-toggle { display: flex; align-items: center; gap: 9px; padding: 7px 8px; border-radius: 8px; font-size: 12px; font-weight: 500; color: #777; cursor: pointer; }
+.settings-children { padding-left: 35px; }
+.settings-child { font-size: 11px; color: #aaa; padding: 4px 8px; border-radius: 6px; cursor: pointer; }
+.settings-child:hover { color: #666; background: #faf8f5; }
+
+.sidebar-footer { margin-top: auto; padding: 12px 14px; border-top: 1px solid #f5f0ea; }
+.user-row { display: flex; align-items: center; gap: 8px; }
+.user-av { width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg, #ff6b35, #f59e0b); font-size: 11px; font-weight: 700; color: white; display: flex; align-items: center; justify-content: center; }
+.user-name { font-size: 11px; font-weight: 600; color: #444; }
+.user-email { font-size: 10px; color: #bbb; }
+.plan-pill { margin-left: auto; font-size: 9px; font-weight: 700; background: #fff3ee; color: #ff6b35; padding: 2px 7px; border-radius: 20px; border: 1px solid #ffe4d6; }
+
+/* MAIN CONTENT */
+.main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.topbar { height: 52px; background: #fff; border-bottom: 1px solid #f0ebe3; display: flex; align-items: center; padding: 0 20px; gap: 12px; flex-shrink: 0; }
+.topbar-title { font-size: 14px; font-weight: 700; color: #1a1a1a; letter-spacing: -0.02em; }
+.topbar-crumb { font-size: 12px; color: #ccc; }
+.topbar-spacer { flex: 1; }
+.cmd-bar { display: flex; align-items: center; gap: 6px; background: #faf8f5; border: 1px solid #ede8e0; border-radius: 8px; padding: 5px 10px; font-size: 11px; color: #bbb; cursor: pointer; transition: all 0.15s; }
+.cmd-bar:hover { border-color: #ff6b35; color: #888; }
+.cmd-key { font-size: 9px; background: #ede8e0; border-radius: 3px; padding: 1px 4px; color: #aaa; }
+.topbar-btn { width: 30px; height: 30px; border-radius: 8px; background: #faf8f5; border: 1px solid #ede8e0; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 13px; }
+
+.content { flex: 1; overflow-y: auto; padding: 20px; background: #faf8f5; }
+
+/* DASHBOARD */
+.greeting { font-size: 18px; font-weight: 800; letter-spacing: -0.03em; margin-bottom: 2px; }
+.greeting-sub { font-size: 12px; color: #999; margin-bottom: 16px; }
+.dash-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+.kpi { background: white; border-radius: 10px; padding: 12px 14px; border: 1px solid #f0ebe3; }
+.kpi-num { font-size: 22px; font-weight: 900; letter-spacing: -0.04em; color: #1a1a1a; }
+.kpi-num.orange { color: #ff6b35; }
+.kpi-label { font-size: 10px; color: #bbb; margin-top: 1px; }
+.kpi-trend { font-size: 10px; font-weight: 600; color: #22c55e; margin-top: 2px; }
+.kpi-trend.down { color: #ef4444; }
+.kpi.hero { grid-column: span 1; background: linear-gradient(135deg, #fff3ee 0%, #fff 100%); border-color: #ffe4d6; }
+
+.dash-row { display: grid; grid-template-columns: 1.4fr 1fr; gap: 10px; }
+.chart-card { background: white; border-radius: 10px; padding: 14px; border: 1px solid #f0ebe3; }
+.chart-title { font-size: 11px; font-weight: 700; color: #444; margin-bottom: 10px; }
+.mini-chart { height: 50px; display: flex; align-items: flex-end; gap: 4px; }
+.bar { flex: 1; background: #ffe4d6; border-radius: 3px 3px 0 0; transition: height 0.3s; }
+.bar.highlight { background: #ff6b35; }
+
+.activity-card { background: white; border-radius: 10px; padding: 14px; border: 1px solid #f0ebe3; }
+.activity-item { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 9px; }
+.act-dot { width: 6px; height: 6px; border-radius: 50%; background: #ff6b35; margin-top: 4px; flex-shrink: 0; }
+.act-dot.green { background: #22c55e; }
+.act-dot.amber { background: #f59e0b; }
+.act-text { font-size: 10px; color: #666; line-height: 1.4; }
+.act-time { font-size: 9px; color: #ccc; margin-top: 1px; }
+
+/* quick actions */
+.quick-actions { display: flex; gap: 8px; margin-bottom: 12px; }
+.qa-btn { display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: white; border: 1px solid #f0ebe3; border-radius: 8px; font-size: 11px; font-weight: 600; color: #555; cursor: pointer; transition: all 0.15s; }
+.qa-btn:hover { border-color: #ff6b35; color: #ff6b35; }
+.qa-btn.primary { background: #ff6b35; border-color: #ff6b35; color: white; }
+
+/* ─── CONVERSATION SLIDEOUT ─── */
+.conv-layout { display: flex; height: 440px; background: white; border-radius: 12px; overflow: hidden; border: 1px solid #f0ebe3; }
+.conv-list { width: 280px; border-right: 1px solid #f5f0ea; display: flex; flex-direction: column; }
+.conv-list-header { padding: 12px 14px; border-bottom: 1px solid #f5f0ea; display: flex; align-items: center; gap: 8px; }
+.conv-list-title { font-size: 13px; font-weight: 700; flex: 1; }
+.filter-chip { font-size: 10px; padding: 3px 8px; border-radius: 20px; background: #faf8f5; border: 1px solid #ede8e0; color: #888; }
+.filter-chip.active { background: #fff3ee; border-color: #ffcbb8; color: #ff6b35; }
+.conv-row { display: flex; align-items: flex-start; gap: 9px; padding: 10px 14px; border-bottom: 1px solid #faf8f5; cursor: pointer; transition: background 0.1s; }
+.conv-row:hover { background: #faf8f5; }
+.conv-row.active { background: #fff3ee; border-left: 2px solid #ff6b35; }
+.conv-av { width: 28px; height: 28px; border-radius: 50%; font-size: 10px; font-weight: 700; color: white; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+.conv-meta { flex: 1; min-width: 0; }
+.conv-name { font-size: 11px; font-weight: 600; color: #333; }
+.conv-preview { font-size: 10px; color: #aaa; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+.conv-time { font-size: 9px; color: #ccc; flex-shrink: 0; }
+.status-dot { width: 6px; height: 6px; border-radius: 50%; margin-top: 6px; flex-shrink: 0; }
+
+.slideout { flex: 1; display: flex; flex-direction: column; }
+.slideout-header { padding: 12px 16px; border-bottom: 1px solid #f5f0ea; display: flex; align-items: center; gap: 10px; }
+.slideout-name { font-size: 13px; font-weight: 700; flex: 1; }
+.status-select { font-size: 10px; font-weight: 700; padding: 3px 10px; border-radius: 20px; background: #dcfce7; color: #16a34a; border: none; cursor: pointer; }
+.msg-area { flex: 1; padding: 14px 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+.msg { max-width: 75%; }
+.msg.user { align-self: flex-end; }
+.msg-bubble { padding: 8px 11px; border-radius: 10px; font-size: 11px; line-height: 1.5; }
+.msg.bot .msg-bubble { background: #faf8f5; color: #444; border-radius: 2px 10px 10px 10px; }
+.msg.user .msg-bubble { background: #ff6b35; color: white; border-radius: 10px 2px 10px 10px; }
+.msg-label { font-size: 9px; color: #ccc; margin-bottom: 3px; }
+.msg.user .msg-label { text-align: right; }
+.meta-sidebar { width: 180px; border-left: 1px solid #f5f0ea; padding: 14px; }
+.meta-section { margin-bottom: 14px; }
+.meta-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #ccc; margin-bottom: 6px; }
+.meta-val { font-size: 11px; color: #555; }
+.meta-tag { display: inline-block; font-size: 9px; padding: 2px 7px; border-radius: 20px; background: #faf8f5; border: 1px solid #ede8e0; color: #888; margin-right: 3px; margin-bottom: 3px; }
+
+/* ─── CHATBOT TABS ─── */
+.chatbot-shell { background: white; border-radius: 12px; border: 1px solid #f0ebe3; overflow: hidden; }
+.chatbot-header { padding: 14px 18px; border-bottom: 1px solid #f5f0ea; display: flex; align-items: center; gap: 10px; }
+.chatbot-av { width: 32px; height: 32px; border-radius: 9px; background: linear-gradient(135deg, #6366f1, #8b5cf6); display: flex; align-items: center; justify-content: center; font-size: 16px; }
+.chatbot-name { font-size: 14px; font-weight: 700; }
+.chatbot-url { font-size: 10px; color: #bbb; }
+.online-badge { display: flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 600; color: #22c55e; margin-left: auto; }
+.online-dot { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,0.2); }
+.tab-bar { display: flex; border-bottom: 1px solid #f5f0ea; padding: 0 18px; gap: 0; }
+.tab { padding: 10px 14px; font-size: 11px; font-weight: 600; color: #aaa; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; display: flex; align-items: center; gap: 5px; }
+.tab.active { color: #ff6b35; border-bottom-color: #ff6b35; }
+.tab-icon { width: 14px; height: 14px; display: flex; align-items: center; justify-content: center; }
+.tab-content { padding: 16px 18px; min-height: 160px; }
+
+/* ─── SOURCES TABLE ─── */
+.sources-table { width: 100%; border-collapse: collapse; }
+.sources-table th { text-align: left; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #bbb; padding: 0 10px 8px; }
+.sources-table td { padding: 9px 10px; font-size: 11px; color: #555; border-top: 1px solid #faf8f5; vertical-align: middle; }
+.sources-table tr:hover td { background: #fdfcfb; }
+.src-name { font-weight: 600; color: #333; display: flex; align-items: center; gap: 6px; }
+.src-icon { width: 20px; height: 20px; border-radius: 5px; background: #f0ebe3; display: flex; align-items: center; justify-content: center; }
+.status-pill { display: inline-flex; align-items: center; gap: 4px; font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 20px; }
+.status-pill.indexed { background: #dcfce7; color: #16a34a; }
+.status-pill.processing { background: #fef3c7; color: #d97706; }
+.status-pill.failed { background: #fee2e2; color: #dc2626; }
+.row-actions { display: flex; gap: 4px; opacity: 0; transition: opacity 0.15s; }
+.sources-table tr:hover .row-actions { opacity: 1; }
+.row-btn { font-size: 9px; padding: 2px 7px; border-radius: 5px; border: 1px solid #ede8e0; color: #888; cursor: pointer; background: white; }
+.row-btn.danger { color: #ef4444; border-color: #fecaca; }
+
+/* ─── WIDGET CUSTOMIZE ─── */
+.customize-layout { display: grid; grid-template-columns: 1fr 320px; gap: 0; height: 420px; background: white; border-radius: 12px; border: 1px solid #f0ebe3; overflow: hidden; }
+.customize-form { padding: 16px; overflow-y: auto; border-right: 1px solid #f5f0ea; }
+.form-section { margin-bottom: 18px; }
+.form-section-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #ff6b35; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid #fff3ee; }
+.form-row { display: flex; gap: 8px; margin-bottom: 8px; }
+.form-field { flex: 1; }
+.form-label { font-size: 10px; font-weight: 600; color: #888; margin-bottom: 4px; }
+.form-input { width: 100%; padding: 6px 9px; border: 1px solid #ede8e0; border-radius: 7px; font-size: 11px; color: #333; background: #faf8f5; }
+.color-swatch { width: 28px; height: 28px; border-radius: 7px; background: #ff6b35; border: 2px solid white; box-shadow: 0 0 0 1px #ede8e0; flex-shrink: 0; }
+.toggle-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.toggle { width: 30px; height: 16px; border-radius: 20px; background: #22c55e; position: relative; flex-shrink: 0; }
+.toggle-knob { width: 12px; height: 12px; border-radius: 50%; background: white; position: absolute; top: 2px; right: 2px; }
+.toggle.off { background: #e5e7eb; }
+.toggle.off .toggle-knob { right: auto; left: 2px; }
+.toggle-label { font-size: 11px; color: #555; }
+
+.customize-preview { padding: 16px; background: #faf8f5; display: flex; flex-direction: column; }
+.preview-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #ccc; margin-bottom: 12px; }
+.widget-preview { background: white; border-radius: 12px; border: 1px solid #f0ebe3; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
+.widget-header { background: #ff6b35; padding: 10px 12px; display: flex; align-items: center; gap: 8px; }
+.widget-title { font-size: 12px; font-weight: 700; color: white; }
+.widget-close { color: rgba(255,255,255,0.7); font-size: 14px; margin-left: auto; cursor: pointer; }
+.widget-messages { padding: 10px; display: flex; flex-direction: column; gap: 7px; }
+.w-msg { font-size: 10px; padding: 6px 9px; border-radius: 8px; max-width: 80%; }
+.w-msg.bot { background: #f5f5f5; color: #444; border-radius: 2px 8px 8px 8px; }
+.w-msg.user { background: #ff6b35; color: white; align-self: flex-end; border-radius: 8px 2px 8px 8px; }
+.widget-input { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-top: 1px solid #f5f0ea; }
+.widget-input input { flex: 1; border: none; background: none; font-size: 10px; color: #666; outline: none; }
+.widget-send { width: 22px; height: 22px; background: #ff6b35; border-radius: 6px; display: flex; align-items: center; justify-content: center; }
+
+/* ─── EMPTY STATE ─── */
+.empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; text-align: center; background: white; border-radius: 12px; border: 1px solid #f0ebe3; }
+.empty-illo { width: 64px; height: 64px; background: #fff3ee; border-radius: 16px; display: flex; align-items: center; justify-content: center; margin-bottom: 14px; }
+.empty-title { font-size: 14px; font-weight: 700; color: #333; margin-bottom: 6px; }
+.empty-desc { font-size: 12px; color: #aaa; margin-bottom: 16px; max-width: 240px; line-height: 1.5; }
+.empty-cta { display: flex; gap: 8px; }
+
+/* buttons */
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 8px; font-size: 11px; font-weight: 600; cursor: pointer; border: none; transition: all 0.15s; }
+.btn.primary { background: #ff6b35; color: white; }
+.btn.primary:hover { background: #e85a26; }
+.btn.secondary { background: white; color: #555; border: 1px solid #ede8e0; }
+.btn.secondary:hover { border-color: #ff6b35; color: #ff6b35; }
+.btn.sm { padding: 5px 10px; font-size: 10px; }
+
+/* PROGRESS WIZARD */
+.wizard-steps { display: flex; align-items: center; gap: 0; margin-bottom: 20px; }
+.wstep { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; position: relative; }
+.wstep:not(:last-child)::after { content: ''; position: absolute; top: 14px; left: 50%; right: -50%; height: 1px; background: #f0ebe3; z-index: 0; }
+.wstep:not(:last-child).done::after { background: #ff6b35; }
+.wstep-circle { width: 28px; height: 28px; border-radius: 50%; border: 2px solid #f0ebe3; background: white; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: #ccc; z-index: 1; position: relative; }
+.wstep.done .wstep-circle { border-color: #ff6b35; background: #ff6b35; color: white; }
+.wstep.active .wstep-circle { border-color: #ff6b35; color: #ff6b35; }
+.wstep-label { font-size: 9px; font-weight: 600; color: #ccc; letter-spacing: 0.03em; }
+.wstep.done .wstep-label, .wstep.active .wstep-label { color: #ff6b35; }
+</style>
+</head>
+<body>
+
+<h1>PulseLite — Full UX Redesign</h1>
+<p class="sub">Warm Studio × Custom Glyphs × Butter-smooth interactions</p>
+
+<!-- ═══════════════════════════════════
+     1. APP SHELL + NAVIGATION
+═══════════════════════════════════ -->
+<div class="section-title">1 — App shell & navigation</div>
+<div class="app">
+  <div class="sidebar">
+    <div class="sidebar-top">
+      <div class="logo">
+        <div class="logo-mark">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M1 7 L3 7 L5 3 L7 11 L9 5 L11 7 L13 7" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        pulse
+      </div>
+      <div class="ws-switcher">
+        <div class="ws-dot">A</div>
+        <div class="ws-name">Acme Corp</div>
+        <div class="ws-chevron">⌄</div>
+      </div>
+    </div>
+
+    <div class="nav-section">
+      <!-- Overview: pulse wave -->
+      <div class="nav-item active">
+        <div class="nav-icon">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M1 8 L3.5 8 L5 4 L7 12 L9 6 L10.5 8 L15 8" stroke="#ff6b35" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        Overview
+      </div>
+
+      <!-- Chatbots: spark/diamond -->
+      <div class="nav-item">
+        <div class="nav-icon">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M8 1.5 L10 6 L14.5 8 L10 10 L8 14.5 L6 10 L1.5 8 L6 6 Z" stroke="#aaa" stroke-width="1.6" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        Chatbots
+        <span class="badge gray">3</span>
+      </div>
+
+      <!-- Conversations: speech bubble -->
+      <div class="nav-item">
+        <div class="nav-icon">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M2 4 Q2 2 4 2 L12 2 Q14 2 14 4 L14 9 Q14 11 12 11 L9 11 L6 14 L7 11 L4 11 Q2 11 2 9 Z" stroke="#aaa" stroke-width="1.6" stroke-linejoin="round"/>
+            <circle cx="5.5" cy="6.5" r="0.8" fill="#aaa"/>
+            <circle cx="8" cy="6.5" r="0.8" fill="#aaa"/>
+            <circle cx="10.5" cy="6.5" r="0.8" fill="#aaa"/>
+          </svg>
+        </div>
+        Conversations
+        <span class="badge">12</span>
+      </div>
+
+      <!-- Intelligence: lens/intersect -->
+      <div class="nav-item">
+        <div class="nav-icon">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <circle cx="6" cy="8" r="4.5" stroke="#aaa" stroke-width="1.6"/>
+            <circle cx="10.5" cy="6.5" r="3.5" stroke="#aaa" stroke-width="1.6"/>
+          </svg>
+        </div>
+        Intelligence
+      </div>
+    </div>
+
+    <div style="height:1px;background:#f5f0ea;margin:6px 14px"></div>
+
+    <div class="nav-section">
+      <div class="nav-label">Workspace</div>
+
+      <!-- Settings: quad grid -->
+      <div class="nav-item">
+        <div class="nav-icon">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <rect x="1.5" y="1.5" width="5.5" height="5.5" rx="1.5" stroke="#aaa" stroke-width="1.6"/>
+            <rect x="9" y="1.5" width="5.5" height="5.5" rx="1.5" stroke="#aaa" stroke-width="1.6"/>
+            <rect x="1.5" y="9" width="5.5" height="5.5" rx="1.5" stroke="#aaa" stroke-width="1.6"/>
+            <rect x="9" y="9" width="5.5" height="5.5" rx="1.5" stroke="#aaa" stroke-width="1.6"/>
+          </svg>
+        </div>
+        Settings
+        <div style="margin-left:auto;font-size:10px;color:#ccc">›</div>
+      </div>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="user-row">
+        <div class="user-av">Y</div>
+        <div>
+          <div class="user-name">Yvan V.</div>
+          <div class="user-email">yvan@acme.com</div>
+        </div>
+        <div class="plan-pill">Pro</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-title">Overview</div>
+      <div class="topbar-spacer"></div>
+      <div class="cmd-bar">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="5" cy="5" r="3.5" stroke="#ccc" stroke-width="1.4"/><path d="M8 8 L11 11" stroke="#ccc" stroke-width="1.4" stroke-linecap="round"/></svg>
+        Search or jump to…
+        <div class="cmd-key">⌘K</div>
+      </div>
+      <div class="topbar-btn" title="Notifications">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 2 C5 2 3.5 3.5 3.5 5.5 L3.5 8 L2 10 L12 10 L10.5 8 L10.5 5.5 C10.5 3.5 9 2 7 2 Z" stroke="#888" stroke-width="1.4" stroke-linejoin="round"/><path d="M5.5 10 C5.5 10.83 6.17 11.5 7 11.5 C7.83 11.5 8.5 10.83 8.5 10" stroke="#888" stroke-width="1.4"/></svg>
+      </div>
+      <div class="topbar-btn" title="New chatbot">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 2 L7 12 M2 7 L12 7" stroke="#888" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="greeting">Good morning, Yvan 👋</div>
+      <div class="greeting-sub">3 bots active · 47 conversations while you were away</div>
+
+      <div class="quick-actions">
+        <div class="qa-btn primary">
+          <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M5.5 1 L5.5 10 M1 5.5 L10 5.5" stroke="white" stroke-width="1.8" stroke-linecap="round"/></svg>
+          New chatbot
+        </div>
+        <div class="qa-btn">
+          <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M1 5.5 L3 5.5 L4 2.5 L6 9 L7 5 L8 5.5 L10 5.5" stroke="#888" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          View conversations
+        </div>
+        <div class="qa-btn">
+          <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M5.5 1 L6.8 4.2 L10.5 5.5 L6.8 6.8 L5.5 10 L4.2 6.8 L0.5 5.5 L4.2 4.2 Z" stroke="#888" stroke-width="1.4" stroke-linejoin="round"/></svg>
+          Add knowledge
+        </div>
+      </div>
+
+      <div class="dash-grid">
+        <div class="kpi hero">
+          <div class="kpi-num orange">94.2%</div>
+          <div class="kpi-label">Auto-resolution rate</div>
+          <div class="kpi-trend">↑ 3.1% this week</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-num">1,247</div>
+          <div class="kpi-label">Conversations</div>
+          <div class="kpi-trend">↑ 18%</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-num">73</div>
+          <div class="kpi-label">Escalated</div>
+          <div class="kpi-trend down">↑ 4</div>
+        </div>
+      </div>
+
+      <div class="dash-row">
+        <div class="chart-card">
+          <div class="chart-title">Resolution trend — 12 weeks</div>
+          <div class="mini-chart">
+            <div class="bar" style="height:55%"></div><div class="bar" style="height:62%"></div><div class="bar" style="height:48%"></div><div class="bar" style="height:70%"></div><div class="bar" style="height:65%"></div><div class="bar" style="height:72%"></div><div class="bar" style="height:80%"></div><div class="bar" style="height:75%"></div><div class="bar" style="height:85%"></div><div class="bar" style="height:78%"></div><div class="bar" style="height:90%"></div><div class="bar highlight" style="height:94%"></div>
+          </div>
+        </div>
+        <div class="activity-card">
+          <div class="chart-title">Recent activity</div>
+          <div class="activity-item"><div class="act-dot green"></div><div><div class="act-text">Support Bot answered 12 new questions</div><div class="act-time">2 min ago</div></div></div>
+          <div class="activity-item"><div class="act-dot amber"></div><div><div class="act-text">3 knowledge gaps flagged</div><div class="act-time">14 min ago</div></div></div>
+          <div class="activity-item"><div class="act-dot"></div><div><div class="act-text">Sales Bot escalated 1 conversation</div><div class="act-time">1h ago</div></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════
+     2. CONVERSATIONS — SLIDE-OVER
+═══════════════════════════════════ -->
+<div class="section-title">2 — Conversations: list + inline slide-over (no full page nav away)</div>
+<div class="conv-layout">
+  <div class="conv-list">
+    <div class="conv-list-header">
+      <span class="conv-list-title">Conversations</span>
+      <span class="filter-chip active">Open</span>
+      <span class="filter-chip">All</span>
+    </div>
+    <div style="padding:8px 10px;border-bottom:1px solid #faf8f5;display:flex;gap:5px;">
+      <span class="filter-chip active">All bots</span>
+      <span class="filter-chip">This week</span>
+    </div>
+    <div class="conv-row active">
+      <div class="conv-av" style="background:linear-gradient(135deg,#ff6b35,#f59e0b)">AK</div>
+      <div class="conv-meta">
+        <div class="conv-name">Anna K.</div>
+        <div class="conv-preview">"How do I reset my password?"</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+        <div class="conv-time">2m</div>
+        <div class="status-dot" style="background:#22c55e"></div>
+      </div>
+    </div>
+    <div class="conv-row">
+      <div class="conv-av" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)">JS</div>
+      <div class="conv-meta">
+        <div class="conv-name">James S.</div>
+        <div class="conv-preview">"Can I export my data to CSV?"</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+        <div class="conv-time">5m</div>
+        <div class="status-dot" style="background:#f59e0b"></div>
+      </div>
+    </div>
+    <div class="conv-row">
+      <div class="conv-av" style="background:linear-gradient(135deg,#10b981,#06b6d4)">ML</div>
+      <div class="conv-meta">
+        <div class="conv-name">Maria L.</div>
+        <div class="conv-preview">"What's the refund policy?"</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+        <div class="conv-time">12m</div>
+        <div class="status-dot" style="background:#22c55e"></div>
+      </div>
+    </div>
+    <div class="conv-row">
+      <div class="conv-av" style="background:linear-gradient(135deg,#ec4899,#f43f5e)">TW</div>
+      <div class="conv-meta">
+        <div class="conv-name">Tom W.</div>
+        <div class="conv-preview">"Escalated: billing issue"</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+        <div class="conv-time">1h</div>
+        <div class="status-dot" style="background:#ef4444"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="slideout">
+    <div class="slideout-header">
+      <div class="conv-av" style="width:32px;height:32px;background:linear-gradient(135deg,#ff6b35,#f59e0b);font-size:12px;font-weight:700;color:white;border-radius:50%;display:flex;align-items:center;justify-content:center">AK</div>
+      <div>
+        <div class="slideout-name">Anna K.</div>
+        <div style="font-size:10px;color:#bbb">Support Bot · acme.com · 2 min ago</div>
+      </div>
+      <select class="status-select">
+        <option>● Resolved</option>
+        <option>Escalate</option>
+        <option>Open</option>
+      </select>
+    </div>
+    <div class="msg-area">
+      <div class="msg bot">
+        <div class="msg-label">Support Bot</div>
+        <div class="msg-bubble">Hi there! How can I help you today?</div>
+      </div>
+      <div class="msg user">
+        <div class="msg-label">Anna K.</div>
+        <div class="msg-bubble">How do I reset my password?</div>
+      </div>
+      <div class="msg bot">
+        <div class="msg-label">Support Bot · 94% confidence</div>
+        <div class="msg-bubble">Go to Settings → Security → Reset password. You'll receive an email within 2 minutes.</div>
+      </div>
+    </div>
+    <div style="padding:0 16px 12px;display:flex;gap:6px">
+      <span style="font-size:9px;padding:3px 8px;background:#fff3ee;color:#ff6b35;border-radius:20px;border:1px solid #ffe4d6;font-weight:700">password reset</span>
+      <span style="font-size:9px;padding:3px 8px;background:#faf8f5;color:#aaa;border-radius:20px;border:1px solid #ede8e0">account</span>
+    </div>
+  </div>
+
+  <div class="meta-sidebar">
+    <div class="meta-section">
+      <div class="meta-label">Contact</div>
+      <div class="meta-val" style="font-weight:600">Anna K.</div>
+      <div class="meta-val" style="font-size:10px;color:#bbb">anna@company.com</div>
+    </div>
+    <div class="meta-section">
+      <div class="meta-label">Session</div>
+      <div class="meta-val">2 visits · 4m total</div>
+    </div>
+    <div class="meta-section">
+      <div class="meta-label">Confidence</div>
+      <div style="height:4px;background:#f0ebe3;border-radius:2px;margin-top:4px"><div style="height:4px;width:94%;background:#22c55e;border-radius:2px"></div></div>
+      <div style="font-size:10px;color:#22c55e;margin-top:3px;font-weight:600">94% — resolved</div>
+    </div>
+    <div class="meta-section">
+      <div class="meta-label">Tags</div>
+      <div class="meta-tag">password</div>
+      <div class="meta-tag">account</div>
+    </div>
+    <div style="margin-top:10px">
+      <div class="btn secondary sm" style="width:100%;justify-content:center">Export CSV</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════
+     3. CHATBOT TABS — REORDERED
+═══════════════════════════════════ -->
+<div class="section-title">3 — Chatbot tabs: logical flow order + custom tab icons</div>
+<div class="chatbot-shell">
+  <div class="chatbot-header">
+    <div class="chatbot-av">✦</div>
+    <div>
+      <div class="chatbot-name">Support Bot</div>
+      <div class="chatbot-url">acme.com · 847 conversations</div>
+    </div>
+    <div class="online-badge"><div class="online-dot"></div> Live</div>
+    <div style="display:flex;gap:6px;margin-left:16px">
+      <div class="btn secondary sm">Duplicate</div>
+      <div class="btn primary sm">Test bot</div>
+    </div>
+  </div>
+  <div class="tab-bar">
+    <!-- New order: Knowledge → Configure → Tune → Appearance → Test → Publish -->
+    <div class="tab active">
+      <div class="tab-icon"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 3 L10 3 M2 6 L8 6 M2 9 L6 9" stroke="#ff6b35" stroke-width="1.5" stroke-linecap="round"/></svg></div>
+      Knowledge
+    </div>
+    <div class="tab">
+      <div class="tab-icon"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1 L7.2 4.2 L10.5 5.5 L7.2 6.8 L6 10 L4.8 6.8 L1.5 5.5 L4.8 4.2 Z" stroke="#aaa" stroke-width="1.3" stroke-linejoin="round"/></svg></div>
+      Configure
+    </div>
+    <div class="tab">
+      <div class="tab-icon"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4" stroke="#aaa" stroke-width="1.4"/><path d="M6 4 L6 6 L8 6" stroke="#aaa" stroke-width="1.4" stroke-linecap="round"/></svg></div>
+      Actions
+    </div>
+    <div class="tab">
+      <div class="tab-icon"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1.5" y="1.5" width="9" height="9" rx="2" stroke="#aaa" stroke-width="1.4"/><path d="M3.5 6 Q4.5 4.5 6 5.5 Q7.5 6.5 8.5 5" stroke="#aaa" stroke-width="1.3" stroke-linecap="round"/></svg></div>
+      Appearance
+    </div>
+    <div class="tab">
+      <div class="tab-icon"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 4 Q2 2 4 2 L8 2 Q10 2 10 4 L10 7 Q10 9 8 9 L7 9 L5 11 L5.5 9 L4 9 Q2 9 2 7 Z" stroke="#aaa" stroke-width="1.4" stroke-linejoin="round"/></svg></div>
+      Test
+    </div>
+    <div class="tab">
+      <div class="tab-icon"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6 L5 9 L10 3" stroke="#aaa" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      Publish
+    </div>
+  </div>
+  <div class="tab-content">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <div style="font-size:13px;font-weight:700;flex:1">Knowledge sources</div>
+      <div class="btn primary sm">+ Add source</div>
+    </div>
+    <table class="sources-table" style="width:100%">
+      <thead><tr><th>Source</th><th>Type</th><th>Status</th><th>Chunks</th><th>Sync</th><th></th></tr></thead>
+      <tbody>
+        <tr>
+          <td><div class="src-name"><div class="src-icon"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.5" stroke="#888" stroke-width="1.3"/><path d="M3 6 Q6 2 9 6 Q6 10 3 6" stroke="#888" stroke-width="1.3"/></svg></div>acme.com/docs</div></td>
+          <td style="color:#bbb">Web crawl</td>
+          <td><span class="status-pill indexed">● Indexed</span></td>
+          <td style="color:#bbb">142</td>
+          <td><span style="font-size:10px;color:#aaa">Weekly</span></td>
+          <td><div class="row-actions"><button class="row-btn">Reindex</button><button class="row-btn danger">×</button></div></td>
+        </tr>
+        <tr>
+          <td><div class="src-name"><div class="src-icon"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 1.5 L9 1.5 Q10.5 1.5 10.5 3 L10.5 9 Q10.5 10.5 9 10.5 L3 10.5 Q1.5 10.5 1.5 9 L1.5 3 Q1.5 1.5 3 1.5" stroke="#888" stroke-width="1.3"/><path d="M3.5 5 L8.5 5 M3.5 7 L6.5 7" stroke="#888" stroke-width="1.3" stroke-linecap="round"/></svg></div>Product FAQ.pdf</div></td>
+          <td style="color:#bbb">PDF</td>
+          <td><span class="status-pill processing">◌ Processing</span></td>
+          <td style="color:#bbb">—</td>
+          <td><span style="font-size:10px;color:#aaa">Manual</span></td>
+          <td><div class="row-actions"><button class="row-btn danger">×</button></div></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════
+     4. WIDGET CUSTOMIZE
+═══════════════════════════════════ -->
+<div class="section-title">4 — Widget customization: sectioned form + sticky save</div>
+<div class="customize-layout">
+  <div class="customize-form">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid #f5f0ea">
+      <div style="font-size:13px;font-weight:700;flex:1">Appearance</div>
+      <div class="btn secondary sm">Reset defaults</div>
+      <div class="btn primary sm">Save changes</div>
+    </div>
+
+    <div class="form-section">
+      <div class="form-section-title">Identity</div>
+      <div class="form-row">
+        <div class="form-field">
+          <div class="form-label">Bot name</div>
+          <input class="form-input" value="Support Bot" readonly>
+        </div>
+        <div>
+          <div class="form-label">Brand colour</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+            <div class="color-swatch"></div>
+            <input class="form-input" value="#ff6b35" style="width:80px" readonly>
+          </div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <div class="form-label">Welcome message</div>
+          <textarea class="form-input" style="height:50px;resize:none">Hi there! How can I help you today? 👋</textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="form-section-title">Layout & position</div>
+      <div style="display:flex;gap:8px">
+        <div style="flex:1;padding:8px;background:#fff3ee;border:1.5px solid #ff6b35;border-radius:8px;text-align:center;font-size:10px;font-weight:700;color:#ff6b35;cursor:pointer">Bottom right</div>
+        <div style="flex:1;padding:8px;background:#faf8f5;border:1px solid #ede8e0;border-radius:8px;text-align:center;font-size:10px;color:#aaa;cursor:pointer">Bottom left</div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="form-section-title">Behaviour</div>
+      <div class="toggle-row">
+        <div class="toggle"><div class="toggle-knob"></div></div>
+        <div class="toggle-label">Capture lead info before chat</div>
+      </div>
+      <div class="toggle-row">
+        <div class="toggle off"><div class="toggle-knob"></div></div>
+        <div class="toggle-label">Show GDPR consent message</div>
+      </div>
+      <div class="toggle-row">
+        <div class="toggle"><div class="toggle-knob"></div></div>
+        <div class="toggle-label">Persist conversation across pages</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="customize-preview">
+    <div class="preview-label">Live preview · Desktop</div>
+    <div style="flex:1;position:relative;min-height:0">
+      <div style="position:absolute;bottom:0;right:0;width:240px">
+        <div class="widget-preview">
+          <div class="widget-header">
+            <div style="width:24px;height:24px;background:rgba(255,255,255,0.2);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:12px">✦</div>
+            <div class="widget-title">Support Bot</div>
+            <div class="widget-close">×</div>
+          </div>
+          <div class="widget-messages">
+            <div class="w-msg bot">Hi there! How can I help you today? 👋</div>
+            <div class="w-msg user">How do I reset my password?</div>
+            <div class="w-msg bot">Go to Settings → Security → Reset password. You'll get an email in 2 min.</div>
+          </div>
+          <div class="widget-input">
+            <input placeholder="Ask something…">
+            <div class="widget-send">
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1 5 L9 5 M6 2 L9 5 L6 8" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;gap:6px;margin-top:10px">
+      <div class="btn secondary sm" style="flex:1;justify-content:center">Desktop</div>
+      <div class="btn secondary sm" style="flex:1;justify-content:center;color:#bbb">Mobile</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════
+     5. EMPTY STATE (first-time user)
+═══════════════════════════════════ -->
+<div class="section-title">5 — First-time empty state: guided, not just "no data yet"</div>
+<div class="empty-state">
+  <div class="empty-illo">
+    <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+      <path d="M4 16 L8 16 L11 8 L15 26 L18 12 L21 16 L28 16" stroke="#ff6b35" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </div>
+  <div class="empty-title">Your first chatbot is one URL away</div>
+  <div class="empty-desc">Paste your website URL. We'll crawl it, auto-configure the bot, and give you a script tag — in under 2 minutes.</div>
+  <div class="empty-cta">
+    <div class="btn primary">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1.5 L6 10.5 M1.5 6 L10.5 6" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
+      Create my first chatbot
+    </div>
+    <div class="btn secondary">See a demo</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════
+     6. NEW BOT WIZARD PROGRESS
+═══════════════════════════════════ -->
+<div class="section-title">6 — Wizard progress bar: cleaner steps</div>
+<div style="background:white;border-radius:12px;border:1px solid #f0ebe3;padding:20px 28px">
+  <div class="wizard-steps">
+    <div class="wstep done">
+      <div class="wstep-circle">✓</div>
+      <div class="wstep-label">URL</div>
+    </div>
+    <div class="wstep done">
+      <div class="wstep-circle">✓</div>
+      <div class="wstep-label">Crawling</div>
+    </div>
+    <div class="wstep active">
+      <div class="wstep-circle">3</div>
+      <div class="wstep-label">Review</div>
+    </div>
+    <div class="wstep">
+      <div class="wstep-circle">4</div>
+      <div class="wstep-label">Deploy</div>
+    </div>
+  </div>
+  <div style="font-size:14px;font-weight:700;margin-bottom:6px">Looks good — make it yours</div>
+  <div style="font-size:12px;color:#999;margin-bottom:14px">We auto-configured your bot from 142 pages. Adjust anything before going live.</div>
+  <div style="display:flex;gap:10px">
+    <div style="flex:1;background:#faf8f5;border-radius:10px;padding:12px 14px;border:1px solid #f0ebe3">
+      <div style="font-size:10px;font-weight:700;color:#bbb;margin-bottom:6px">BOT NAME</div>
+      <input class="form-input" value="Support Bot — Acme" style="width:100%">
+    </div>
+    <div style="flex:1;background:#faf8f5;border-radius:10px;padding:12px 14px;border:1px solid #f0ebe3">
+      <div style="font-size:10px;font-weight:700;color:#bbb;margin-bottom:6px">WELCOME MESSAGE</div>
+      <input class="form-input" value="Hi! How can I help you today?" style="width:100%">
+    </div>
+  </div>
+  <div style="display:flex;justify-content:space-between;margin-top:14px">
+    <div class="btn secondary">← Back</div>
+    <div class="btn primary">Continue to Deploy →</div>
+  </div>
+</div>
+
+</body>
+</html>

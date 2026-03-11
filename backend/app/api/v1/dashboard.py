@@ -2,12 +2,12 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import get_current_user, get_workspace
-from app.models.conversations import Conversation
+from app.models.conversations import Conversation, MessageFeedback
 from app.models.intelligence import (
     ConversationAnalysis,
     GapCluster,
@@ -68,32 +68,42 @@ async def get_dashboard(
     )
     escalation_breakdown = {row[0]: row[1] for row in escalation_result.all()}
 
+    twelve_weeks_ago = now - timedelta(weeks=12)
+    week_trunc = func.date_trunc(text("'week'"), Conversation.created_at)
+    trend_stmt = (
+        select(
+            week_trunc.label("week"),
+            func.count(Conversation.id).label("total"),
+            func.count(Conversation.id).filter(Conversation.autonomous_resolved == True).label("resolved"),  # noqa: E712
+        )
+        .where(
+            Conversation.workspace_id == workspace_id,
+            Conversation.created_at >= twelve_weeks_ago,
+        )
+        .group_by(week_trunc)
+        .order_by(week_trunc)
+    )
+    trend_result = await db.execute(trend_stmt)
+    week_rows = {row.week.replace(tzinfo=None): row for row in trend_result.all()}
+
     trend_data = []
-    for i in range(12):
+    for i in range(11, -1, -1):
         w_end = now - timedelta(weeks=i)
         w_start = w_end - timedelta(weeks=1)
-        week_result = await db.execute(
-            select(
-                func.count().label("total"),
-                func.count().filter(Conversation.autonomous_resolved == True).label("resolved"),  # noqa: E712
-            )
-            .select_from(Conversation)
-            .where(
-                Conversation.workspace_id == workspace_id,
-                Conversation.created_at >= w_start,
-                Conversation.created_at < w_end,
-            )
-        )
-        week_row = week_result.one()
+        # Align to Monday (date_trunc("week") starts on Monday in PostgreSQL)
+        week_key = w_start.replace(tzinfo=None, hour=0, minute=0, second=0, microsecond=0)
+        week_key -= timedelta(days=week_key.weekday())
+        row = week_rows.get(week_key)
+        total = row.total if row else 0
+        resolved = row.resolved if row else 0
         trend_data.append(
             {
                 "week_start": w_start.date().isoformat(),
-                "total": week_row.total,
-                "resolved": week_row.resolved,
-                "rate": week_row.resolved / week_row.total if week_row.total > 0 else 0.0,
+                "total": total,
+                "resolved": resolved,
+                "rate": resolved / total if total > 0 else 0.0,
             }
         )
-    trend_data.reverse()
 
     articles_result = await db.execute(
         select(func.count())
@@ -109,6 +119,34 @@ async def get_dashboard(
     )
     open_gaps = open_gaps_result.scalar() or 0
 
+    thirty_days_ago = now - timedelta(days=30)
+    feedback_result = await db.execute(
+        select(MessageFeedback.rating, func.count().label("n"))
+        .where(
+            MessageFeedback.workspace_id == workspace_id,
+            MessageFeedback.created_at >= thirty_days_ago,
+        )
+        .group_by(MessageFeedback.rating)
+    )
+    feedback_counts: dict[str, int] = {row.rating: row.n for row in feedback_result.all()}
+
+    top_topics_result = await db.execute(
+        text("""
+            SELECT topic, count(*) AS n
+            FROM conversation_analysis ca
+            JOIN conversations c ON c.id = ca.conversation_id
+            CROSS JOIN LATERAL unnest(ca.topics) AS topic
+            WHERE ca.workspace_id = :ws
+              AND c.autonomous_resolved = TRUE
+              AND ca.created_at >= :cutoff
+            GROUP BY topic
+            ORDER BY n DESC
+            LIMIT 5
+        """),
+        {"ws": str(workspace_id), "cutoff": thirty_days_ago},
+    )
+    top_topics = [{"topic": row[0], "count": row[1]} for row in top_topics_result.all()]
+
     return {
         "resolution_rate": round(resolution_rate, 4),
         "resolution_rate_trend": round(rate_trend, 4),
@@ -123,6 +161,11 @@ async def get_dashboard(
         "intelligence": {
             "open_gaps": open_gaps,
         },
+        "feedback": {
+            "thumbs_up": feedback_counts.get("thumbs_up", 0),
+            "thumbs_down": feedback_counts.get("thumbs_down", 0),
+        },
+        "top_topics": top_topics,
     }
 
 

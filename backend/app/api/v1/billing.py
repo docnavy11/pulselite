@@ -27,6 +27,11 @@ DEFAULT_COST_PER_1K = 0.001
 
 router = APIRouter(tags=["billing"])
 
+
+def _validate_return_url(url: str | None) -> None:
+    if url and not url.startswith(settings.FRONTEND_URL):
+        raise HTTPException(status_code=400, detail="Invalid return URL")
+
 BILLING_PLANS = [
     {
         "id": "free",
@@ -190,6 +195,8 @@ async def create_checkout(
     db: AsyncSession = Depends(get_db),
     current_user: Agent = Depends(get_current_user),
 ):
+    _validate_return_url(body.success_url)
+    _validate_return_url(body.cancel_url)
     try:
         url = await billing_service.create_checkout_session(
             db, workspace_id, body.plan, body.success_url, body.cancel_url, body.interval
@@ -206,6 +213,7 @@ async def create_portal(
     db: AsyncSession = Depends(get_db),
     current_user: Agent = Depends(get_current_user),
 ):
+    _validate_return_url(body.return_url)
     try:
         url = await billing_service.create_portal_session(db, workspace_id, body.return_url)
         return {"url": url}

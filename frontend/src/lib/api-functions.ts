@@ -1,7 +1,14 @@
 import { api } from "./api";
+import { getTokens } from "./auth";
+
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 import {
+  Action,
+  ActionCreate,
+  ActionUpdate,
   AutoConfigResponse,
   Chatbot,
+  CrawlJobSummary,
   CrawlResponse,
   CrawlStatusResponse,
   KnowledgeBase,
@@ -29,6 +36,12 @@ import {
 // Chatbot CRUD
 export function getChatbots(workspaceId: string) {
   return api.get<Chatbot[]>(`/api/v1/workspaces/${workspaceId}/chatbots`);
+}
+
+export function getChatbotStats(workspaceId: string) {
+  return api.get<Record<string, { conversations_30d: number; resolution_rate: number; last_active: string | null }>>(
+    `/api/v1/workspaces/${workspaceId}/chatbots/stats/summary`
+  );
 }
 
 export function getChatbot(workspaceId: string, id: string) {
@@ -74,6 +87,14 @@ export function startCrawl(workspaceId: string, url: string, maxPages: number, c
 
 export function getCrawlStatus(workspaceId: string, jobId: string) {
   return api.get<CrawlStatusResponse>(`/api/v1/workspaces/${workspaceId}/crawl/${jobId}`);
+}
+
+export function getLatestCrawlForChatbot(workspaceId: string, chatbotId: string) {
+  return api.get<CrawlStatusResponse | null>(`/api/v1/workspaces/${workspaceId}/crawl?chatbot_id=${chatbotId}`);
+}
+
+export function getCrawlHistory(workspaceId: string, chatbotId: string) {
+  return api.get<CrawlJobSummary[]>(`/api/v1/workspaces/${workspaceId}/crawl/history?chatbot_id=${chatbotId}`);
 }
 
 export function runAutoconfig(workspaceId: string, chatbotId: string, knowledgeBaseId: string) {
@@ -361,11 +382,13 @@ export function getBillingPlans() {
 }
 
 export function createCheckoutSession(workspaceId: string, planId: string, interval: "monthly" | "annual" = "monthly") {
-  return api.post<{ url: string }>(`/api/v1/workspaces/${workspaceId}/billing/checkout`, { plan: planId, interval, success_url: window.location.origin + "/settings/billing", cancel_url: window.location.origin + "/settings/billing" });
+  const origin = typeof window !== "undefined" ? window.location.origin : BASE_URL;
+  return api.post<{ url: string }>(`/api/v1/workspaces/${workspaceId}/billing/checkout`, { plan: planId, interval, success_url: origin + "/settings/billing", cancel_url: origin + "/settings/billing" });
 }
 
 export function createPortalSession(workspaceId: string) {
-  return api.post<{ url: string }>(`/api/v1/workspaces/${workspaceId}/billing/portal`, { return_url: window.location.origin + "/settings/billing" });
+  const origin = typeof window !== "undefined" ? window.location.origin : BASE_URL;
+  return api.post<{ url: string }>(`/api/v1/workspaces/${workspaceId}/billing/portal`, { return_url: origin + "/settings/billing" });
 }
 
 export function getCreditsBalance(workspaceId: string) {
@@ -404,8 +427,8 @@ export function completeOnboarding(workspaceId: string) {
 
 // GDPR
 export function requestDataExport(workspaceId: string) {
-  return api.post<{ download_url: string }>(
-    `/api/v1/workspaces/${workspaceId}/gdpr/export`,
+  return api.post<{ export_id: string; status: string }>(
+    `/api/v1/workspaces/${workspaceId}/export`,
   );
 }
 
@@ -413,11 +436,20 @@ export function deleteWorkspace(workspaceId: string) {
   return api.delete<void>(`/api/v1/workspaces/${workspaceId}`);
 }
 
+export function getWorkspaces() {
+  return api.get<import("./types").Workspace[]>("/api/v1/workspaces");
+}
+
+export function createWorkspace(name: string) {
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  return api.post<import("./types").Workspace>("/api/v1/workspaces", { name, slug });
+}
+
 export async function exportConversationsCSV(workspaceId: string): Promise<void> {
-  const token = localStorage.getItem("access_token");
+  const tokens = getTokens();
   const response = await fetch(
-    `/api/v1/workspaces/${workspaceId}/conversations/export`,
-    { headers: { Authorization: `Bearer ${token}` } },
+    `${BASE_URL}/api/v1/workspaces/${workspaceId}/conversations/export`,
+    { headers: tokens ? { Authorization: `Bearer ${tokens.access_token}` } : {} },
   );
   if (!response.ok) throw new Error("Export failed");
   const blob = await response.blob();
@@ -522,4 +554,21 @@ export async function updateLLMSettings(
 export async function getOpenRouterModels(workspaceId: string): Promise<{ models: OpenRouterModel[] }> {
   const data = await api.get(`/api/v1/workspaces/${workspaceId}/llm-settings/models`);
   return data as { models: OpenRouterModel[] };
+}
+
+// Actions
+export function getActions(workspaceId: string, chatbotId: string) {
+  return api.get<Action[]>(`/api/v1/workspaces/${workspaceId}/chatbots/${chatbotId}/actions`);
+}
+
+export function createAction(workspaceId: string, chatbotId: string, data: ActionCreate) {
+  return api.post<Action>(`/api/v1/workspaces/${workspaceId}/chatbots/${chatbotId}/actions`, data);
+}
+
+export function updateAction(workspaceId: string, chatbotId: string, actionId: string, data: ActionUpdate) {
+  return api.put<Action>(`/api/v1/workspaces/${workspaceId}/chatbots/${chatbotId}/actions/${actionId}`, data);
+}
+
+export function deleteAction(workspaceId: string, chatbotId: string, actionId: string) {
+  return api.delete<void>(`/api/v1/workspaces/${workspaceId}/chatbots/${chatbotId}/actions/${actionId}`);
 }

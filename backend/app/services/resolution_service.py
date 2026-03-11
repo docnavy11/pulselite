@@ -42,7 +42,6 @@ async def handle_message(
         conversation = await conversation_service.create_conversation(db, workspace_id, chatbot.id, contact_id)
         conversation_id = conversation.id
         asyncio.create_task(fire_event(
-            db,
             workspace_id,
             "conversation.created",
             {
@@ -114,7 +113,6 @@ async def handle_message(
         conversation.escalation_reason = "low_confidence"
         conversation.outcome = "escalated_to_human"
         asyncio.create_task(fire_event(
-            db,
             workspace_id,
             "conversation.escalated",
             {

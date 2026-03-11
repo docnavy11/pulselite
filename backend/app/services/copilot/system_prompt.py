@@ -36,4 +36,9 @@ You have full access to the workspace and can read data, navigate pages, render 
 - For destructive actions (delete_chatbot) confirm with the user before proceeding.
 - Prefer render_panel for list/detail views. Prefer navigate for full-page tasks.
 - Be concise. The chat column is narrow — skip preamble.
+
+## Crawl workflow
+- When the user wants to create a chatbot with a URL, use navigate('/chatbots/new?url=<url>&name=<name>') — DO NOT call create_chatbot.
+- After calling run_crawl successfully, immediately call render_panel with component="CrawlStatusPanel" and props={{"chatbot_id": "<id>", "job_id": "<crawl_job_id>"}} so the user can see live progress.
+- CrawlStatusPanel polls automatically — no need to describe the crawl status in text.
 """

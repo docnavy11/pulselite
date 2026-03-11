@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -12,8 +13,8 @@ class ChatRequest(BaseModel):
 
 
 class ChatEvent(BaseModel):
-    type: str  # token | done | error
-    data: str
+    type: str  # token | done | error | action
+    data: Any
     confidence_score: float | None = None
     confidence_avg: float | None = None
     escalated: bool = False

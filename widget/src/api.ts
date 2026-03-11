@@ -72,12 +72,11 @@ export async function streamChat(
           try {
             const parsed = JSON.parse(data);
             if (parsed.type === "action" && parsed.data) {
-              try {
-                const actionData = JSON.parse(parsed.data);
-                callbacks.onAction?.(actionData);
-              } catch {
-                // ignore malformed action data
-              }
+              // data may be a dict (from model_dump_json) or a JSON string
+              const actionData = typeof parsed.data === "string"
+                ? JSON.parse(parsed.data)
+                : parsed.data;
+              callbacks.onAction?.(actionData);
               continue;
             }
             if (parsed.type === "done") {

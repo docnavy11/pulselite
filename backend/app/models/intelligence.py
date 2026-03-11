@@ -18,7 +18,6 @@ class RetrievalLog(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     message_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("messages.id"), nullable=True)
     query: Mapped[str] = mapped_column(Text, nullable=False)
-    query_embedding_model: Mapped[str] = mapped_column(Text, server_default=text("'text-embedding-3-small'"))
     confidence_score: Mapped[float] = mapped_column(Float, nullable=False)
     confidence_avg: Mapped[float | None] = mapped_column(Float, nullable=True)
     retrieved_chunk_ids: Mapped[list | None] = mapped_column(ARRAY(UUID(as_uuid=True)), nullable=True)
@@ -52,7 +51,6 @@ class GapCluster(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     representative_query: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(Text, server_default=text("'open'"))
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    resolution_impact: Mapped[float | None] = mapped_column(Float, nullable=True)
     clustered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("NOW()"))
 
 

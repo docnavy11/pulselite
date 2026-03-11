@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import {
   FileQuestion,
@@ -11,6 +12,7 @@ import {
   Globe,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/Card";
+import { useCopilot } from "@/components/copilot/CopilotProvider";
 
 const sections = [
   {
@@ -66,6 +68,12 @@ const sections = [
 ];
 
 export default function IntelligencePage() {
+  const { register } = useCopilot();
+
+  useEffect(() => {
+    register({ page: "intelligence", data: {} });
+  }, [register]);
+
   return (
     <div>
       <h1 className="text-2xl font-bold text-gray-900 mb-2">Intelligence</h1>

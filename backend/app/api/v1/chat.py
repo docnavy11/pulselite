@@ -3,6 +3,7 @@ import io
 import json
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
@@ -24,7 +25,7 @@ router = APIRouter(tags=["chat"])
 
 
 class MessageFeedbackBody(BaseModel):
-    rating: str  # 'thumbs_up' or 'thumbs_down'
+    rating: Literal["thumbs_up", "thumbs_down"]
     comment: str | None = None
 
 
@@ -87,12 +88,14 @@ async def export_conversations_csv(
     db: AsyncSession = Depends(get_db),
     current_user: Agent = Depends(get_current_user),
 ):
-    result = await db.execute(
-        select(Conversation).where(Conversation.workspace_id == workspace_id).order_by(Conversation.created_at.desc())
+    stream = await db.stream_scalars(
+        select(Conversation)
+        .where(Conversation.workspace_id == workspace_id)
+        .order_by(Conversation.created_at.desc())
+        .execution_options(yield_per=100)
     )
-    conversations = result.scalars().all()
 
-    def generate():
+    async def generate():
         output = io.StringIO()
         writer = csv.writer(output)
         writer.writerow(
@@ -117,7 +120,7 @@ async def export_conversations_csv(
         output.seek(0)
         output.truncate(0)
 
-        for conv in conversations:
+        async for conv in stream:
             writer.writerow(
                 [
                     str(conv.id),
@@ -216,7 +219,29 @@ async def submit_message_feedback(
     workspace_id: uuid.UUID = Depends(get_workspace),
     db: AsyncSession = Depends(get_db),
 ):
-    from app.models.conversations import MessageFeedback
+    from fastapi import HTTPException
+    from app.models.conversations import Message, MessageFeedback
+
+    # Verify the conversation belongs to the workspace
+    conv_result = await db.execute(
+        select(Conversation).where(
+            Conversation.id == conversation_id,
+            Conversation.workspace_id == workspace_id,
+        )
+    )
+    if conv_result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    # Verify the message belongs to the conversation
+    msg_result = await db.execute(
+        select(Message).where(
+            Message.id == message_id,
+            Message.conversation_id == conversation_id,
+        )
+    )
+    msg = msg_result.scalar_one_or_none()
+    if not msg:
+        raise HTTPException(status_code=404, detail="Message not found")
 
     feedback = MessageFeedback(
         message_id=message_id,

@@ -142,11 +142,12 @@ async def _update_subscription(db: AsyncSession, subscription: dict) -> None:
     status = subscription.get("status")
     if status in ("active", "trialing"):
         price_id = subscription.get("items", {}).get("data", [{}])[0].get("price", {}).get("id")
-        for plan, pid in PLAN_PRICES.items():
-            if pid == price_id:
-                workspace.plan = plan
-                workspace.plan_conversation_cap = PLAN_LIMITS.get(plan, {}).get("conversations", 100)
-                break
+        for plan_map in (PLAN_PRICES, PLAN_PRICES_ANNUAL):
+            for plan, pid in plan_map.items():
+                if pid == price_id:
+                    workspace.plan = plan
+                    workspace.plan_conversation_cap = PLAN_LIMITS.get(plan, {}).get("conversations", 100)
+                    break
 
 
 def get_plan_limits(plan: str) -> dict:

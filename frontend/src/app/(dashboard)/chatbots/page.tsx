@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Plus, Bot } from "lucide-react";
@@ -9,13 +9,17 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Spinner } from "@/components/ui/Spinner";
 import { Chatbot } from "@/lib/types";
-import { getChatbots, updateChatbot, deleteChatbot } from "@/lib/api-functions";
+import { getChatbots, getChatbotStats, updateChatbot, deleteChatbot } from "@/lib/api-functions";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { useChatbotStore } from "@/stores/chatbot-store";
+import { useCopilot } from "@/components/copilot/CopilotProvider";
 
 export default function ChatbotsPage() {
   const router = useRouter();
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);
-  const [chatbots, setChatbots] = useState<Chatbot[]>([]);
+  const { chatbots, setChatbots, patchChatbotInList, removeChatbotFromList } = useChatbotStore();
+  const { register } = useCopilot();
+  const [stats, setStats] = useState<Record<string, { conversations_30d: number; resolution_rate: number; last_active: string | null }>>({});
   const [loading, setLoading] = useState(true);
   const [actionPending, setActionPending] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -26,7 +30,7 @@ export default function ChatbotsPage() {
     setActionPending(chatbot.id);
     try {
       const updated = await updateChatbot(workspace.id, chatbot.id, { is_active: !chatbot.is_active });
-      setChatbots((prev) => prev.map((c) => (c.id === chatbot.id ? { ...c, ...updated } : c)));
+      patchChatbotInList(chatbot.id, { is_active: updated.is_active });
     } finally {
       setActionPending(null);
     }
@@ -38,7 +42,7 @@ export default function ChatbotsPage() {
     setActionPending(id);
     try {
       await deleteChatbot(workspace.id, id);
-      setChatbots((prev) => prev.filter((c) => c.id !== id));
+      removeChatbotFromList(id);
     } finally {
       setActionPending(null);
       setConfirmDelete(null);
@@ -47,8 +51,15 @@ export default function ChatbotsPage() {
 
   useEffect(() => {
     if (!workspace) return;
-    getChatbots(workspace.id)
-      .then(setChatbots)
+    Promise.all([
+      getChatbots(workspace.id),
+      getChatbotStats(workspace.id).catch(() => ({})),
+    ])
+      .then(([bots, s]) => {
+        setChatbots(bots);
+        setStats(s);
+        register({ page: "chatbots", data: { chatbot_count: bots.length } });
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [workspace]);
@@ -71,7 +82,7 @@ export default function ChatbotsPage() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-2 gap-4 min-[1200px]:grid-cols-3">
         {chatbots.map((chatbot) => (
           <div key={chatbot.id} className="group relative">
             {/* Delete confirmation overlay */}
@@ -114,10 +125,37 @@ export default function ChatbotsPage() {
                         </Badge>
                       </div>
                       <p className="mt-1 text-xs text-gray-500">
-                        {chatbot.llm_model} / {chatbot.tone}
+                        {chatbot.llm_model.split("/").pop()} / {chatbot.tone}
                       </p>
                     </div>
                   </div>
+
+                  {/* Stats row */}
+                  {(() => {
+                    const s = stats[chatbot.id];
+                    return (
+                      <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+                        <div>
+                          <div className="text-[15px] font-black text-gray-900">{s?.conversations_30d ?? 0}</div>
+                          <div className="text-[10px] text-gray-400 uppercase tracking-wide mt-0.5">Chats</div>
+                        </div>
+                        <div>
+                          <div className="text-[15px] font-black text-gray-900">
+                            {s ? `${Math.round(s.resolution_rate * 100)}%` : "—"}
+                          </div>
+                          <div className="text-[10px] text-gray-400 uppercase tracking-wide mt-0.5">Resolved</div>
+                        </div>
+                        <div>
+                          <div className="text-[13px] font-semibold text-gray-900 truncate">
+                            {s?.last_active
+                              ? new Date(s.last_active).toLocaleDateString(undefined, { month: "short", day: "numeric" })
+                              : "—"}
+                          </div>
+                          <div className="text-[10px] text-gray-400 uppercase tracking-wide mt-0.5">Last chat</div>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Hover actions */}
                   <div className="flex items-center gap-2 mt-3 pt-3 border-t border-[#faf8f5] opacity-0 group-hover:opacity-100 transition-opacity duration-150">

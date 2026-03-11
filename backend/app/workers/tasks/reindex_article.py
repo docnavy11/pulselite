@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import select
 
-from app.database import async_session_factory
+from app.database import async_session_factory, engine
 from app.models.knowledge import Article, Document
 from app.services.ingestion.chunkers.markdown_chunker import chunk_markdown
 from app.services.ingestion.embedder import embed_chunks
@@ -20,10 +20,11 @@ def reindex_article(self, article_id: str) -> dict:
     try:
         return asyncio.run(_reindex(uuid.UUID(article_id)))
     except Exception as exc:
-        self.retry(exc=exc)
+        raise self.retry(exc=exc)  # type: ignore[attr-defined]
 
 
 async def _reindex(article_id: uuid.UUID) -> dict:
+    await engine.dispose()
     async with async_session_factory() as session:
         try:
             result = await session.execute(select(Article).where(Article.id == article_id))

@@ -20,8 +20,8 @@ class ChatbotCreate(BaseModel):
     system_prompt: str | None = None
     tone: str = "professional"
     language: str = "en"
-    llm_provider: str = "openai"
-    llm_model: str = "gpt-4o-mini"
+    llm_provider: str = "openrouter"
+    llm_model: str = "openai/gpt-4o-mini"
     temperature: float = Field(default=0.3, ge=0.0, le=2.0)
     max_tokens: int = Field(default=1000, ge=1, le=32000)
     confidence_threshold: float = Field(default=0.65, ge=0.0, le=1.0)
@@ -105,3 +105,5 @@ class AutoConfigResponse(BaseModel):
     suggested_questions: list[str] | None
     fallback_message: str | None
     brand_color: str | None
+    tone: str | None
+    language: str | None

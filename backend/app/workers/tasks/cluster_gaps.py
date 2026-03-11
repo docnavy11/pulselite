@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import func, select
 
-from app.database import async_session_factory
+from app.database import async_session_factory, engine
 from app.models.intelligence import GapCluster, GapEvent
 from app.workers.celery_app import celery_app
 
@@ -18,6 +18,7 @@ def cluster_gaps() -> dict:
 
 
 async def _cluster() -> dict:
+    await engine.dispose()
     async with async_session_factory() as session:
         try:
             result = await session.execute(

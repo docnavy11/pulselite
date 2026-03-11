@@ -1,3 +1,4 @@
+import re
 from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
@@ -6,6 +7,25 @@ from pydantic import BaseModel, Field, field_validator
 def _strip_null_bytes(v: str) -> str:
     """Remove null bytes that would cause PostgreSQL errors."""
     return v.replace("\x00", "") if isinstance(v, str) else v
+
+
+DANGEROUS_CSS_PATTERNS = [
+    r'expression\s*\(',
+    r'javascript\s*:',
+    r'@import',
+    r'url\s*\(',
+    r'behavior\s*:',
+    r'-moz-binding',
+]
+
+
+def sanitize_css(css: str) -> str:
+    """Strip dangerous CSS patterns that could be used for data exfiltration or XSS."""
+    if not css:
+        return css
+    for pattern in DANGEROUS_CSS_PATTERNS:
+        css = re.sub(pattern, '', css, flags=re.IGNORECASE)
+    return css
 
 
 class WidgetConfig(BaseModel):
@@ -38,6 +58,11 @@ class WidgetConfig(BaseModel):
     @classmethod
     def strip_null_bytes(cls, v: object) -> object:
         return _strip_null_bytes(v) if isinstance(v, str) else v
+
+    @field_validator("custom_css", mode="after")
+    @classmethod
+    def sanitize_custom_css(cls, v: object) -> object:
+        return sanitize_css(v) if isinstance(v, str) else v
 
     @field_validator("quick_replies", "lead_capture_fields", "allowed_domains", mode="before")
     @classmethod
