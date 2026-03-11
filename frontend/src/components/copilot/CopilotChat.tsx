@@ -38,7 +38,7 @@ export function CopilotChat() {
     await streamCopilotChat(
       workspace.id,
       nextMessages,
-      context as Record<string, unknown>,
+      context as unknown as Record<string, unknown>,
       {
         onToken(token) {
           setMessages((prev) => {
