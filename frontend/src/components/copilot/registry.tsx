@@ -1,6 +1,7 @@
 import React from "react";
+import { LLMSettingsPanel } from "@/panels/LLMSettingsPanel";
+import { PersonaSettingsPanel } from "@/panels/PersonaSettingsPanel";
 
-// Panels are loaded lazily — they may not exist yet; stubs render a placeholder
 function stub(name: string) {
   return function PanelStub(props: Record<string, unknown>) {
     return (
@@ -12,7 +13,6 @@ function stub(name: string) {
   };
 }
 
-// Replace stubs with real imports as panels are built in later chunks
 export const ComponentRegistry: Record<string, React.ComponentType<Record<string, unknown>>> = {
   ConversationList: stub("ConversationList"),
   ConversationDetail: stub("ConversationDetail"),
@@ -21,7 +21,7 @@ export const ComponentRegistry: Record<string, React.ComponentType<Record<string
   DocumentList: stub("DocumentList"),
   ActionsList: stub("ActionsList"),
   CreditBalance: stub("CreditBalance"),
-  LLMSettingsPanel: stub("LLMSettingsPanel"),
-  PersonaSettingsPanel: stub("PersonaSettingsPanel"),
+  LLMSettingsPanel: LLMSettingsPanel as React.ComponentType<Record<string, unknown>>,
+  PersonaSettingsPanel: PersonaSettingsPanel as React.ComponentType<Record<string, unknown>>,
   WidgetSettingsPanel: stub("WidgetSettingsPanel"),
 };
