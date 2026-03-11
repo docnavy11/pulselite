@@ -1,7 +1,5 @@
-"use client";
-
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card, CardContent } from "@/components/ui/Card";
@@ -10,7 +8,7 @@ import { requestDataExport, deleteWorkspace } from "@/lib/api-functions";
 import { useCopilot } from "@/components/copilot/CopilotProvider";
 
 export default function SettingsPage() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);
   const { register } = useCopilot();
 
@@ -32,7 +30,7 @@ export default function SettingsPage() {
     setExporting(true);
     try {
       const result = await requestDataExport(workspace.id);
-      const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
       setExportUrl(`${BASE_URL}/api/v1/workspaces/${workspace.id}/export/${result.export_id}/download`);
     } catch {
       // handle error
@@ -45,7 +43,7 @@ export default function SettingsPage() {
     if (!workspace || deleteConfirmText !== workspace.name) return;
     try {
       await deleteWorkspace(workspace.id);
-      router.push("/workspaces");
+      navigate("/workspaces");
     } catch {
       // handle error
     }
