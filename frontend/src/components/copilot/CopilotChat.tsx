@@ -6,6 +6,15 @@ import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useCopilot } from "./CopilotProvider";
 import { streamCopilotChat, CopilotMessage } from "./api";
 
+const MIN_WIDTH = 220;
+const MAX_WIDTH = 520;
+const STORAGE_KEY = "copilot_width";
+
+function getStoredWidth(): number {
+  if (typeof window === "undefined") return 280;
+  return parseInt(localStorage.getItem(STORAGE_KEY) ?? "280", 10) || 280;
+}
+
 export function CopilotChat() {
   const { context, close, setActivePanel } = useCopilot();
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);
@@ -15,6 +24,35 @@ export function CopilotChat() {
   const [streaming, setStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState<number>(getStoredWidth);
+  const dragStartX = useRef<number | null>(null);
+  const dragStartWidth = useRef<number>(width);
+
+  function onDragStart(e: React.MouseEvent) {
+    e.preventDefault();
+    dragStartX.current = e.clientX;
+    dragStartWidth.current = width;
+
+    function onMove(ev: MouseEvent) {
+      if (dragStartX.current === null) return;
+      const delta = dragStartX.current - ev.clientX;
+      const next = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, dragStartWidth.current + delta));
+      setWidth(next);
+    }
+
+    function onUp() {
+      setWidth((w) => {
+        localStorage.setItem(STORAGE_KEY, String(w));
+        return w;
+      });
+      dragStartX.current = null;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    }
+
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
 
   useEffect(() => {
     return () => {
@@ -102,7 +140,13 @@ export function CopilotChat() {
   }
 
   return (
-    <div className="flex w-[280px] flex-shrink-0 flex-col border-l border-[#e8e2d9] bg-white">
+    <div className="flex flex-shrink-0 flex-col border-l border-[#e8e2d9] bg-white relative" style={{ width }}>
+      {/* Drag handle */}
+      <div
+        onMouseDown={onDragStart}
+        className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary-200 transition-colors z-10"
+        title="Drag to resize"
+      />
       {/* Header */}
       <div className="flex items-center justify-between border-b border-[#f0ebe3] px-3 py-2.5">
         <span className="text-[13px] font-bold text-primary-500">✦ Copilot</span>
