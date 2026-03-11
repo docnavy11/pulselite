@@ -1,5 +1,7 @@
 import { useAuthStore } from "@/stores/auth-store";
 
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
 export type CopilotEvent =
   | { type: "token"; data: string }
   | { type: "action"; tool: string; args: Record<string, unknown> }
@@ -27,7 +29,7 @@ export async function streamCopilotChat(
 ): Promise<void> {
   const tokens = useAuthStore.getState().tokens;
   const res = await fetch(
-    `/api/v1/workspaces/${workspaceId}/copilot/chat`,
+    `${BASE_URL}/api/v1/workspaces/${workspaceId}/copilot/chat`,
     {
       method: "POST",
       headers: {
