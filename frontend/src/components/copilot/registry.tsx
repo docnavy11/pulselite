@@ -1,6 +1,11 @@
 import React from "react";
 import { LLMSettingsPanel } from "@/panels/LLMSettingsPanel";
 import { PersonaSettingsPanel } from "@/panels/PersonaSettingsPanel";
+import { ConversationListPanel } from "@/panels/ConversationListPanel";
+import { MetricsDashboardPanel } from "@/panels/MetricsDashboardPanel";
+import { ChatbotListPanel } from "@/panels/ChatbotListPanel";
+import { DocumentListPanel } from "@/panels/DocumentListPanel";
+import { CreditBalancePanel } from "@/panels/CreditBalancePanel";
 
 function stub(name: string) {
   return function PanelStub(props: Record<string, unknown>) {
@@ -14,13 +19,13 @@ function stub(name: string) {
 }
 
 export const ComponentRegistry: Record<string, React.ComponentType<Record<string, unknown>>> = {
-  ConversationList: stub("ConversationList"),
+  ConversationList: ConversationListPanel as unknown as React.ComponentType<Record<string, unknown>>,
   ConversationDetail: stub("ConversationDetail"),
-  MetricsDashboard: stub("MetricsDashboard"),
-  ChatbotList: stub("ChatbotList"),
-  DocumentList: stub("DocumentList"),
+  MetricsDashboard: MetricsDashboardPanel as unknown as React.ComponentType<Record<string, unknown>>,
+  ChatbotList: ChatbotListPanel,
+  DocumentList: DocumentListPanel as unknown as React.ComponentType<Record<string, unknown>>,
   ActionsList: stub("ActionsList"),
-  CreditBalance: stub("CreditBalance"),
+  CreditBalance: CreditBalancePanel,
   LLMSettingsPanel: LLMSettingsPanel as unknown as React.ComponentType<Record<string, unknown>>,
   PersonaSettingsPanel: PersonaSettingsPanel as unknown as React.ComponentType<Record<string, unknown>>,
   WidgetSettingsPanel: stub("WidgetSettingsPanel"),
