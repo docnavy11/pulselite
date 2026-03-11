@@ -1,13 +1,11 @@
-"use client";
-
 import { useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
 import { AuthResponse } from "@/lib/types";
 
 export function useAuth() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const { user, tokens, isLoading, initialize, login: storeLogin, logout: storeLogout } = useAuthStore();
 
   const login = useCallback(
@@ -17,9 +15,9 @@ export function useAuth() {
         password,
       });
       storeLogin(data.user, data.tokens);
-      router.push("/");
+      navigate("/");
     },
-    [storeLogin, router],
+    [storeLogin, navigate],
   );
 
   const register = useCallback(
@@ -31,15 +29,15 @@ export function useAuth() {
         workspace_name: workspaceName || `${name}'s Workspace`,
       });
       storeLogin(data.user, data.tokens);
-      router.push("/");
+      navigate("/");
     },
-    [storeLogin, router],
+    [storeLogin, navigate],
   );
 
   const logout = useCallback(() => {
     storeLogout();
-    router.push("/login");
-  }, [storeLogout, router]);
+    navigate("/login");
+  }, [storeLogout, navigate]);
 
   return {
     user,

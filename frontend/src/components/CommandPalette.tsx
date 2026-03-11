@@ -1,8 +1,6 @@
-"use client";
-
 import { useEffect, useState, useCallback } from "react";
 import { Command } from "cmdk";
-import { useRouter } from "next/navigation";
+import { useNavigate } from "react-router-dom";
 import { IconSearch } from "@/components/icons/NavIcons";
 
 const COMMANDS = [
@@ -18,7 +16,7 @@ const COMMANDS = [
 
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
-  const router = useRouter();
+  const navigate = useNavigate();
 
   const openPalette = useCallback(() => setOpen(true), []);
 
@@ -41,7 +39,7 @@ export function CommandPalette() {
 
   const handleSelect = (href: string) => {
     setOpen(false);
-    router.push(href);
+    navigate(href);
   };
 
   if (!open) return null;

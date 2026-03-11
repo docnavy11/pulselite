@@ -1,7 +1,4 @@
-"use client";
-
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { Link, useLocation } from "react-router-dom";
 import { clsx } from "clsx";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -37,7 +34,7 @@ const PLAN_LABELS: Record<string, string> = {
 };
 
 export function Sidebar() {
-  const pathname = usePathname();
+  const { pathname } = useLocation();
   const user = useAuthStore((s) => s.user);
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);
   const workspaces = useWorkspaceStore((s) => s.workspaces);
@@ -193,7 +190,7 @@ export function Sidebar() {
 
               {/* Settings link */}
               <Link
-                href="/settings"
+                to="/settings"
                 onClick={() => setWsSwitcherOpen(false)}
                 className="flex items-center gap-2 w-full px-3 py-2 text-[11px] text-gray-400 hover:text-gray-600 hover:bg-[#faf8f5] transition-colors border-t border-[#f0ebe3]"
               >
@@ -215,7 +212,7 @@ export function Sidebar() {
           return (
             <Link
               key={href}
-              href={href}
+              to={href}
               className={clsx(
                 "flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-[12px] font-medium transition-all",
                 active
@@ -265,7 +262,7 @@ export function Sidebar() {
               return (
                 <Link
                   key={href}
-                  href={href}
+                  to={href}
                   className={clsx(
                     "block px-2.5 py-[5px] rounded-md text-[11px] transition-colors",
                     active

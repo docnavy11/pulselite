@@ -1,6 +1,4 @@
-"use client";
-
-import { usePathname, useRouter } from "next/navigation";
+import { useLocation, useNavigate } from "react-router-dom";
 import { IconBell, IconPlus, IconSearch } from "@/components/icons/NavIcons";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 
@@ -11,8 +9,8 @@ const NEW_BUTTON_ACTIONS: Record<string, { label: string; href: string }> = {
 };
 
 export function TopBar() {
-  const pathname = usePathname();
-  const router = useRouter();
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
 
   const action = NEW_BUTTON_ACTIONS[pathname] ?? { label: "New chatbot", href: "/chatbots/new" };
 
@@ -44,7 +42,7 @@ export function TopBar() {
 
       {/* + New */}
       <button
-        onClick={() => router.push(action.href)}
+        onClick={() => navigate(action.href)}
         className="flex items-center gap-1.5 px-3 py-1.5 bg-primary-500 hover:bg-primary-600 text-white rounded-lg text-[11px] font-semibold transition-colors"
       >
         <IconPlus size={11} className="stroke-white" />

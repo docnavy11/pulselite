@@ -1,7 +1,5 @@
-"use client";
-
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useNavigate } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -35,7 +33,7 @@ function getStoredWidth(): number {
 export function CopilotChat() {
   const { context, close, setActivePanel } = useCopilot();
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);
-  const router = useRouter();
+  const navigate = useNavigate();
   const [messages, setMessages] = useState<CopilotMessage[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
@@ -129,7 +127,7 @@ export function CopilotChat() {
             } else if (tool === "navigate") {
               const route = args.route as string;
               if (route.startsWith("/") && !route.startsWith("//")) {
-                router.push(route);
+                navigate(route);
               }
             } else if (tool === "patch_store") {
               // patch_store is a no-op for now — optimistic UI updates are deferred

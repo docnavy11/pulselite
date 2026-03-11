@@ -1,8 +1,8 @@
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useNavigate } from "react-router-dom";
 
 export function useKeyboardShortcuts() {
-  const router = useRouter();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -13,10 +13,10 @@ export function useKeyboardShortcuts() {
 
       switch (e.key) {
         case "n":
-          router.push("/chatbots/new");
+          navigate("/chatbots/new");
           break;
         case "c":
-          router.push("/conversations");
+          navigate("/conversations");
           break;
         case "/":
           e.preventDefault();
@@ -30,5 +30,5 @@ export function useKeyboardShortcuts() {
 
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [router]);
+  }, [navigate]);
 }

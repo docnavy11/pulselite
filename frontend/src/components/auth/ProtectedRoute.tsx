@@ -1,7 +1,5 @@
-"use client";
-
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { api } from "@/lib/api";
@@ -9,7 +7,7 @@ import { Workspace } from "@/lib/types";
 import { Spinner } from "@/components/ui/Spinner";
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
+  const navigate = useNavigate();
   const { tokens, isLoading, initialize } = useAuthStore();
   const { currentWorkspace, setCurrentWorkspace, setWorkspaces } =
     useWorkspaceStore();
@@ -20,9 +18,9 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!isLoading && !tokens) {
-      router.push("/login");
+      navigate("/login");
     }
-  }, [isLoading, tokens, router]);
+  }, [isLoading, tokens, navigate]);
 
   useEffect(() => {
     if (!tokens || currentWorkspace) return;

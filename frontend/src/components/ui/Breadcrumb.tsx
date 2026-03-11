@@ -1,7 +1,4 @@
-"use client";
-
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { Link, useLocation } from "react-router-dom";
 
 const SEGMENT_LABELS: Record<string, string> = {
   dashboard: "Overview",
@@ -29,7 +26,7 @@ function segmentLabel(seg: string): string {
 }
 
 export function Breadcrumb() {
-  const pathname = usePathname();
+  const { pathname } = useLocation();
   // Split path into segments, filter empty
   const rawSegments = pathname.split("/").filter(Boolean);
 
@@ -59,7 +56,7 @@ export function Breadcrumb() {
             {isLast ? (
               <span className="font-semibold text-gray-800">{crumb.label}</span>
             ) : (
-              <Link href={crumb.href} className="text-gray-400 hover:text-gray-600 transition-colors">
+              <Link to={crumb.href} className="text-gray-400 hover:text-gray-600 transition-colors">
                 {crumb.label}
               </Link>
             )}

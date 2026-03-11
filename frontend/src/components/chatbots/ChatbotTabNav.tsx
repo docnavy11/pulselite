@@ -1,6 +1,4 @@
-"use client";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { Link, useLocation } from "react-router-dom";
 
 interface Props {
   chatbotId: string;
@@ -16,7 +14,7 @@ const TABS = [
 ];
 
 export function ChatbotTabNav({ chatbotId }: Props) {
-  const pathname = usePathname();
+  const { pathname } = useLocation();
 
   function isActive(label: string, href: string): boolean {
     if (label === "Sources" || label === "Settings") {
@@ -29,7 +27,7 @@ export function ChatbotTabNav({ chatbotId }: Props) {
     <div className="border-b border-gray-200 mb-6">
       <nav className="-mb-px flex gap-6 items-center">
         <Link
-          href={`/chatbots/${chatbotId}`}
+          to={`/chatbots/${chatbotId}`}
           className="text-sm text-gray-500 hover:text-gray-700 pb-3 block mr-4"
         >
           ← Back to Chatbots
@@ -40,7 +38,7 @@ export function ChatbotTabNav({ chatbotId }: Props) {
           return (
             <Link
               key={tab.label}
-              href={href}
+              to={href}
               className={`pb-3 text-sm font-medium border-b-2 ${
                 active
                   ? "border-blue-600 text-blue-600"
