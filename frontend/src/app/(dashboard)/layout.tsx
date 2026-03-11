@@ -6,6 +6,8 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { CommandPalette } from "@/components/CommandPalette";
 import { ToastProvider } from "@/components/ui/Toast";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
+import { CopilotProvider } from "@/components/copilot/CopilotProvider";
+import { CopilotPanel } from "@/components/copilot/CopilotPanel";
 
 function DashboardShell({ children }: { children: React.ReactNode }) {
   useKeyboardShortcuts();
@@ -15,9 +17,12 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
         <Sidebar />
         <div className="flex flex-1 flex-col overflow-hidden">
           <TopBar />
-          <main className="flex-1 overflow-auto bg-gray-50 p-6">
-            {children}
-          </main>
+          <div className="flex flex-1 overflow-hidden">
+            <main className="flex-1 overflow-auto bg-[#faf8f5] p-6">
+              {children}
+            </main>
+            <CopilotPanel />
+          </div>
         </div>
       </div>
       <CommandPalette />
@@ -31,5 +36,9 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <DashboardShell>{children}</DashboardShell>;
+  return (
+    <CopilotProvider>
+      <DashboardShell>{children}</DashboardShell>
+    </CopilotProvider>
+  );
 }
