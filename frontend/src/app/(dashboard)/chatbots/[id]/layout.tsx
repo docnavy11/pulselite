@@ -4,12 +4,14 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { clsx } from "clsx";
-import { Copy } from "lucide-react";
+import { Copy, Pencil, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { Chatbot } from "@/lib/types";
-import { getChatbot, duplicateChatbot } from "@/lib/api-functions";
+import { getChatbot, duplicateChatbot, updateChatbot } from "@/lib/api-functions";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { useChatbotStore } from "@/stores/chatbot-store";
+import { useCopilot } from "@/components/copilot/CopilotProvider";
 import {
   IconKnowledge,
   IconConfigure,
@@ -34,17 +36,57 @@ export default function ChatbotLayout({ children }: { children: React.ReactNode 
   const pathname = usePathname();
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);
   const chatbotId = params.id as string;
-  const [chatbot, setChatbot] = useState<Chatbot | null>(null);
+  const { currentChatbot: chatbot, setChatbot, patchChatbot, clearChatbot } = useChatbotStore();
+  const { register } = useCopilot();
   const [loading, setLoading] = useState(true);
   const [duplicating, setDuplicating] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameValue, setNameValue] = useState("");
+  const [savingName, setSavingName] = useState(false);
 
   useEffect(() => {
     if (!workspace) return;
     getChatbot(workspace.id, chatbotId)
-      .then(setChatbot)
+      .then((bot) => {
+        setChatbot(bot);
+        register({
+          page: "chatbot-settings",
+          chatbot_id: bot.id,
+          data: {
+            chatbot: {
+              name: bot.name,
+              display_name: bot.display_name,
+              llm_model: bot.llm_model,
+              confidence_threshold: bot.confidence_threshold,
+              is_active: bot.is_active,
+              tone: bot.tone,
+            },
+          },
+        });
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [workspace, chatbotId]);
+    return () => clearChatbot();
+  }, [workspace, chatbotId, register]);
+
+  function startEditName() {
+    setNameValue(chatbot?.display_name || chatbot?.name || "");
+    setEditingName(true);
+  }
+
+  async function saveName() {
+    if (!workspace || !chatbot || !nameValue.trim()) return;
+    setSavingName(true);
+    try {
+      const updated = await updateChatbot(workspace.id, chatbot.id, { display_name: nameValue.trim() });
+      patchChatbot({ display_name: updated.display_name });
+      setEditingName(false);
+    } catch {
+      // handle error
+    } finally {
+      setSavingName(false);
+    }
+  }
 
   async function handleDuplicate() {
     if (!workspace || !chatbot) return;
@@ -89,11 +131,40 @@ export default function ChatbotLayout({ children }: { children: React.ReactNode 
 
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            {chatbot?.display_name || chatbot?.name}
-          </h1>
+          {editingName ? (
+            <div className="flex items-center gap-2">
+              <input
+                autoFocus
+                value={nameValue}
+                onChange={(e) => setNameValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") saveName();
+                  if (e.key === "Escape") setEditingName(false);
+                }}
+                className="text-2xl font-bold text-gray-900 border-b-2 border-primary-500 bg-transparent focus:outline-none w-64"
+              />
+              <button onClick={saveName} disabled={savingName} className="text-green-600 hover:text-green-700 disabled:opacity-50">
+                <Check className="h-5 w-5" />
+              </button>
+              <button onClick={() => setEditingName(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 group">
+              <h1 className="text-2xl font-bold text-gray-900">
+                {chatbot?.display_name || chatbot?.name}
+              </h1>
+              <button
+                onClick={startEditName}
+                className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-gray-600"
+              >
+                <Pencil className="h-4 w-4" />
+              </button>
+            </div>
+          )}
           <p className="text-sm text-gray-500 mt-1">
-            {chatbot?.llm_provider} / {chatbot?.llm_model}
+            {chatbot?.llm_model?.split("/").pop()} / {chatbot?.tone}
           </p>
         </div>
         <Button

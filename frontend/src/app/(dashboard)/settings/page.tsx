@@ -1,39 +1,31 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { clsx } from "clsx";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card, CardContent } from "@/components/ui/Card";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { requestDataExport, deleteWorkspace } from "@/lib/api-functions";
-
-const tabs = ["General", "Team", "Integrations", "Billing"] as const;
-type Tab = (typeof tabs)[number];
-
+import { useCopilot } from "@/components/copilot/CopilotProvider";
 
 export default function SettingsPage() {
   const router = useRouter();
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);
-  const [activeTab, setActiveTab] = useState<Tab>("General");
+  const { register } = useCopilot();
+
+  useEffect(() => {
+    register({ page: "settings", data: {} });
+  }, [register]);
   const [exporting, setExporting] = useState(false);
   const [exportUrl, setExportUrl] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [workspaceName, setWorkspaceName] = useState(workspace?.name || "");
 
-  function handleTabClick(tab: Tab) {
-    if (tab === "Integrations") {
-      router.push("/settings/integrations");
-      return;
-    }
-    if (tab === "Billing") {
-      router.push("/settings/billing");
-      return;
-    }
-    setActiveTab(tab);
-  }
+  useEffect(() => {
+    if (workspace?.name) setWorkspaceName(workspace.name);
+  }, [workspace?.name]);
 
   async function handleExport() {
     if (!workspace) return;
@@ -60,28 +52,8 @@ export default function SettingsPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Settings</h1>
+      <h1 className="text-2xl font-bold text-gray-900 mb-6">General</h1>
 
-      <div className="border-b border-gray-200 mb-6">
-        <nav className="flex gap-6">
-          {tabs.map((tab) => (
-            <button
-              key={tab}
-              onClick={() => handleTabClick(tab)}
-              className={clsx(
-                "pb-3 text-sm font-medium border-b-2 transition-all duration-200",
-                activeTab === tab
-                  ? "border-primary-500 text-primary-500"
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300",
-              )}
-            >
-              {tab}
-            </button>
-          ))}
-        </nav>
-      </div>
-
-      {activeTab === "General" && (
         <div className="space-y-6 max-w-lg">
           <Card>
             <CardContent className="pt-6 pb-6 space-y-4">
@@ -93,7 +65,24 @@ export default function SettingsPage() {
                 value={workspaceName}
                 onChange={(e) => setWorkspaceName(e.target.value)}
               />
-              <Input label="Timezone" defaultValue="UTC" />
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Timezone</label>
+                <select
+                  defaultValue={Intl.DateTimeFormat().resolvedOptions().timeZone}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  {Intl.supportedValuesOf("timeZone").map((tz) => {
+                    const offset = new Intl.DateTimeFormat("en", { timeZone: tz, timeZoneName: "shortOffset" })
+                      .formatToParts(new Date())
+                      .find((p) => p.type === "timeZoneName")?.value ?? "";
+                    return (
+                      <option key={tz} value={tz}>
+                        {tz.replace(/_/g, " ")} ({offset})
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
               <Button size="sm" onClick={() => {}}>Save</Button>
             </CardContent>
           </Card>
@@ -182,16 +171,6 @@ export default function SettingsPage() {
             </div>
           )}
         </div>
-      )}
-
-      {activeTab === "Team" && (
-        <div className="py-4">
-          <p className="text-sm text-gray-600">
-            Manage team members and invitations on the{" "}
-            <a href="/settings/team" className="text-blue-600 underline">Team page</a>.
-          </p>
-        </div>
-      )}
     </div>
   );
 }
