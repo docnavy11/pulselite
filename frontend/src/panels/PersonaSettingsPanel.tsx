@@ -35,6 +35,7 @@ export function PersonaSettingsPanel({ chatbot, onUpdate }: PersonaSettingsPanel
   const [tone, setTone] = useState(chatbot.tone);
   const [selectedPreset, setSelectedPreset] = useState("");
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const [welcomeMessage, setWelcomeMessage] = useState(chatbot.welcome_message || "");
   const [fallbackMessage, setFallbackMessage] = useState(chatbot.fallback_message || "");
@@ -46,9 +47,12 @@ export function PersonaSettingsPanel({ chatbot, onUpdate }: PersonaSettingsPanel
     e.preventDefault();
     if (!workspace) return;
     setSaving(true);
+    setSaveError(null);
     try {
       const updated = await updateChatbot(workspace.id, chatbot.id, { display_name: displayName, system_prompt: systemPrompt, tone });
       onUpdate(updated);
+    } catch {
+      setSaveError("Failed to save. Please try again.");
     } finally { setSaving(false); }
   }
 
@@ -56,9 +60,12 @@ export function PersonaSettingsPanel({ chatbot, onUpdate }: PersonaSettingsPanel
     e.preventDefault();
     if (!workspace) return;
     setSavingPrompts(true);
+    setSaveError(null);
     try {
       const updated = await updateChatbot(workspace.id, chatbot.id, { welcome_message: welcomeMessage, fallback_message: fallbackMessage, suggested_questions: suggestedQuestions });
       onUpdate(updated);
+    } catch {
+      setSaveError("Failed to save. Please try again.");
     } finally { setSavingPrompts(false); }
   }
 
@@ -105,6 +112,7 @@ export function PersonaSettingsPanel({ chatbot, onUpdate }: PersonaSettingsPanel
                 placeholder="You are a helpful support assistant…" />
             </div>
             <div className="pt-2"><Button type="submit" loading={saving}>Save Settings</Button></div>
+            {saveError && <p className="text-xs text-red-500">{saveError}</p>}
           </form>
         </CardContent>
       </Card>
@@ -146,6 +154,7 @@ export function PersonaSettingsPanel({ chatbot, onUpdate }: PersonaSettingsPanel
               )}
             </div>
             <div className="pt-2"><Button type="submit" loading={savingPrompts}>Save Prompts</Button></div>
+            {saveError && <p className="text-xs text-red-500">{saveError}</p>}
           </form>
         </CardContent>
       </Card>

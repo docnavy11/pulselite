@@ -24,6 +24,7 @@ export function LLMSettingsPanel({ chatbot, onUpdate }: LLMSettingsPanelProps) {
   const [useReranking, setUseReranking] = useState(chatbot.use_reranking ?? true);
   const [useHybrid, setUseHybrid] = useState(chatbot.use_hybrid_retrieval ?? true);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!workspace) return;
@@ -42,10 +43,13 @@ export function LLMSettingsPanel({ chatbot, onUpdate }: LLMSettingsPanelProps) {
     e.preventDefault();
     if (!workspace) return;
     setSaving(true);
+    setSaveError(null);
     try {
       const provider = llmModel.startsWith("anthropic/") ? "anthropic" : llmModel.startsWith("google/") ? "google" : "openrouter";
       const updated = await updateLLMConfig(workspace.id, chatbot.id, { llm_provider: provider, llm_model: llmModel, temperature, confidence_threshold: confidenceThreshold, retrieval_top_k: retrievalTopK, use_reranking: useReranking, use_hybrid_retrieval: useHybrid });
       onUpdate(updated);
+    } catch {
+      setSaveError("Failed to save. Please try again.");
     } finally { setSaving(false); }
   }
 
@@ -93,6 +97,7 @@ export function LLMSettingsPanel({ chatbot, onUpdate }: LLMSettingsPanelProps) {
             </label>
           </div>
           <div className="pt-2"><Button type="submit" loading={saving}>Save AI Config</Button></div>
+          {saveError && <p className="text-xs text-red-500 mt-1">{saveError}</p>}
         </form>
       </CardContent>
     </Card>

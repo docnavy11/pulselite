@@ -12,8 +12,8 @@ interface SettingsTabProps {
 export function SettingsTab({ chatbot, onUpdate }: SettingsTabProps) {
   return (
     <div className="space-y-6">
-      <PersonaSettingsPanel chatbot={chatbot} onUpdate={onUpdate} />
-      <LLMSettingsPanel chatbot={chatbot} onUpdate={onUpdate} />
+      <PersonaSettingsPanel key={`persona-${chatbot.id}`} chatbot={chatbot} onUpdate={onUpdate} />
+      <LLMSettingsPanel key={`llm-${chatbot.id}`} chatbot={chatbot} onUpdate={onUpdate} />
     </div>
   );
 }
