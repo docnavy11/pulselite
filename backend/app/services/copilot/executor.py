@@ -297,6 +297,7 @@ async def _create_chatbot(
 ) -> dict:
     from app.services.chatbot_service import create_chatbot as svc_create
     bot = await svc_create(db, workspace_id, name=name)
+    await db.commit()
     result: dict = {"ok": True, "chatbot_id": str(bot.id), "name": bot.name}
     if url:
         from app.services.crawl_service import prepare_crawl
@@ -331,6 +332,18 @@ async def _run_crawl(
 ) -> dict:
     from app.services.crawl_service import prepare_crawl
     from app.workers.tasks.crawl_website import crawl_website
+
+    # Verify chatbot belongs to this workspace
+    result = await db.execute(
+        select(Chatbot).where(
+            Chatbot.id == uuid.UUID(chatbot_id),
+            Chatbot.workspace_id == workspace_id,
+        )
+    )
+    bot = result.scalar_one_or_none()
+    if not bot:
+        return {"error": "Chatbot not found"}
+
     # prepare_crawl signature: (db, workspace_id, url, max_pages, kb_id=None, chatbot_id=None)
     job_id, _kb_id = await prepare_crawl(
         db, workspace_id, url, max_pages=50, chatbot_id=uuid.UUID(chatbot_id)

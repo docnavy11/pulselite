@@ -111,7 +111,7 @@ async def copilot_chat(
                     messages.append({
                         "role": "tool",
                         "tool_call_id": tool_call_id,
-                        "content": json.dumps(tool_result),
+                        "content": json.dumps(tool_result, default=str),
                     })
                 # Loop: LLM continues with tool result in context
 
