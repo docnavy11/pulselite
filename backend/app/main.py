@@ -4,11 +4,13 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from app.api.v1 import (
+    actions,
     articles,
     auth,
     billing,
     chat,
     chatbots,
+    copilot,
     crawl,
     dashboard,
     documents,
@@ -51,6 +53,7 @@ def create_app() -> FastAPI:
     application.include_router(workspaces.router, prefix="/api/v1")
     application.include_router(health.router, prefix="/api/v1")
     application.include_router(chatbots.router, prefix="/api/v1")
+    application.include_router(actions.router, prefix="/api/v1")
     application.include_router(knowledge_bases.router, prefix="/api/v1")
     application.include_router(documents.router, prefix="/api/v1")
     application.include_router(articles.router, prefix="/api/v1")
@@ -65,6 +68,7 @@ def create_app() -> FastAPI:
     application.include_router(gdpr.router, prefix="/api/v1")
     application.include_router(invites.router, prefix="/api/v1")
     application.include_router(webhooks.router, prefix="/api/v1")
+    application.include_router(copilot.router, prefix="/api/v1")
 
     # Public routes (no auth required)
     application.include_router(widget_config.router, prefix="/api/v1")
