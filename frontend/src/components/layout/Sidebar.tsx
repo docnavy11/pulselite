@@ -3,13 +3,15 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { clsx } from "clsx";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   IconOverview, IconChatbots, IconConversations,
   IconIntelligence, IconSettings, IconChevronDown,
 } from "@/components/icons/NavIcons";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { useCopilot } from "@/components/copilot/CopilotProvider";
+import { createWorkspace } from "@/lib/api-functions";
 import type { Workspace } from "@/lib/types";
 
 const SETTINGS_CHILDREN = [
@@ -44,7 +46,47 @@ export function Sidebar() {
   const isSettingsActive = pathname.startsWith("/settings");
   const [settingsOpen, setSettingsOpen] = useState(isSettingsActive);
   const [wsSwitcherOpen, setWsSwitcherOpen] = useState(false);
+  const [creatingWs, setCreatingWs] = useState(false);
+  const [newWsName, setNewWsName] = useState("");
+  const [savingWs, setSavingWs] = useState(false);
+  const newWsInputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    if (creatingWs) setTimeout(() => newWsInputRef.current?.focus(), 50);
+  }, [creatingWs]);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setWsSwitcherOpen(false);
+        setCreatingWs(false);
+        setNewWsName("");
+      }
+    }
+    if (wsSwitcherOpen) document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [wsSwitcherOpen]);
+
+  async function handleCreateWorkspace() {
+    const name = newWsName.trim();
+    if (!name) return;
+    setSavingWs(true);
+    try {
+      const ws = await createWorkspace(name);
+      useWorkspaceStore.getState().setWorkspaces([...workspaces, ws]);
+      useWorkspaceStore.getState().setCurrentWorkspace(ws);
+      setWsSwitcherOpen(false);
+      setCreatingWs(false);
+      setNewWsName("");
+    } catch {
+      // handle error
+    } finally {
+      setSavingWs(false);
+    }
+  }
+
+  const { isOpen: copilotOpen, toggle: toggleCopilot } = useCopilot();
   const wsInitial = workspace?.name?.[0]?.toUpperCase() ?? "W";
   const userName = user?.name ?? user?.email ?? "";
   const userInitial = userName[0]?.toUpperCase() ?? "?";
@@ -64,9 +106,9 @@ export function Sidebar() {
         </div>
 
         {/* Workspace switcher */}
-        <div className="relative">
+        <div className="relative" ref={dropdownRef}>
           <button
-            onClick={() => setWsSwitcherOpen((o) => !o)}
+            onClick={() => { setWsSwitcherOpen((o) => !o); setCreatingWs(false); setNewWsName(""); }}
             className="flex items-center gap-2 w-full px-2 py-1.5 bg-[#faf8f5] rounded-lg hover:bg-[#f5f0ea] transition-colors"
           >
             <div className="w-5 h-5 rounded-[5px] bg-gradient-to-br from-primary-500 to-amber-400 flex items-center justify-center text-white text-[9px] font-bold flex-shrink-0">
@@ -78,8 +120,9 @@ export function Sidebar() {
             <IconChevronDown className={clsx("transition-transform", wsSwitcherOpen ? "rotate-180" : "", "stroke-gray-300")} />
           </button>
 
-          {wsSwitcherOpen && workspaces.length > 1 && (
-            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#f0ebe3] rounded-lg shadow-lg z-50 overflow-hidden">
+          {wsSwitcherOpen && (
+            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#f0ebe3] rounded-xl shadow-lg z-50 overflow-hidden">
+              {/* Workspace list */}
               {workspaces.map((ws: Workspace) => (
                 <button
                   key={ws.id}
@@ -87,16 +130,79 @@ export function Sidebar() {
                   className={clsx(
                     "flex items-center gap-2 w-full px-3 py-2 text-left text-[11px] transition-colors",
                     ws.id === workspace?.id
-                      ? "bg-primary-50 text-primary-500 font-semibold"
+                      ? "bg-primary-50 text-primary-600 font-semibold"
                       : "text-gray-600 hover:bg-[#faf8f5]"
                   )}
                 >
                   <div className="w-4 h-4 rounded-[4px] bg-gradient-to-br from-primary-500 to-amber-400 flex items-center justify-center text-white text-[8px] font-bold flex-shrink-0">
                     {ws.name[0]?.toUpperCase()}
                   </div>
-                  {ws.name}
+                  <span className="flex-1 truncate">{ws.name}</span>
+                  {ws.id === workspace?.id && (
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                      <path d="M2 5l2 2 4-4" stroke="#ff6b35" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  )}
                 </button>
               ))}
+
+              {/* Divider */}
+              <div className="h-px bg-[#f0ebe3] mx-2" />
+
+              {/* New workspace */}
+              {creatingWs ? (
+                <div className="px-3 py-2 space-y-1.5">
+                  <input
+                    ref={newWsInputRef}
+                    value={newWsName}
+                    onChange={(e) => setNewWsName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleCreateWorkspace();
+                      if (e.key === "Escape") { setCreatingWs(false); setNewWsName(""); }
+                    }}
+                    placeholder="Workspace name"
+                    className="w-full rounded-md border border-gray-300 px-2 py-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  />
+                  <div className="flex gap-1.5">
+                    <button
+                      onClick={handleCreateWorkspace}
+                      disabled={savingWs || !newWsName.trim()}
+                      className="flex-1 py-1 text-[10px] font-semibold bg-primary-500 hover:bg-primary-600 text-white rounded-md disabled:opacity-50 transition-colors"
+                    >
+                      {savingWs ? "Creating…" : "Create"}
+                    </button>
+                    <button
+                      onClick={() => { setCreatingWs(false); setNewWsName(""); }}
+                      className="flex-1 py-1 text-[10px] font-medium text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setCreatingWs(true)}
+                  className="flex items-center gap-2 w-full px-3 py-2 text-[11px] text-gray-400 hover:text-gray-600 hover:bg-[#faf8f5] transition-colors"
+                >
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                    <path d="M6 2v8M2 6h8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                  </svg>
+                  New workspace
+                </button>
+              )}
+
+              {/* Settings link */}
+              <Link
+                href="/settings"
+                onClick={() => setWsSwitcherOpen(false)}
+                className="flex items-center gap-2 w-full px-3 py-2 text-[11px] text-gray-400 hover:text-gray-600 hover:bg-[#faf8f5] transition-colors border-t border-[#f0ebe3]"
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <circle cx="6" cy="6" r="1.5" stroke="currentColor" strokeWidth="1.2"/>
+                  <path d="M6 1v1.5M6 9.5V11M1 6h1.5M9.5 6H11M2.4 2.4l1.1 1.1M8.5 8.5l1.1 1.1M9.6 2.4L8.5 3.5M3.5 8.5L2.4 9.6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+                </svg>
+                Workspace settings
+              </Link>
             </div>
           )}
         </div>
@@ -174,6 +280,23 @@ export function Sidebar() {
           </div>
         )}
       </nav>
+
+      {/* Copilot toggle */}
+      <div className="px-3 pb-2">
+        <button
+          onClick={toggleCopilot}
+          className={clsx(
+            "flex items-center gap-2.5 w-full px-2.5 py-[7px] rounded-lg text-[12px] font-medium transition-all",
+            copilotOpen
+              ? "bg-primary-50 text-primary-500 font-semibold"
+              : "text-gray-500 hover:bg-[#faf8f5] hover:text-gray-700"
+          )}
+        >
+          <span className={clsx("text-[14px] leading-none", copilotOpen ? "text-primary-500" : "text-gray-400")}>✦</span>
+          <span className="flex-1 text-left">Copilot</span>
+          <span className="text-[10px] text-gray-300">⌘J</span>
+        </button>
+      </div>
 
       {/* User footer */}
       <div className="px-3 py-3 border-t border-[#f0ebe3]">
