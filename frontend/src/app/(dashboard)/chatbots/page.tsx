@@ -1,8 +1,5 @@
-"use client";
-
 import { useEffect, useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { Link, useNavigate } from "react-router-dom";
 import { Plus, Bot } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -15,7 +12,7 @@ import { useChatbotStore } from "@/stores/chatbot-store";
 import { useCopilot } from "@/components/copilot/CopilotProvider";
 
 export default function ChatbotsPage() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);
   const { chatbots, setChatbots, patchChatbotInList, removeChatbotFromList } = useChatbotStore();
   const { register } = useCopilot();
@@ -76,7 +73,7 @@ export default function ChatbotsPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Chatbots</h1>
-        <Button onClick={() => router.push("/chatbots/new")}>
+        <Button onClick={() => navigate("/chatbots/new")}>
           <Plus className="h-4 w-4 mr-2" />
           Create Chatbot
         </Button>
@@ -108,7 +105,7 @@ export default function ChatbotsPage() {
               </div>
             )}
 
-            <Link href={`/chatbots/${chatbot.id}`}>
+            <Link to={`/chatbots/${chatbot.id}`}>
               <Card className="cursor-pointer hover:shadow-md transition-all duration-200">
                 <CardContent className="py-5">
                   <div className="flex items-start gap-3">
@@ -195,7 +192,7 @@ export default function ChatbotsPage() {
               Paste a URL, we crawl it and auto-configure a chatbot in minutes.
             </p>
             <button
-              onClick={() => router.push("/chatbots/new")}
+              onClick={() => navigate("/chatbots/new")}
               className="px-5 py-2.5 bg-primary-500 hover:bg-primary-600 text-white rounded-xl text-[13px] font-semibold transition-colors"
             >
               Create my first chatbot

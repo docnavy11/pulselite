@@ -1,7 +1,5 @@
-"use client";
-
 import { useState, useEffect, useRef } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Globe, CheckCircle, ChevronRight, Copy, Check, Sparkles, AlertTriangle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -108,8 +106,8 @@ const PLATFORM_GUIDES: { id: string; name: string; logo: string; steps: string[]
 ];
 
 export default function NewBotWizardPage() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);
 
   const [step, setStep] = useState<Step>("url");
@@ -618,7 +616,7 @@ export default function NewBotWizardPage() {
             {error && <p className="text-sm text-red-600 mt-4">{error}</p>}
 
             <div className="flex justify-end gap-3 pt-6">
-              <Button variant="secondary" onClick={() => router.push("/chatbots")}>
+              <Button variant="secondary" onClick={() => navigate("/chatbots")}>
                 Skip
               </Button>
               <Button onClick={handleSave} loading={saving}>
@@ -653,10 +651,10 @@ export default function NewBotWizardPage() {
               </div>
 
               <div className="flex justify-end gap-3 pt-6">
-                <Button variant="secondary" onClick={() => router.push("/chatbots")}>
+                <Button variant="secondary" onClick={() => navigate("/chatbots")}>
                   Back to bots
                 </Button>
-                <Button onClick={() => router.push(`/chatbots/${chatbotId}`)}>
+                <Button onClick={() => navigate(`/chatbots/${chatbotId}`)}>
                   Open bot settings
                 </Button>
               </div>

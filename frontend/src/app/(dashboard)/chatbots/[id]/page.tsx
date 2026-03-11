@@ -1,7 +1,5 @@
-"use client";
-
 import { useState, useEffect } from "react";
-import { useParams } from "next/navigation";
+import { useParams } from "react-router-dom";
 import { Spinner } from "@/components/ui/Spinner";
 import { KnowledgeBase } from "@/lib/types";
 import { getKnowledgeBases } from "@/lib/api-functions";
@@ -9,9 +7,8 @@ import { useWorkspaceStore } from "@/stores/workspace-store";
 import { SourcesTab } from "./sources/SourcesTab";
 
 export default function ChatbotSourcesPage() {
-  const params = useParams();
+  const { id: chatbotId } = useParams<{ id: string }>();
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);
-  const chatbotId = params.id as string;
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBase[]>([]);
   const [loading, setLoading] = useState(true);
 

@@ -1,15 +1,13 @@
-"use client";
-
 import { useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useNavigate } from "react-router-dom";
 
 export default function SourcesPage() {
-  const params = useParams();
-  const router = useRouter();
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
 
   useEffect(() => {
-    router.replace(`/chatbots/${String(params.id)}`);
-  }, [params.id, router]);
+    navigate(`/chatbots/${id}`, { replace: true });
+  }, [id, navigate]);
 
   return null;
 }

@@ -1,7 +1,5 @@
-"use client";
-
 import { useState, useEffect, useRef } from "react";
-import { useParams } from "next/navigation";
+import { useParams } from "react-router-dom";
 import { MessageCircle } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { Spinner } from "@/components/ui/Spinner";
@@ -30,9 +28,8 @@ const DEFAULT_CONFIG: WidgetConfig = {
 };
 
 export default function CustomizePage() {
-  const params = useParams();
+  const { id: chatbotId } = useParams<{ id: string }>();
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);
-  const chatbotId = params.id as string;
 
   const [config, setConfig] = useState<WidgetConfig>(DEFAULT_CONFIG);
   const [loading, setLoading] = useState(true);

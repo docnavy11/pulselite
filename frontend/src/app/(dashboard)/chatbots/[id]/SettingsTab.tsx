@@ -1,5 +1,3 @@
-"use client";
-
 import { Chatbot } from "@/lib/types";
 import { PersonaSettingsPanel } from "@/panels/PersonaSettingsPanel";
 import { LLMSettingsPanel } from "@/panels/LLMSettingsPanel";

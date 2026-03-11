@@ -1,7 +1,5 @@
-"use client";
-
 import { useState, useRef, useEffect } from "react";
-import { useParams } from "next/navigation";
+import { useParams } from "react-router-dom";
 import { Send, Plus, MessageCircle, X, Monitor, Layers } from "lucide-react";
 import { clsx } from "clsx";
 import { Badge } from "@/components/ui/Badge";
@@ -22,8 +20,7 @@ function ConfidenceBadge({ confidence }: { confidence?: number }) {
 }
 
 export default function TestChatPage() {
-  const params = useParams();
-  const chatbotId = params.id as string;
+  const { id: chatbotId } = useParams<{ id: string }>();
   const [mode, setMode] = useState<"inline" | "bubble">("inline");
   const [bubbleOpen, setBubbleOpen] = useState(false);
   const [primaryColor, setPrimaryColor] = useState("#4f46e5");

@@ -1,7 +1,5 @@
-"use client";
-
 import { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useNavigate } from "react-router-dom";
 import { Plus, FileText } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
@@ -22,10 +20,9 @@ const stateVariant: Record<string, "default" | "success" | "warning"> = {
 };
 
 export default function ArticlesPage() {
-  const params = useParams();
-  const router = useRouter();
+  const { id: chatbotId } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);
-  const chatbotId = params.id as string;
   const [articles, setArticles] = useState<Article[]>([]);
   const [knowledgeBase, setKnowledgeBase] = useState<KnowledgeBase | null>(
     null,
@@ -59,7 +56,7 @@ export default function ArticlesPage() {
       const article = await createArticle(workspace.id, {
         title: "Untitled Article",
       });
-      router.push(`/articles/${article.id}`);
+      navigate(`/articles/${article.id}`);
     } catch {
       // handle error
     } finally {
@@ -115,7 +112,7 @@ export default function ArticlesPage() {
               {articles.map((article) => (
                 <tr
                   key={article.id}
-                  onClick={() => router.push(`/articles/${article.id}`)}
+                  onClick={() => navigate(`/articles/${article.id}`)}
                   className="border-b border-gray-100 last:border-0 cursor-pointer hover:bg-gray-50 transition-all duration-200"
                 >
                   <td className="px-4 py-3 font-medium text-gray-900">

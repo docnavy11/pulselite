@@ -1,7 +1,5 @@
-"use client";
-
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams } from "react-router-dom";
 import { Plus, Trash2, Zap } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
@@ -279,8 +277,7 @@ function ActionTypeBadge({ type }: { type: string }) {
 }
 
 export default function ActionsPage() {
-  const params = useParams();
-  const chatbotId = params.id as string;
+  const { id: chatbotId } = useParams<{ id: string }>();
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);
 
   const [actions, setActions] = useState<Action[]>([]);

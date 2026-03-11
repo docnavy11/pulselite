@@ -1,7 +1,5 @@
-"use client";
-
 import { useState, useRef } from "react";
-import { useParams } from "next/navigation";
+import { useParams } from "react-router-dom";
 import { clsx } from "clsx";
 import { Copy, Check } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
@@ -9,8 +7,8 @@ import { Highlight, themes } from "prism-react-renderer";
 import { Card, CardContent } from "@/components/ui/Card";
 
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const APP_URL = import.meta.env.VITE_APP_URL || "http://localhost:3000";
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 const deployTabs = ["Script Tag", "Shareable Link", "REST API"] as const;
 type DeployTab = (typeof deployTabs)[number];
@@ -98,8 +96,7 @@ const platformGuides: { name: string; steps: string[] }[] = [
 ];
 
 export default function DeployPage() {
-  const params = useParams();
-  const chatbotId = params.id as string;
+  const { id: chatbotId } = useParams<{ id: string }>();
   const [activeTab, setActiveTab] = useState<DeployTab>("Script Tag");
   const [expandedGuide, setExpandedGuide] = useState<string | null>(null);
   const qrRef = useRef<HTMLDivElement>(null);

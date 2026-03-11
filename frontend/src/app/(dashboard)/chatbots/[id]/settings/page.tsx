@@ -1,5 +1,3 @@
-"use client";
-
 import { Spinner } from "@/components/ui/Spinner";
 import { useChatbotStore } from "@/stores/chatbot-store";
 import { SettingsTab } from "../SettingsTab";
