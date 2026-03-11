@@ -25,7 +25,7 @@ export function ConversationListPanel({ filters, chatbot_id }: Props) {
       .then(setConversations)
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [workspace?.id]);
+  }, [workspace?.id, filters?.status, filters?.chatbot_id, chatbot_id]);
 
   if (loading)
     return (
