@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useCopilot } from "./CopilotProvider";
 import { streamCopilotChat, CopilotMessage } from "./api";
@@ -178,7 +180,29 @@ export function CopilotChat() {
                 : "bg-[#faf8f5] text-gray-700"
             }`}
           >
-            {msg.content || (streaming && i === messages.length - 1 ? "▍" : "")}
+            {msg.role === "user" ? (
+              msg.content
+            ) : msg.content ? (
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  p: ({ children }) => <p className="mb-1 last:mb-0">{children}</p>,
+                  ul: ({ children }) => <ul className="list-disc pl-4 mb-1 space-y-0.5">{children}</ul>,
+                  ol: ({ children }) => <ol className="list-decimal pl-4 mb-1 space-y-0.5">{children}</ol>,
+                  li: ({ children }) => <li>{children}</li>,
+                  code: ({ children, className }) =>
+                    className ? (
+                      <pre className="bg-gray-100 rounded p-2 text-[10px] overflow-auto my-1"><code>{children}</code></pre>
+                    ) : (
+                      <code className="bg-gray-100 rounded px-1 text-[10px]">{children}</code>
+                    ),
+                  a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="underline text-primary-500">{children}</a>,
+                  strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                }}
+              >
+                {msg.content}
+              </ReactMarkdown>
+            ) : streaming && i === messages.length - 1 ? "▍" : ""}
           </div>
         ))}
         <div ref={bottomRef} />
