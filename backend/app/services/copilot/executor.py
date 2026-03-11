@@ -285,7 +285,7 @@ async def _update_chatbot(
             setattr(bot, key, value)
 
     await db.commit()
-    return {"ok": True, "chatbot_id": chatbot_id, "updated": list(fields.keys())}
+    return {"ok": True, "chatbot_id": chatbot_id, "updated": [k for k in fields.keys() if k in allowed]}
 
 
 async def _create_chatbot(
