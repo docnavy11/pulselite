@@ -56,3 +56,4 @@ logs/
 k6-results/
 celerybeat-schedule
 .hypothesis/
+.worktrees/
