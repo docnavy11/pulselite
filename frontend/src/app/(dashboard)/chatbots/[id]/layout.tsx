@@ -1,13 +1,9 @@
-"use client";
-
 import { useState, useEffect } from "react";
-import { useParams, useRouter, usePathname } from "next/navigation";
-import Link from "next/link";
+import { useParams, useNavigate, useLocation, Link, Outlet } from "react-router-dom";
 import { clsx } from "clsx";
 import { Copy, Pencil, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
-import { Chatbot } from "@/lib/types";
 import { getChatbot, duplicateChatbot, updateChatbot } from "@/lib/api-functions";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useChatbotStore } from "@/stores/chatbot-store";
@@ -22,20 +18,19 @@ import {
 } from "@/components/icons/NavIcons";
 
 const TABS = [
-  { label: "Knowledge",   segment: null,       Icon: IconKnowledge },
-  { label: "Configure",   segment: "settings", Icon: IconConfigure },
-  { label: "Actions",     segment: "actions",  Icon: IconActions },
-  { label: "Appearance",  segment: "customize", Icon: IconAppearance },
-  { label: "Test",        segment: "chat",     Icon: IconTest },
-  { label: "Publish",     segment: "deploy",   Icon: IconPublish },
+  { label: "Knowledge",  segment: null,        Icon: IconKnowledge },
+  { label: "Configure",  segment: "settings",  Icon: IconConfigure },
+  { label: "Actions",    segment: "actions",   Icon: IconActions },
+  { label: "Appearance", segment: "customize", Icon: IconAppearance },
+  { label: "Test",       segment: "chat",      Icon: IconTest },
+  { label: "Publish",    segment: "deploy",    Icon: IconPublish },
 ] as const;
 
-export default function ChatbotLayout({ children }: { children: React.ReactNode }) {
-  const params = useParams();
-  const router = useRouter();
-  const pathname = usePathname();
+export default function ChatbotLayout() {
+  const { id: chatbotId } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);
-  const chatbotId = params.id as string;
   const { currentChatbot: chatbot, setChatbot, patchChatbot, clearChatbot } = useChatbotStore();
   const { register } = useCopilot();
   const [loading, setLoading] = useState(true);
@@ -45,7 +40,7 @@ export default function ChatbotLayout({ children }: { children: React.ReactNode 
   const [savingName, setSavingName] = useState(false);
 
   useEffect(() => {
-    if (!workspace) return;
+    if (!workspace || !chatbotId) return;
     getChatbot(workspace.id, chatbotId)
       .then((bot) => {
         setChatbot(bot);
@@ -82,7 +77,6 @@ export default function ChatbotLayout({ children }: { children: React.ReactNode 
       patchChatbot({ display_name: updated.display_name });
       setEditingName(false);
     } catch {
-      // handle error
     } finally {
       setSavingName(false);
     }
@@ -93,9 +87,8 @@ export default function ChatbotLayout({ children }: { children: React.ReactNode 
     setDuplicating(true);
     try {
       const copy = await duplicateChatbot(workspace.id, chatbot.id);
-      router.push(`/chatbots/${copy.id}`);
+      navigate(`/chatbots/${copy.id}`);
     } catch {
-      // handle error
     } finally {
       setDuplicating(false);
     }
@@ -123,7 +116,7 @@ export default function ChatbotLayout({ children }: { children: React.ReactNode 
   return (
     <div>
       <Link
-        href="/chatbots"
+        to="/chatbots"
         className="inline-flex items-center gap-1 mb-3 text-sm text-gray-500 hover:text-gray-700 transition-colors"
       >
         ← Chatbots
@@ -185,7 +178,7 @@ export default function ChatbotLayout({ children }: { children: React.ReactNode 
             return (
               <Link
                 key={tab.label}
-                href={tabHref(tab.segment)}
+                to={tabHref(tab.segment)}
                 className={clsx(
                   "pb-3 text-sm font-medium border-b-2 transition-all duration-200 flex items-center gap-1.5",
                   isActive(tab.segment)
@@ -201,7 +194,7 @@ export default function ChatbotLayout({ children }: { children: React.ReactNode 
         </nav>
       </div>
 
-      {children}
+      <Outlet />
     </div>
   );
 }

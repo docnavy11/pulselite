@@ -1,5 +1,4 @@
-"use client";
-
+import { Outlet } from 'react-router-dom'
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
@@ -9,7 +8,7 @@ import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { CopilotProvider } from "@/components/copilot/CopilotProvider";
 import { CopilotPanel } from "@/components/copilot/CopilotPanel";
 
-function DashboardShell({ children }: { children: React.ReactNode }) {
+function DashboardShell() {
   useKeyboardShortcuts();
   return (
     <ProtectedRoute>
@@ -19,7 +18,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           <TopBar />
           <div className="flex flex-1 overflow-hidden">
             <main className="flex-1 overflow-auto bg-[#faf8f5] p-6">
-              {children}
+              <Outlet />
             </main>
             <CopilotPanel />
           </div>
@@ -31,14 +30,10 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function DashboardLayout() {
   return (
     <CopilotProvider>
-      <DashboardShell>{children}</DashboardShell>
+      <DashboardShell />
     </CopilotProvider>
   );
 }
