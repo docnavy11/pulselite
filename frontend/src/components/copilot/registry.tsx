@@ -21,7 +21,7 @@ export const ComponentRegistry: Record<string, React.ComponentType<Record<string
   DocumentList: stub("DocumentList"),
   ActionsList: stub("ActionsList"),
   CreditBalance: stub("CreditBalance"),
-  LLMSettingsPanel: LLMSettingsPanel as React.ComponentType<Record<string, unknown>>,
-  PersonaSettingsPanel: PersonaSettingsPanel as React.ComponentType<Record<string, unknown>>,
+  LLMSettingsPanel: LLMSettingsPanel as unknown as React.ComponentType<Record<string, unknown>>,
+  PersonaSettingsPanel: PersonaSettingsPanel as unknown as React.ComponentType<Record<string, unknown>>,
   WidgetSettingsPanel: stub("WidgetSettingsPanel"),
 };
