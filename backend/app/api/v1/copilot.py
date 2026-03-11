@@ -1,4 +1,5 @@
 import json
+import logging
 import uuid
 
 from fastapi import APIRouter, Depends
@@ -17,6 +18,8 @@ from app.services.copilot.tools import (
     get_tool_definitions,
 )
 from app.services.llm import get_llm_client
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/workspaces/{workspace_id}", tags=["copilot"])
 
@@ -55,9 +58,10 @@ async def copilot_chat(
                     max_tokens=2000,
                 )
             except Exception as exc:
+                logger.exception("LLM call failed in copilot stream")
                 yield {
                     "event": "error",
-                    "data": json.dumps({"type": "error", "data": str(exc)}),
+                    "data": json.dumps({"type": "error", "data": "LLM call failed. Please try again."}),
                 }
                 return
 

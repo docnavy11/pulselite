@@ -45,6 +45,10 @@ async def execute_tool(
         else:
             return {"error": f"Unknown tool: {tool_name}"}
     except Exception as exc:
+        try:
+            await db.rollback()
+        except Exception:
+            pass
         return {"error": str(exc)}
 
 
@@ -293,7 +297,6 @@ async def _create_chatbot(
 ) -> dict:
     from app.services.chatbot_service import create_chatbot as svc_create
     bot = await svc_create(db, workspace_id, name=name)
-    await db.commit()
     result: dict = {"ok": True, "chatbot_id": str(bot.id), "name": bot.name}
     if url:
         from app.services.crawl_service import prepare_crawl
