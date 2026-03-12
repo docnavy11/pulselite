@@ -30,6 +30,14 @@ async def _run(document_id: uuid.UUID) -> dict:
     # the old (now closed) loop and will raise "Future attached to a different loop".
     await engine.dispose()
     async with async_session_factory() as session:
+        # Idempotency guard: if already processed, skip re-ingestion
+        from app.models.knowledge import Document
+        from sqlalchemy import select as sa_select
+        doc_check = await session.execute(sa_select(Document).where(Document.id == document_id))
+        doc = doc_check.scalar_one_or_none()
+        if doc is not None and doc.status in ("indexed", "skipped"):
+            return {"status": "already_processed", "document_id": str(document_id)}
+
         try:
             await run_ingestion(session, document_id)
             await session.commit()
@@ -50,7 +58,7 @@ async def _mark_document_failed(document_id: uuid.UUID, reason: str) -> None:
         try:
             result = await session.execute(select(Document).where(Document.id == document_id))
             doc = result.scalar_one_or_none()
-            if doc and doc.status != "indexed":
+            if doc and doc.status not in ("indexed", "skipped", "failed"):
                 doc.status = "failed"
                 await session.commit()
         except Exception as e:

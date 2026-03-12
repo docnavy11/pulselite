@@ -2,7 +2,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import select, text as sa_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -286,6 +286,50 @@ async def run_ingestion(db: AsyncSession, document_id: uuid.UUID) -> None:
             return
 
         content = _extract(document)
+
+        # Character budget enforcement
+        n = len(content)
+        if n > 0:
+            from app.config import PLAN_CHAR_LIMITS
+            from app.models.organizational import Workspace
+
+            ws_result = await db.execute(
+                select(Workspace).where(Workspace.id == document.workspace_id)
+            )
+            workspace = ws_result.scalar_one()
+            limit = PLAN_CHAR_LIMITS.get(workspace.plan)
+
+            if limit is None:
+                # No limit for this plan — unconditional update
+                budget_rows = await db.execute(
+                    sa_text("""
+                        UPDATE workspaces
+                        SET    chars_indexed = chars_indexed + :n
+                        WHERE  id = :workspace_id
+                        RETURNING chars_indexed
+                    """),
+                    {"n": n, "workspace_id": document.workspace_id},
+                )
+            else:
+                budget_rows = await db.execute(
+                    sa_text("""
+                        UPDATE workspaces
+                        SET    chars_indexed = chars_indexed + :n
+                        WHERE  id = :workspace_id
+                          AND  chars_indexed + :n <= :limit
+                        RETURNING chars_indexed
+                    """),
+                    {"n": n, "workspace_id": document.workspace_id, "limit": limit},
+                )
+            accepted = budget_rows.fetchone() is not None
+
+            if not accepted:
+                document.status = "skipped"
+                document.char_count = 0
+                return
+
+            document.char_count = n
+
         chunks = _chunk(document, content)
 
         if not chunks:
