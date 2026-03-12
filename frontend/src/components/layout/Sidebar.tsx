@@ -76,7 +76,7 @@ export function Sidebar({ isOpen, onClose, pinned, onPinToggle }: SidebarProps) 
   // Collapse settings sub-nav when switching to rail mode
   useEffect(() => {
     if (!pinned) setSettingsOpen(false);
-  }, [pinned]);
+  }, [pinned, setSettingsOpen]);
 
   // Close drawer on route change only when not pinned (mobile behaviour)
   useEffect(() => {

@@ -12,14 +12,13 @@ import { CopilotPanel } from "@/components/copilot/CopilotPanel";
 function DashboardShell() {
   useKeyboardShortcuts();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  // Stable reference so Sidebar's useEffect dep array doesn't re-fire on every render
-  const closeSidebar = useCallback(() => setSidebarOpen(false), []);
-  const toggleSidebarPin = useCallback(() => setSidebarPinned((p) => !p), []);
-
   const [sidebarPinned, setSidebarPinned] = useState<boolean>(() => {
     const stored = localStorage.getItem("sidebar-pinned");
     return stored === null ? true : stored === "true";
   });
+  // Stable references so Sidebar's useEffect dep arrays don't re-fire on every render
+  const closeSidebar = useCallback(() => setSidebarOpen(false), []);
+  const toggleSidebarPin = useCallback(() => setSidebarPinned((p) => !p), []);
 
   // Persist pin preference on every change
   useEffect(() => {
