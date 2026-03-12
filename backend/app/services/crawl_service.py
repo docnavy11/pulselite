@@ -9,7 +9,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.knowledge import CrawlJob, Document, KnowledgeBase
-from app.services.crawler import discover_urls
+from app.services.crawler import DiscoveredUrl, discover_urls
 from app.services.fetcher import fetch
 
 logger = logging.getLogger(__name__)
@@ -116,7 +116,17 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
         failed: bool
         error: str = ""
 
-    async def _fetch(page_url: str) -> _FetchResult:
+    async def _fetch(discovered: DiscoveredUrl) -> _FetchResult:
+        # Reuse content already fetched during BFS discovery (avoids double Playwright launch)
+        if discovered.prefetched_text is not None:
+            return _FetchResult(
+                url=discovered.url,
+                text=discovered.prefetched_text,
+                title=discovered.prefetched_title or "",
+                failed=False,
+            )
+
+        page_url = discovered.url
         for attempt in range(_MAX_RETRIES + 1):
             async with semaphore:
                 try:
@@ -150,7 +160,7 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
 
     # Write to DB as each fetch completes — gives live pages_queued progress
     doc_ids: list[str] = []
-    fetch_tasks = [asyncio.create_task(_fetch(u)) for u in urls]
+    fetch_tasks = [asyncio.create_task(_fetch(d)) for d in urls]
 
     try:
         for coro in asyncio.as_completed(fetch_tasks):

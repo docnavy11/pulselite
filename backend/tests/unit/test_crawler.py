@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import patch
 
-from app.services.crawler import _matches_paths, _normalize, _same_domain, discover_urls
+from app.services.crawler import DiscoveredUrl, _matches_paths, _normalize, _same_domain, discover_urls
 from app.services.fetcher import FetchResult
 
 
@@ -82,7 +82,7 @@ async def test_discover_uses_sitemap_when_available():
         urls = await discover_urls("https://a.com")
 
     assert len(urls) == 4
-    assert all("a.com" in u for u in urls)
+    assert all("a.com" in d.url for d in urls)
 
 
 @pytest.mark.asyncio
@@ -102,7 +102,7 @@ async def test_sitemap_not_found_falls_back_to_bfs():
     with patch("app.services.crawler.fetch", side_effect=mock_fetch):
         urls = await discover_urls("https://a.com")
 
-    assert any("a.com" in u for u in urls)
+    assert any("a.com" in d.url for d in urls)
 
 
 @pytest.mark.asyncio
@@ -122,7 +122,7 @@ async def test_bfs_drops_off_domain_links():
     with patch("app.services.crawler.fetch", side_effect=mock_fetch):
         urls = await discover_urls("https://a.com")
 
-    assert all("other.com" not in u for u in urls)
+    assert all("other.com" not in d.url for d in urls)
 
 
 @pytest.mark.asyncio
@@ -142,8 +142,8 @@ async def test_bfs_drops_urls_with_query_strings():
     with patch("app.services.crawler.fetch", side_effect=mock_fetch):
         urls = await discover_urls("https://a.com")
 
-    assert not any("foo=bar" in u for u in urls)
-    assert any("clean" in u for u in urls)
+    assert not any("foo=bar" in d.url for d in urls)
+    assert any("clean" in d.url for d in urls)
 
 
 @pytest.mark.asyncio
@@ -217,8 +217,50 @@ async def test_include_paths_filters_sitemap_urls():
     with patch("app.services.crawler.fetch", side_effect=mock_fetch):
         urls = await discover_urls("https://a.com", include_paths=["/blog"])
 
-    assert all("/blog" in u for u in urls)
-    assert not any("/about" in u for u in urls)
+    assert all("/blog" in d.url for d in urls)
+    assert not any("/about" in d.url for d in urls)
+
+
+@pytest.mark.asyncio
+async def test_bfs_results_include_prefetched_content():
+    """BFS-discovered pages should carry pre-fetched text so Phase 2 can skip re-fetching."""
+    page_html = "<html><body>Hello world content here</body></html>"
+
+    async def mock_fetch(url: str) -> FetchResult:
+        if "sitemap" in url:
+            return FetchResult(url=url, html="", text="", title=None,
+                               theme_color=None, status_code=404, used_playwright=False)
+        return FetchResult(url=url, html=page_html, text="Hello world content here", title="Home",
+                           theme_color=None, status_code=200, used_playwright=False)
+
+    with patch("app.services.crawler.fetch", side_effect=mock_fetch):
+        urls = await discover_urls("https://a.com")
+
+    root = next(d for d in urls if d.url == "https://a.com/")
+    assert root.prefetched_text == "Hello world content here"
+    assert root.prefetched_title == "Home"
+
+
+@pytest.mark.asyncio
+async def test_sitemap_results_have_no_prefetched_content():
+    """Sitemap-discovered pages have no pre-fetched content — they're fetched in Phase 2."""
+    sitemap_xml = """<?xml version="1.0"?>
+    <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+      <url><loc>https://a.com/page1</loc></url>
+      <url><loc>https://a.com/page2</loc></url>
+      <url><loc>https://a.com/page3</loc></url>
+    </urlset>"""
+
+    async def mock_fetch(url: str) -> FetchResult:
+        if "sitemap" in url:
+            return FetchResult(url=url, html=sitemap_xml, text="", title=None,
+                               theme_color=None, status_code=200, used_playwright=False)
+        return _make_fetch_result(url)
+
+    with patch("app.services.crawler.fetch", side_effect=mock_fetch):
+        urls = await discover_urls("https://a.com")
+
+    assert all(d.prefetched_text is None for d in urls)
 
 
 @pytest.mark.asyncio
@@ -240,5 +282,5 @@ async def test_exclude_paths_filters_sitemap_urls():
     with patch("app.services.crawler.fetch", side_effect=mock_fetch):
         urls = await discover_urls("https://a.com", exclude_paths=["/admin"])
 
-    assert not any("/admin" in u for u in urls)
+    assert not any("/admin" in d.url for d in urls)
     assert len(urls) == 3

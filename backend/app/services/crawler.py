@@ -1,5 +1,6 @@
 import logging
 from collections import deque
+from dataclasses import dataclass, field
 from urllib.parse import urljoin, urlparse, urlunparse
 
 import defusedxml.ElementTree as ET
@@ -8,6 +9,13 @@ from bs4 import BeautifulSoup
 from app.services.fetcher import FetchResult, fetch
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class DiscoveredUrl:
+    url: str
+    prefetched_text: str | None = field(default=None)
+    prefetched_title: str | None = field(default=None)
 
 _MAX_CHILD_SITEMAPS = 20
 
@@ -89,13 +97,13 @@ async def _discover_via_bfs(
     max_depth: int = 10,
     include_paths: list[str] | None = None,
     exclude_paths: list[str] | None = None,
-) -> list[str]:
+) -> list[DiscoveredUrl]:
     _inc = include_paths or []
     _exc = exclude_paths or []
     root_domain = urlparse(root_url).netloc
     visited: set[str] = set()
     queue: deque[tuple[str, int]] = deque([(root_url, 0)])
-    found: list[str] = []
+    found: list[DiscoveredUrl] = []
 
     while queue:
         url, depth = queue.popleft()
@@ -105,14 +113,22 @@ async def _discover_via_bfs(
         if not _matches_paths(norm, _inc, _exc):
             continue
         visited.add(norm)
-        found.append(norm)
 
         if depth >= max_depth:
+            found.append(DiscoveredUrl(url=norm))
             continue
 
         result = await fetch(url)
         if result.status_code >= 400 or not result.html:
+            found.append(DiscoveredUrl(url=norm))
             continue
+
+        # Cache fetched content — avoids re-fetching (and re-launching Playwright) in Phase 2
+        found.append(DiscoveredUrl(
+            url=norm,
+            prefetched_text=result.text or None,
+            prefetched_title=result.title,
+        ))
 
         soup = BeautifulSoup(result.html, "html.parser")
         for tag in soup.find_all("a", href=True):
@@ -133,26 +149,35 @@ async def discover_urls(
     root_url: str,
     include_paths: list[str] | None = None,
     exclude_paths: list[str] | None = None,
-) -> list[str]:
-    """Discover all URLs under root_url, applying optional path filters."""
+) -> list[DiscoveredUrl]:
+    """Discover all URLs under root_url, applying optional path filters.
+
+    Returns DiscoveredUrl objects. BFS-discovered pages include pre-fetched
+    content so execute_crawl can skip re-fetching them (avoids double Playwright
+    launches on JS-heavy sites).
+    """
     _inc = include_paths or []
     _exc = exclude_paths or []
 
-    urls: list[str] = []
+    discovered: list[DiscoveredUrl] = []
 
     sitemap_urls = await _discover_via_sitemap(root_url, _inc, _exc)
     if sitemap_urls and len(sitemap_urls) >= 3:
         root_domain = urlparse(root_url).netloc
-        urls = [u for u in sitemap_urls if _same_domain(u, root_domain)]
+        discovered = [
+            DiscoveredUrl(url=u)
+            for u in sitemap_urls
+            if _same_domain(u, root_domain)
+        ]
     else:
-        urls = await _discover_via_bfs(root_url, include_paths=_inc, exclude_paths=_exc)
+        discovered = await _discover_via_bfs(root_url, include_paths=_inc, exclude_paths=_exc)
 
     # Deduplicate preserving order
     seen: set[str] = set()
-    deduped: list[str] = []
-    for u in urls:
-        if u not in seen:
-            seen.add(u)
-            deduped.append(u)
+    deduped: list[DiscoveredUrl] = []
+    for d in discovered:
+        if d.url not in seen:
+            seen.add(d.url)
+            deduped.append(d)
 
     return deduped
