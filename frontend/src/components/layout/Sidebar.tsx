@@ -1,4 +1,4 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { clsx } from "clsx";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -42,6 +42,7 @@ interface SidebarProps {
 
 export function Sidebar({ isOpen, onClose, pinned, onPinToggle }: SidebarProps) {
   const { pathname } = useLocation();
+  const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);
   const workspaces = useWorkspaceStore((s) => s.workspaces);
@@ -135,7 +136,7 @@ export function Sidebar({ isOpen, onClose, pinned, onPinToggle }: SidebarProps) 
           <button
             onClick={onPinToggle}
             className="hidden xl:flex ml-auto items-center justify-center w-6 h-6 rounded-md hover:bg-[#faf8f5] transition-colors flex-shrink-0 text-primary-500"
-            aria-label="Unpin sidebar"
+            aria-label={pinned ? "Unpin sidebar" : "Pin sidebar"}
           >
             {/* Filled pin icon = pinned state */}
             <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
@@ -299,7 +300,7 @@ export function Sidebar({ isOpen, onClose, pinned, onPinToggle }: SidebarProps) 
 
         {/* Settings — collapsible */}
         <button
-          onClick={() => pinned && setSettingsOpen((o) => !o)}
+          onClick={() => pinned ? setSettingsOpen((o) => !o) : navigate("/settings")}
           className={clsx(
             "flex items-center py-[7px] rounded-lg text-[12px] font-medium w-full transition-all",
             pinned ? "gap-2.5 px-2.5" : "gap-2.5 px-2.5 xl:justify-center xl:gap-0 xl:px-0",
