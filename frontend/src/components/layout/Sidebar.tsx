@@ -36,9 +36,11 @@ const PLAN_LABELS: Record<string, string> = {
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
+  pinned: boolean;
+  onPinToggle: () => void;
 }
 
-export function Sidebar({ isOpen, onClose }: SidebarProps) {
+export function Sidebar({ isOpen, onClose, pinned, onPinToggle }: SidebarProps) {
   const { pathname } = useLocation();
   const user = useAuthStore((s) => s.user);
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);
@@ -70,10 +72,15 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     return () => document.removeEventListener("mousedown", handleClick);
   }, [wsSwitcherOpen]);
 
-  // Close drawer on any route change (mobile)
+  // Collapse settings sub-nav when switching to rail mode
   useEffect(() => {
-    onClose();
-  }, [pathname, onClose]);
+    if (!pinned) setSettingsOpen(false);
+  }, [pinned]);
+
+  // Close drawer on route change only when not pinned (mobile behaviour)
+  useEffect(() => {
+    if (!pinned) onClose();
+  }, [pathname, pinned, onClose]);
 
   async function handleCreateWorkspace() {
     const name = newWsName.trim();
@@ -100,16 +107,22 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
   return (
     <aside className={clsx(
-      "flex h-screen w-56 flex-col bg-white border-r border-[#f0ebe3]",
+      "flex h-screen flex-col bg-white border-r border-[#f0ebe3]",
+      // Mobile always w-56; desktop: w-56 when pinned, w-10 when not
+      pinned ? "w-56" : "w-56 xl:w-10",
       // Below xl: fixed overlay, slides in/out
-      "fixed inset-y-0 left-0 z-50 transition-transform duration-200 ease-in-out",
+      "fixed inset-y-0 left-0 z-50 transition-[width,transform] duration-200 ease-in-out",
       // At xl+: back to normal document flow
       "xl:static xl:z-auto xl:flex-shrink-0 xl:translate-x-0",
-      // Open/closed (only meaningful below xl — xl:translate-x-0 overrides)
+      // Open/closed (only meaningful below xl)
       isOpen ? "translate-x-0" : "-translate-x-full",
     )}>
-      {/* Logo + workspace switcher */}
-      <div className="px-4 pt-5 pb-4 border-b border-[#f0ebe3]">
+      {/* ── Expanded header (logo + workspace switcher) ──────────────────────
+          Hidden in desktop rail mode; always visible on mobile (drawer). */}
+      <div className={clsx(
+        "px-4 pt-5 pb-4 border-b border-[#f0ebe3]",
+        !pinned && "xl:hidden",
+      )}>
         <div className="flex items-center gap-2 mb-3">
           <div className="w-6 h-6 bg-primary-500 rounded-lg flex items-center justify-center flex-shrink-0">
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -118,6 +131,18 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             </svg>
           </div>
           <span className="text-[17px] font-black tracking-tight text-gray-900">pulse</span>
+          {/* Pin button — desktop only, right-aligned in expanded header */}
+          <button
+            onClick={onPinToggle}
+            className="hidden xl:flex ml-auto items-center justify-center w-6 h-6 rounded-md hover:bg-[#faf8f5] transition-colors flex-shrink-0 text-primary-500"
+            aria-label="Unpin sidebar"
+          >
+            {/* Filled pin icon = pinned state */}
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+              <path d="M8 1L11 4L9 6L9.5 9L6 7.5L2.5 9L3 6L1 4L4 1H8Z" />
+              <line x1="6" y1="7.5" x2="6" y2="11.5" stroke="white" strokeWidth="1.3" strokeLinecap="round" />
+            </svg>
+          </button>
         </div>
 
         {/* Workspace switcher */}
@@ -223,6 +248,27 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         </div>
       </div>
 
+      {/* ── Rail header (pin button only) ────────────────────────────────────
+          Only shown on desktop when sidebar is in icon-rail (unpinned) mode. */}
+      <div className={clsx(
+        "hidden border-b border-[#f0ebe3] py-4 justify-center",
+        !pinned && "xl:flex",
+      )}>
+        <button
+          onClick={onPinToggle}
+          className="flex items-center justify-center w-6 h-6 rounded-md hover:bg-[#faf8f5] transition-colors text-gray-300"
+          aria-label="Pin sidebar"
+        >
+          {/* Outline pin icon = unpinned state */}
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <path d="M8 1L11 4L9 6L9.5 9L6 7.5L2.5 9L3 6L1 4L4 1H8Z"
+              stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
+            <line x1="6" y1="7.5" x2="6" y2="11.5"
+              stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+          </svg>
+        </button>
+      </div>
+
       {/* Main nav */}
       <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
         {MAIN_NAV.map(({ href, label, Icon }) => {
@@ -232,7 +278,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
               key={href}
               to={href}
               className={clsx(
-                "flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-[12px] font-medium transition-all",
+                "flex items-center py-[7px] rounded-lg text-[12px] font-medium transition-all",
+                pinned ? "gap-2.5 px-2.5" : "gap-2.5 px-2.5 xl:justify-center xl:gap-0 xl:px-0",
                 active
                   ? "bg-primary-50 text-primary-500 font-semibold"
                   : "text-gray-500 hover:bg-[#faf8f5] hover:text-gray-700"
@@ -242,7 +289,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                 size={16}
                 className={active ? "stroke-primary-500" : "stroke-gray-400"}
               />
-              {label}
+              <span className={clsx(!pinned && "xl:hidden")}>{label}</span>
             </Link>
           );
         })}
@@ -252,9 +299,10 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
         {/* Settings — collapsible */}
         <button
-          onClick={() => setSettingsOpen((o) => !o)}
+          onClick={() => pinned && setSettingsOpen((o) => !o)}
           className={clsx(
-            "flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-[12px] font-medium w-full transition-all",
+            "flex items-center py-[7px] rounded-lg text-[12px] font-medium w-full transition-all",
+            pinned ? "gap-2.5 px-2.5" : "gap-2.5 px-2.5 xl:justify-center xl:gap-0 xl:px-0",
             isSettingsActive
               ? "bg-primary-50 text-primary-500 font-semibold"
               : "text-gray-500 hover:bg-[#faf8f5] hover:text-gray-700"
@@ -264,10 +312,11 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             size={16}
             className={isSettingsActive ? "stroke-primary-500" : "stroke-gray-400"}
           />
-          <span className="flex-1 text-left">Settings</span>
+          <span className={clsx("flex-1 text-left", !pinned && "xl:hidden")}>Settings</span>
           <IconChevronDown
             className={clsx(
               "transition-transform",
+              !pinned && "xl:hidden",
               settingsOpen ? "rotate-0 stroke-gray-400" : "-rotate-90 stroke-gray-300"
             )}
           />
@@ -297,7 +346,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       </nav>
 
       {/* Copilot toggle */}
-      <div className="px-3 pb-2">
+      <div className={clsx("px-3 pb-2", !pinned && "xl:hidden")}>
         <button
           onClick={toggleCopilot}
           className={clsx(
@@ -314,7 +363,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       </div>
 
       {/* User footer */}
-      <div className="px-3 py-3 border-t border-[#f0ebe3]">
+      <div className={clsx("px-3 py-3 border-t border-[#f0ebe3]", !pinned && "xl:hidden")}>
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
             {userInitial}
