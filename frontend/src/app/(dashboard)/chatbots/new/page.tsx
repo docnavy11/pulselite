@@ -17,13 +17,6 @@ import { AutoConfigResponse, CrawlStatusResponse } from "@/lib/types";
 
 type Step = "url" | "crawling" | "review" | "done";
 
-const STEPS: { id: Step; label: string }[] = [
-  { id: "url", label: "Your website" },
-  { id: "crawling", label: "Crawling" },
-  { id: "review", label: "Review" },
-  { id: "done", label: "Done" },
-];
-
 const TONE_OPTIONS: { value: string; label: string; description: string }[] = [
   { value: "professional", label: "Professional", description: "Formal and business-like" },
   { value: "friendly",     label: "Friendly",     description: "Warm and approachable" },
@@ -307,7 +300,8 @@ export default function NewBotWizardPage() {
     });
   }
 
-  const stepIndex = STEPS.findIndex((s) => s.id === step);
+  const STEP_ORDER: Step[] = ["url", "crawling", "review", "done"];
+  const stepIndex = STEP_ORDER.indexOf(step);
   const embedCode = `<script src="https://cdn.pulse.ai/widget.js" data-key="${chatbotId}"></script>`;
   const activePlatformGuide = PLATFORM_GUIDES.find((p) => p.id === activePlatform)!;
 
