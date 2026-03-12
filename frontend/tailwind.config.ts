@@ -68,7 +68,7 @@ const config: Config = {
     },
   },
   plugins: [
-    function ({ addUtilities }: { addUtilities: (utilities: Record<string, unknown>) => void }) {
+    function ({ addUtilities }) {
       addUtilities({
         '.scrollbar-none': {
           '-ms-overflow-style': 'none',
