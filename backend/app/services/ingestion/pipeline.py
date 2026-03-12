@@ -290,6 +290,8 @@ async def run_ingestion(db: AsyncSession, document_id: uuid.UUID) -> None:
             raise
 
         if not content.strip():
+            t0_chunk = datetime.now(timezone.utc)
+            _record("chunk", "skipped", t0_chunk, detail="no chunks (empty content)")
             document.status = "indexed"
             document.chunk_count = 0
             document.last_indexed_at = datetime.now(timezone.utc)

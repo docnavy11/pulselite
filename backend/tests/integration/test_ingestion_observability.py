@@ -66,15 +66,16 @@ class TestIngestionSteps:
         with pytest.raises(Exception):
             await run_ingestion(db, doc.id)
 
-        # Re-read from a new query to verify the commit happened
-        from sqlalchemy import select
-        result = await db.execute(select(Document).where(Document.id == doc.id))
-        refreshed = result.scalar_one()
-        assert refreshed.status == "failed"
-        assert refreshed.error_message is not None
-        assert refreshed.ingestion_steps is not None
-        assert refreshed.ingestion_steps[0]["step"] == "extract"
-        assert refreshed.ingestion_steps[0]["status"] == "failed"
+        # Simulate the Celery task's session.rollback() — evict identity-map cache.
+        # If the pipeline did NOT commit before raising, refresh() would return
+        # the pre-pipeline DB state (status="pending", ingestion_steps=None).
+        db.expire(doc)
+        await db.refresh(doc)
+        assert doc.status == "failed"
+        assert doc.error_message is not None
+        assert doc.ingestion_steps is not None
+        assert doc.ingestion_steps[0]["step"] == "extract"
+        assert doc.ingestion_steps[0]["status"] == "failed"
 
     async def test_budget_exceeded_records_skipped_step(self, db, workspace, kb):
         """When character budget is exceeded, budget_check step has status 'skipped'."""
