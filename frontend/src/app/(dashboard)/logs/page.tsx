@@ -57,9 +57,10 @@ const STEP_LABELS: Record<string, string> = {
 
 // ── Step timeline ─────────────────────────────────────────────────────────────
 
-function StepTimeline({ steps, errorMessage }: {
+function StepTimeline({ steps, errorMessage, status }: {
   steps: IngestionStep[] | null;
   errorMessage: string | null;
+  status: string;
 }) {
   if (!steps) {
     return (
@@ -70,7 +71,7 @@ function StepTimeline({ steps, errorMessage }: {
   }
   return (
     <div className="px-4 py-3 bg-gray-50 border-t border-gray-100">
-      {errorMessage && (
+      {status === "failed" && errorMessage && (
         <div className="mb-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
           {errorMessage}
         </div>
@@ -85,9 +86,7 @@ function StepTimeline({ steps, errorMessage }: {
                 </div>
               )}
               {s.status === "failed" && (
-                <div className="h-5 w-5 rounded-full bg-red-100 flex items-center justify-center">
-                  <AlertTriangle className="h-3 w-3 text-red-500" />
-                </div>
+                <AlertTriangle className="h-4 w-4 text-red-500" />
               )}
               {s.status === "skipped" && (
                 <div className="h-5 w-5 rounded-full bg-yellow-100 flex items-center justify-center">
@@ -197,6 +196,9 @@ function CrawlRunsTab({ workspaceId }: { workspaceId: string }) {
                 </td>
                 <td className="px-4 py-2">
                   <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_BADGE[job.status] ?? "bg-gray-100 text-gray-600"}`}>
+                    {(job.status === "running" || job.status === "processing") && (
+                      <span className="inline-block h-2 w-2 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
+                    )}
                     {job.status}
                   </span>
                 </td>
@@ -300,12 +302,22 @@ function DocumentsTab({ workspaceId }: { workspaceId: string }) {
                 className="w-full text-left hover:bg-gray-50 transition-colors"
                 onClick={() => toggleExpand(doc.id)}
               >
-                <div className="grid grid-cols-8 gap-2 px-4 py-2.5 text-sm items-center">
+                <div className="grid grid-cols-9 gap-2 px-4 py-2.5 text-sm items-center">
                   <div className="col-span-2 flex items-center gap-2 min-w-0">
                     {isOpen
                       ? <ChevronDown className="h-3.5 w-3.5 flex-shrink-0 text-gray-400" />
                       : <ChevronRight className="h-3.5 w-3.5 flex-shrink-0 text-gray-400" />}
                     <span className="truncate text-gray-800">{displayTitle}</span>
+                  </div>
+                  <div>
+                    {doc.source_url ? (
+                      <a href={doc.source_url} target="_blank" rel="noreferrer"
+                         className="text-blue-600 hover:underline flex items-center gap-0.5 text-xs truncate"
+                         onClick={e => e.stopPropagation()}>
+                        {truncateUrl(doc.source_url, 24)}
+                        <ExternalLink className="h-3 w-3 flex-shrink-0" />
+                      </a>
+                    ) : "—"}
                   </div>
                   <div>
                     <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
@@ -326,7 +338,7 @@ function DocumentsTab({ workspaceId }: { workspaceId: string }) {
                 </div>
               </button>
               {isOpen && (
-                <StepTimeline steps={doc.ingestion_steps} errorMessage={doc.error_message} />
+                <StepTimeline steps={doc.ingestion_steps} errorMessage={doc.error_message} status={doc.status} />
               )}
             </div>
           );
