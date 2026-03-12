@@ -129,7 +129,11 @@ export default function ConversationsPage() {
   return (
     <div className="flex flex-1 overflow-hidden bg-[#faf8f5]">
       {/* Left: conversation list */}
-      <div className="w-[280px] flex-shrink-0 flex flex-col bg-white border-r border-[#f0ebe3]">
+      <div className={clsx(
+        "flex-col bg-white border-r border-[#f0ebe3]",
+        "xl:w-[280px] xl:flex-shrink-0 xl:flex",
+        selectedId ? "hidden xl:flex" : "flex w-full",
+      )}>
         {/* Filter chips */}
         <div className="flex gap-1.5 px-3 py-2.5 border-b border-[#f0ebe3] overflow-x-auto">
           {filters.map((f) => (
@@ -220,7 +224,10 @@ export default function ConversationsPage() {
       </div>
 
       {/* Right: detail panel */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className={clsx(
+        "overflow-hidden",
+        selectedId ? "flex flex-1" : "hidden xl:flex xl:flex-1",
+      )}>
         {!selectedId ? (
           <div className="flex-1 flex items-center justify-center bg-[#faf8f5]">
             <div className="text-center">
@@ -240,6 +247,16 @@ export default function ConversationsPage() {
             <div className="flex-1 flex flex-col overflow-hidden">
               {/* Header */}
               <div className="flex items-center gap-3 px-5 py-3 border-b border-[#f0ebe3] bg-white">
+                {/* Back button — mobile only */}
+                <button
+                  onClick={() => navigate("/conversations", { replace: true })}
+                  className="xl:hidden flex items-center gap-1 text-[11px] text-gray-500 hover:text-gray-700 mr-1 flex-shrink-0"
+                >
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                    <path d="M8 2L4 6l4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  Back
+                </button>
                 <div
                   className={`w-8 h-8 rounded-full bg-gradient-to-br ${nameToColor(selected.contact_name ?? selected.contact_email?.split("@")[0] ?? "?")} flex items-center justify-center text-white text-[11px] font-bold`}
                 >
@@ -266,7 +283,7 @@ export default function ConversationsPage() {
                 </select>
                 <button
                   onClick={() => setShowMeta((s) => !s)}
-                  className="text-[11px] text-gray-400 hover:text-gray-600"
+                  className="hidden xl:inline text-[11px] text-gray-400 hover:text-gray-600"
                 >
                   {showMeta ? "Hide info" : "Show info"}
                 </button>
@@ -302,7 +319,7 @@ export default function ConversationsPage() {
 
             {/* Metadata sidebar */}
             {showMeta && (
-              <div className="w-[180px] flex-shrink-0 border-l border-[#f0ebe3] bg-white overflow-y-auto px-4 py-4 space-y-4">
+              <div className="hidden xl:block w-[180px] flex-shrink-0 border-l border-[#f0ebe3] bg-white overflow-y-auto px-4 py-4 space-y-4">
                 <div>
                   <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">
                     Contact
