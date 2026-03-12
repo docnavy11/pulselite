@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, text
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -32,6 +32,7 @@ class Workspace(UUIDPrimaryKeyMixin, TimestampUpdateMixin, Base):
     allowed_models: Mapped[list] = mapped_column(
         JSONB, server_default=text("'[]'::jsonb"), nullable=False
     )
+    chars_indexed: Mapped[int] = mapped_column(BigInteger, server_default=text("0"), nullable=False)
 
     agents: Mapped[list["Agent"]] = relationship(back_populates="workspace")
     memberships: Mapped[list["WorkspaceMembership"]] = relationship(back_populates="workspace")
