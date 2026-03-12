@@ -144,7 +144,7 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
                 return _FetchResult(url=page_url, text="", title="", failed=True, error=f"HTTP {result.status_code}")
             if result.text == "":
                 return _FetchResult(url=page_url, text="", title="", failed=True, error="Empty response")
-            return _FetchResult(url=page_url, text=result.text, title=result.title, failed=False)
+            return _FetchResult(url=page_url, text=result.text, title=result.title or "", failed=False)
 
         return _FetchResult(url=page_url, text="", title="", failed=True, error="HTTP 429 (rate limited)")
 
