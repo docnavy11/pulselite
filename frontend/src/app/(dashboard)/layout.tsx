@@ -14,6 +14,7 @@ function DashboardShell() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   // Stable reference so Sidebar's useEffect dep array doesn't re-fire on every render
   const closeSidebar = useCallback(() => setSidebarOpen(false), []);
+  const toggleSidebarPin = useCallback(() => setSidebarPinned((p) => !p), []);
 
   const [sidebarPinned, setSidebarPinned] = useState<boolean>(() => {
     const stored = localStorage.getItem("sidebar-pinned");
@@ -39,7 +40,7 @@ function DashboardShell() {
           isOpen={sidebarOpen}
           onClose={closeSidebar}
           pinned={sidebarPinned}
-          onPinToggle={() => setSidebarPinned((p) => !p)}
+          onPinToggle={toggleSidebarPin}
         />
         <div className="flex flex-1 flex-col overflow-hidden">
           <TopBar onMenuToggle={() => setSidebarOpen((o) => !o)} />

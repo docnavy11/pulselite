@@ -23,10 +23,10 @@ describe("sidebarPinned localStorage logic", () => {
     expect(readSidebarPinned()).toBe(true);
   });
 
-  it("writes the string representation", () => {
-    localStorage.setItem("sidebar-pinned", String(false));
-    expect(localStorage.getItem("sidebar-pinned")).toBe("false");
-    localStorage.setItem("sidebar-pinned", String(true));
-    expect(localStorage.getItem("sidebar-pinned")).toBe("true");
+  it("reads correctly after multiple writes", () => {
+    localStorage.setItem("sidebar-pinned", "false");
+    expect(readSidebarPinned()).toBe(false);
+    localStorage.setItem("sidebar-pinned", "true");
+    expect(readSidebarPinned()).toBe(true);
   });
 });
