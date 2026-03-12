@@ -172,7 +172,7 @@ export default function ChatbotLayout() {
       </div>
 
       <div className="border-b border-gray-200 mb-6">
-        <nav className="flex gap-6">
+        <nav className="flex gap-6 overflow-x-auto scrollbar-none">
           {TABS.map((tab) => {
             const { Icon } = tab;
             return (
