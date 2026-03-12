@@ -1,7 +1,5 @@
-# backend/app/services/crawler.py
 import logging
 from collections import deque
-from dataclasses import dataclass
 from urllib.parse import urljoin, urlparse, urlunparse
 
 import defusedxml.ElementTree as ET
@@ -12,14 +10,6 @@ from app.services.fetcher import FetchResult, fetch
 logger = logging.getLogger(__name__)
 
 _MAX_CHILD_SITEMAPS = 20
-
-
-@dataclass
-class CrawlResult:
-    urls: list[str]
-    total_discovered: int
-    over_limit: bool
-    used_sitemap: bool
 
 
 def _normalize(url: str) -> str:
@@ -33,7 +23,25 @@ def _same_domain(url: str, root_domain: str) -> bool:
     return urlparse(url).netloc == root_domain
 
 
-async def _discover_via_sitemap(root_url: str) -> list[str] | None:
+def _matches_paths(
+    url: str,
+    include_paths: list[str],
+    exclude_paths: list[str],
+) -> bool:
+    """Return True if url's path passes the include/exclude filters."""
+    path = urlparse(url).path
+    if include_paths and not any(path.startswith(p) for p in include_paths):
+        return False
+    if any(path.startswith(p) for p in exclude_paths):
+        return False
+    return True
+
+
+async def _discover_via_sitemap(
+    root_url: str,
+    include_paths: list[str],
+    exclude_paths: list[str],
+) -> list[str] | None:
     sitemap_url = root_url.rstrip("/") + "/sitemap.xml"
     result: FetchResult = await fetch(sitemap_url)
     if result.status_code != 200 or not result.html:
@@ -60,19 +68,30 @@ async def _discover_via_sitemap(root_url: str) -> list[str] | None:
                 child_root = ET.fromstring(child.html.encode())
                 for loc in child_root.findall(".//sm:url/sm:loc", ns):
                     if loc.text:
-                        urls.append(_normalize(loc.text.strip()))
+                        norm = _normalize(loc.text.strip())
+                        if _matches_paths(norm, include_paths, exclude_paths):
+                            urls.append(norm)
             except Exception as exc:
                 logger.warning("Failed to parse child sitemap %s: %s", loc_text.strip(), exc)
 
     # Regular sitemap entries
     for loc in root_el.findall(".//sm:url/sm:loc", ns):
         if loc.text:
-            urls.append(_normalize(loc.text.strip()))
+            norm = _normalize(loc.text.strip())
+            if _matches_paths(norm, include_paths, exclude_paths):
+                urls.append(norm)
 
     return urls if urls else None
 
 
-async def _discover_via_bfs(root_url: str, max_depth: int = 3) -> list[str]:
+async def _discover_via_bfs(
+    root_url: str,
+    max_depth: int = 10,
+    include_paths: list[str] | None = None,
+    exclude_paths: list[str] | None = None,
+) -> list[str]:
+    _inc = include_paths or []
+    _exc = exclude_paths or []
     root_domain = urlparse(root_url).netloc
     visited: set[str] = set()
     queue: deque[tuple[str, int]] = deque([(root_url, 0)])
@@ -82,6 +101,8 @@ async def _discover_via_bfs(root_url: str, max_depth: int = 3) -> list[str]:
         url, depth = queue.popleft()
         norm = _normalize(url)
         if norm in visited:
+            continue
+        if not _matches_paths(norm, _inc, _exc):
             continue
         visited.add(norm)
         found.append(norm)
@@ -108,20 +129,25 @@ async def _discover_via_bfs(root_url: str, max_depth: int = 3) -> list[str]:
     return found
 
 
-async def discover_urls(root_url: str, max_pages: int) -> CrawlResult:
-    """Discover all URLs under root_url up to max_pages."""
-    urls: list[str] = []
-    used_sitemap = False
+async def discover_urls(
+    root_url: str,
+    include_paths: list[str] | None = None,
+    exclude_paths: list[str] | None = None,
+) -> list[str]:
+    """Discover all URLs under root_url, applying optional path filters."""
+    _inc = include_paths or []
+    _exc = exclude_paths or []
 
-    sitemap_urls = await _discover_via_sitemap(root_url)
+    urls: list[str] = []
+
+    sitemap_urls = await _discover_via_sitemap(root_url, _inc, _exc)
     if sitemap_urls and len(sitemap_urls) >= 3:
         root_domain = urlparse(root_url).netloc
         urls = [u for u in sitemap_urls if _same_domain(u, root_domain)]
-        used_sitemap = True
     else:
-        urls = await _discover_via_bfs(root_url)
+        urls = await _discover_via_bfs(root_url, include_paths=_inc, exclude_paths=_exc)
 
-    # Deduplicate preserving order (sitemap URLs already normalized; BFS URLs already normalized)
+    # Deduplicate preserving order
     seen: set[str] = set()
     deduped: list[str] = []
     for u in urls:
@@ -129,10 +155,4 @@ async def discover_urls(root_url: str, max_pages: int) -> CrawlResult:
             seen.add(u)
             deduped.append(u)
 
-    total = len(deduped)
-    return CrawlResult(
-        urls=deduped[:max_pages],
-        total_discovered=total,
-        over_limit=total > max_pages,
-        used_sitemap=used_sitemap,
-    )
+    return deduped
