@@ -131,7 +131,7 @@ export default function ConversationsPage() {
       {/* Left: conversation list */}
       <div className={clsx(
         "flex-col bg-white border-r border-[#f0ebe3]",
-        "xl:w-[280px] xl:flex-shrink-0 xl:flex",
+        "xl:w-[280px] xl:flex-shrink-0",
         selectedId ? "hidden xl:flex" : "flex w-full",
       )}>
         {/* Filter chips */}
@@ -249,7 +249,11 @@ export default function ConversationsPage() {
               <div className="flex items-center gap-3 px-5 py-3 border-b border-[#f0ebe3] bg-white">
                 {/* Back button — mobile only */}
                 <button
-                  onClick={() => navigate("/conversations", { replace: true })}
+                  onClick={() => {
+                    const params = new URLSearchParams(searchParams.toString());
+                    params.delete("id");
+                    navigate(`/conversations?${params.toString()}`, { replace: true });
+                  }}
                   className="xl:hidden flex items-center gap-1 text-[11px] text-gray-500 hover:text-gray-700 mr-1 flex-shrink-0"
                 >
                   <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
