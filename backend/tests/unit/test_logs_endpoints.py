@@ -65,6 +65,20 @@ class TestCrawlRunsLog:
         assert resp.status_code == 200
         assert resp.json()["items"][0]["chatbot_name"] is None
 
+    async def test_docs_indexed_reflects_indexed_document_count(
+        self, auth_client: AsyncClient, db: AsyncSession, workspace
+    ):
+        bot = await make_chatbot(db, workspace)
+        kb = await make_knowledge_base(db, workspace, bot)
+        await make_crawl_job(db, workspace, kb)
+        await make_document(db, workspace, kb, status="indexed")
+        await make_document(db, workspace, kb, status="indexed")
+        await make_document(db, workspace, kb, status="failed")  # should not count
+
+        resp = await auth_client.get(f"/api/v1/workspaces/{workspace.id}/logs/crawl-runs")
+        assert resp.status_code == 200
+        assert resp.json()["items"][0]["docs_indexed"] == 2
+
 
 class TestDocumentsLog:
 
@@ -101,6 +115,21 @@ class TestDocumentsLog:
         resp = await auth_client.get(f"/api/v1/workspaces/{workspace.id}/logs/documents")
         assert resp.status_code == 200
         assert resp.json()["total"] == 0
+
+    async def test_pagination_offset_beyond_total(
+        self, auth_client: AsyncClient, db: AsyncSession, workspace
+    ):
+        bot = await make_chatbot(db, workspace)
+        kb = await make_knowledge_base(db, workspace, bot)
+        await make_document(db, workspace, kb)
+
+        resp = await auth_client.get(
+            f"/api/v1/workspaces/{workspace.id}/logs/documents?offset=999"
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total"] == 1
+        assert body["items"] == []
 
     async def test_ingestion_steps_included_in_response(
         self, auth_client: AsyncClient, db: AsyncSession, workspace
