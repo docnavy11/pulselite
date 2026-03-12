@@ -67,6 +67,8 @@ class Document(UUIDPrimaryKeyMixin, TimestampUpdateMixin, Base):
     raw_content: Mapped[str | None] = mapped_column(Text, nullable=True)
     title: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(Text, server_default=text("'pending'"))
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ingestion_steps: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     chunk_count: Mapped[int] = mapped_column(Integer, server_default=text("0"))
     char_count: Mapped[int] = mapped_column(Integer, server_default=text("0"), nullable=False)
     last_indexed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
