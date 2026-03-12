@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import BaseModel, field_validator
 
@@ -41,5 +41,7 @@ class DocumentResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     metadata_: dict = {}
+    error_message: Optional[str] = None
+    ingestion_steps: Optional[list] = None
 
     model_config = {"from_attributes": True}

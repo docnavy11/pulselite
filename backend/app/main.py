@@ -21,6 +21,7 @@ from app.api.v1 import (
     intelligence,
     invites,
     knowledge_bases,
+    logs,
     oauth,
     onboarding,
     public_chat,
@@ -58,6 +59,7 @@ def create_app() -> FastAPI:
     application.include_router(documents.router, prefix="/api/v1")
     application.include_router(articles.router, prefix="/api/v1")
     application.include_router(crawl.router, prefix="/api/v1")
+    application.include_router(logs.router, prefix="/api/v1")
     application.include_router(chat.router, prefix="/api/v1")
     application.include_router(intelligence.router, prefix="/api/v1")
     application.include_router(gaps.router, prefix="/api/v1")

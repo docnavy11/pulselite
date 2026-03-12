@@ -2,7 +2,7 @@
 import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.organizational import Workspace
-from app.models.knowledge import Chatbot, KnowledgeBase, Document
+from app.models.knowledge import Chatbot, CrawlJob, KnowledgeBase, Document
 
 
 async def make_chatbot(
@@ -69,3 +69,26 @@ async def make_document(
     db.add(doc)
     await db.flush()
     return doc
+
+
+async def make_crawl_job(
+    db: AsyncSession,
+    workspace: Workspace,
+    kb: KnowledgeBase,
+    *,
+    root_url: str = "https://example.com",
+    status: str = "completed",
+) -> CrawlJob:
+    job = CrawlJob(
+        id=uuid.uuid4(),
+        workspace_id=workspace.id,
+        kb_id=kb.id,
+        root_url=root_url,
+        status=status,
+        pages_discovered=5,
+        pages_queued=5,
+        pages_failed=0,
+    )
+    db.add(job)
+    await db.flush()
+    return job
