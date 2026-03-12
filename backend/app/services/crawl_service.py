@@ -1,4 +1,3 @@
-# backend/app/services/crawl_service.py
 import asyncio
 import logging
 import uuid
@@ -24,15 +23,14 @@ class CrawlStartResult:
     kb_id: str
     pages_discovered: int
     pages_queued: int
-    over_limit: bool
-    limit: int
 
 
 async def prepare_crawl(
     db: AsyncSession,
     workspace_id: uuid.UUID,
     url: str,
-    max_pages: int,
+    include_paths: list[str] | None = None,
+    exclude_paths: list[str] | None = None,
     kb_id: uuid.UUID | None = None,
     chatbot_id: uuid.UUID | None = None,
 ) -> tuple[str, str]:
@@ -71,8 +69,8 @@ async def prepare_crawl(
         root_url=url,
         status="pending",
         pages_discovered=0,
-        max_pages=max_pages,
-        over_limit=False,
+        include_paths=include_paths or [],
+        exclude_paths=exclude_paths or [],
     )
     db.add(job)
     await db.flush()
@@ -95,9 +93,12 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
     await db.refresh(job)
 
     # Phase 1: discover URLs
-    crawl_result = await discover_urls(job.root_url, job.max_pages)
-    job.pages_discovered = crawl_result.total_discovered
-    job.over_limit = crawl_result.over_limit
+    urls = await discover_urls(
+        job.root_url,
+        include_paths=job.include_paths or None,
+        exclude_paths=job.exclude_paths or None,
+    )
+    job.pages_discovered = len(urls)
     await db.commit()
     await db.refresh(job)
 
@@ -129,18 +130,12 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
                     wait = min(5 * (2**attempt), 60)
                     logger.warning(
                         "Rate limited on %s, retrying in %ds (attempt %d/%d)",
-                        page_url,
-                        wait,
-                        attempt + 1,
-                        _MAX_RETRIES,
+                        page_url, wait, attempt + 1, _MAX_RETRIES,
                     )
                     await asyncio.sleep(wait)
                     continue
                 return _FetchResult(
-                    url=page_url,
-                    text="",
-                    title="",
-                    failed=True,
+                    url=page_url, text="", title="", failed=True,
                     error="HTTP 429 (rate limited, max retries exceeded)",
                 )
 
@@ -155,13 +150,12 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
 
     # Write to DB as each fetch completes — gives live pages_queued progress
     doc_ids: list[str] = []
-    fetch_tasks = [asyncio.create_task(_fetch(u)) for u in crawl_result.urls]
+    fetch_tasks = [asyncio.create_task(_fetch(u)) for u in urls]
 
     try:
         for coro in asyncio.as_completed(fetch_tasks):
             fr = await coro
             if fr.failed:
-                # Store as a failed document so the user can see which URLs failed and why
                 failed_doc = Document(
                     workspace_id=job.workspace_id,
                     knowledge_base_id=job.kb_id,
@@ -212,30 +206,3 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
     job.status = "completed"
     job.completed_at = datetime.now(timezone.utc)
     await db.commit()
-
-
-# ---------------------------------------------------------------------------
-# Legacy synchronous entry point (kept for backward compatibility / tests)
-# ---------------------------------------------------------------------------
-
-async def start_crawl(
-    db: AsyncSession,
-    workspace_id: uuid.UUID,
-    url: str,
-    max_pages: int,
-    kb_id: uuid.UUID | None = None,
-    chatbot_id: uuid.UUID | None = None,
-) -> CrawlStartResult:
-    job_id_str, kb_id_str = await prepare_crawl(db, workspace_id, url, max_pages, kb_id, chatbot_id)
-    await execute_crawl(db, uuid.UUID(job_id_str))
-
-    r = await db.execute(select(CrawlJob).where(CrawlJob.id == uuid.UUID(job_id_str)))
-    job = r.scalar_one()
-    return CrawlStartResult(
-        job_id=job_id_str,
-        kb_id=kb_id_str,
-        pages_discovered=job.pages_discovered,
-        pages_queued=job.pages_queued,
-        over_limit=job.over_limit,
-        limit=max_pages,
-    )
