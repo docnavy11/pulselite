@@ -21,7 +21,7 @@ class Chatbot(UUIDPrimaryKeyMixin, TimestampUpdateMixin, Base):
     tone: Mapped[str] = mapped_column(Text, server_default=text("'professional'"))
     language: Mapped[str] = mapped_column(Text, server_default=text("'en'"))
     llm_provider: Mapped[str] = mapped_column(Text, server_default=text("'openrouter'"))
-    llm_model: Mapped[str] = mapped_column(Text, server_default=text("'openai/gpt-4o-mini'"))
+    llm_model: Mapped[str] = mapped_column(Text, server_default=text("'anthropic/claude-haiku-4-5'"))
     byoak: Mapped[str | None] = mapped_column(Text, nullable=True)
     temperature: Mapped[float] = mapped_column(Float, server_default=text("0.3"))
     max_tokens: Mapped[int] = mapped_column(Integer, server_default=text("1000"))

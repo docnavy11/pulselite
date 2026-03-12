@@ -21,7 +21,7 @@ class ChatbotCreate(BaseModel):
     tone: str = "professional"
     language: str = "en"
     llm_provider: str = "openrouter"
-    llm_model: str = "openai/gpt-4o-mini"
+    llm_model: str = "anthropic/claude-haiku-4-5"
     temperature: float = Field(default=0.3, ge=0.0, le=2.0)
     max_tokens: int = Field(default=1000, ge=1, le=32000)
     confidence_threshold: float = Field(default=0.65, ge=0.0, le=1.0)
