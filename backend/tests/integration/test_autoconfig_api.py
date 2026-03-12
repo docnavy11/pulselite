@@ -16,6 +16,7 @@ def _mock_autoconfig_result() -> AutoConfigResult:
         suggested_questions=["Q1?", "Q2?", "Q3?", "Q4?"],
         fallback_message="I don't know.",
         brand_color="#4F46E5",
+        tone="professional",
     )
 
 
