@@ -299,28 +299,19 @@ async def run_ingestion(db: AsyncSession, document_id: uuid.UUID) -> None:
             workspace = ws_result.scalar_one()
             limit = PLAN_CHAR_LIMITS.get(workspace.plan)
 
-            if limit is None:
-                # No limit for this plan — unconditional update
-                budget_rows = await db.execute(
-                    sa_text("""
-                        UPDATE workspaces
-                        SET    chars_indexed = chars_indexed + :n
-                        WHERE  id = :workspace_id
-                        RETURNING chars_indexed
-                    """),
-                    {"n": n, "workspace_id": document.workspace_id},
-                )
-            else:
-                budget_rows = await db.execute(
-                    sa_text("""
-                        UPDATE workspaces
-                        SET    chars_indexed = chars_indexed + :n
-                        WHERE  id = :workspace_id
-                          AND  chars_indexed + :n <= :limit
-                        RETURNING chars_indexed
-                    """),
-                    {"n": n, "workspace_id": document.workspace_id, "limit": limit},
-                )
+            # COALESCE(CAST(:limit AS BIGINT), max-bigint) handles the unlimited-plan
+            # case (limit=None) without a NULL IS NULL check, which asyncpg cannot
+            # type-infer for untyped None parameters.
+            budget_rows = await db.execute(
+                sa_text("""
+                    UPDATE workspaces
+                    SET    chars_indexed = chars_indexed + :n
+                    WHERE  id = :workspace_id
+                      AND  chars_indexed + :n <= COALESCE(CAST(:limit AS BIGINT), 9223372036854775807)
+                    RETURNING chars_indexed
+                """),
+                {"n": n, "workspace_id": document.workspace_id, "limit": limit},
+            )
             accepted = budget_rows.fetchone() is not None
 
             if not accepted:
