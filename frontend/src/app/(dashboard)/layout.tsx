@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { Outlet } from 'react-router-dom'
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
@@ -15,6 +15,16 @@ function DashboardShell() {
   // Stable reference so Sidebar's useEffect dep array doesn't re-fire on every render
   const closeSidebar = useCallback(() => setSidebarOpen(false), []);
 
+  const [sidebarPinned, setSidebarPinned] = useState<boolean>(() => {
+    const stored = localStorage.getItem("sidebar-pinned");
+    return stored === null ? true : stored === "true";
+  });
+
+  // Persist pin preference on every change
+  useEffect(() => {
+    localStorage.setItem("sidebar-pinned", String(sidebarPinned));
+  }, [sidebarPinned]);
+
   return (
     <ProtectedRoute>
       <div className="flex h-screen overflow-hidden">
@@ -25,7 +35,12 @@ function DashboardShell() {
             onClick={closeSidebar}
           />
         )}
-        <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} />
+        <Sidebar
+          isOpen={sidebarOpen}
+          onClose={closeSidebar}
+          pinned={sidebarPinned}
+          onPinToggle={() => setSidebarPinned((p) => !p)}
+        />
         <div className="flex flex-1 flex-col overflow-hidden">
           <TopBar onMenuToggle={() => setSidebarOpen((o) => !o)} />
           <div className="flex flex-1 overflow-hidden">
