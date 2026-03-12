@@ -50,6 +50,9 @@ import SecurityPage from './app/(dashboard)/settings/security/page'
 import TeamPage from './app/(dashboard)/settings/team/page'
 import WebhooksPage from './app/(dashboard)/settings/webhooks/page'
 
+// Logs page
+import LogsPage from './app/(dashboard)/logs/page'
+
 // Public
 import PublicChatPage from './app/chat/[chatbotId]/page'
 
@@ -87,6 +90,8 @@ export default function App() {
 
           <Route path="/conversations" element={<ConversationsPage />} />
           <Route path="/conversations/:id" element={<ConversationDetailPage />} />
+
+          <Route path="/logs" element={<LogsPage />} />
 
           <Route path="/intelligence" element={<IntelligencePage />} />
           <Route path="/intelligence/sentiment" element={<SentimentPage />} />

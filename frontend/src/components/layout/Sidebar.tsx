@@ -3,7 +3,7 @@ import { clsx } from "clsx";
 import { useEffect, useRef, useState } from "react";
 import {
   IconOverview, IconChatbots, IconConversations,
-  IconIntelligence, IconSettings, IconChevronDown,
+  IconIntelligence, IconLogs, IconSettings, IconChevronDown,
 } from "@/components/icons/NavIcons";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -26,6 +26,7 @@ const MAIN_NAV = [
   { href: "/dashboard",     label: "Overview",      Icon: IconOverview },
   { href: "/chatbots",      label: "Chatbots",      Icon: IconChatbots },
   { href: "/conversations", label: "Conversations", Icon: IconConversations },
+  { href: "/logs",          label: "Logs",          Icon: IconLogs },
   { href: "/intelligence",  label: "Intelligence",  Icon: IconIntelligence },
 ];
 

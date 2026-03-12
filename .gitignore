@@ -51,9 +51,15 @@ coverage/
 # Logs
 *.log
 logs/
+!frontend/src/app/**/logs/
+!frontend/src/app/**/logs/**
 
 # k6 results
 k6-results/
 celerybeat-schedule
 .hypothesis/
 .worktrees/
+
+# Superpowers AI development tools
+.superpowers/
+docs/superpowers/

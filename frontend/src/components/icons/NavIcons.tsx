@@ -59,6 +59,19 @@ export function IconIntelligence({ className = "stroke-current", size = 16 }: Ic
   );
 }
 
+export function IconLogs({ className = "stroke-current", size = 16 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" className={className}>
+      <circle cx="3" cy="4.5" r="1" fill="currentColor" className="stroke-none" />
+      <path d="M6 4.5 L14 4.5" strokeWidth="1.6" strokeLinecap="round" />
+      <circle cx="3" cy="8" r="1" fill="currentColor" className="stroke-none" />
+      <path d="M6 8 L14 8" strokeWidth="1.6" strokeLinecap="round" />
+      <circle cx="3" cy="11.5" r="1" fill="currentColor" className="stroke-none" />
+      <path d="M6 11.5 L11 11.5" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function IconSettings({ className = "stroke-current", size = 16 }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" className={className}>

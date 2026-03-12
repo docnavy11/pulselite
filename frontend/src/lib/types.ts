@@ -82,6 +82,56 @@ export interface CrawlStatusResponse {
   stalled: boolean;
 }
 
+export interface IngestionStep {
+  step: string;
+  status: "ok" | "failed" | "skipped";
+  started_at: string;
+  duration_ms: number;
+  detail: string | null;
+  error: string | null;
+}
+
+export interface CrawlRunLogItem {
+  job_id: string;
+  chatbot_id: string | null;
+  chatbot_name: string | null;
+  root_url: string;
+  status: string;
+  phase: string | null;
+  pages_discovered: number;
+  pages_queued: number;
+  pages_failed: number;
+  docs_indexed: number;
+  error_message: string | null;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+}
+export interface CrawlRunLogResponse {
+  items: CrawlRunLogItem[];
+  total: number;
+}
+
+export interface DocumentLogItem {
+  id: string;
+  title: string | null;
+  source_url: string | null;
+  source_type: string;
+  status: string;
+  chunk_count: number;
+  last_indexed_at: string | null;
+  error_message: string | null;
+  ingestion_steps: IngestionStep[] | null;
+  knowledge_base_id: string;
+  knowledge_base_name: string;
+  chatbot_id: string | null;
+  chatbot_name: string | null;
+}
+export interface DocumentLogResponse {
+  items: DocumentLogItem[];
+  total: number;
+}
+
 export interface WorkspaceUsage {
   chars_indexed: number;
   chars_limit: number | null;

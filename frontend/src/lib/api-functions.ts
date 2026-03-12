@@ -32,6 +32,8 @@ import {
   LLMSettings,
   OpenRouterModel,
   WorkspaceUsage,
+  CrawlRunLogResponse,
+  DocumentLogResponse,
 } from "./types";
 
 // Chatbot CRUD
@@ -111,6 +113,26 @@ export function getLatestCrawlForChatbot(workspaceId: string, chatbotId: string)
 
 export function getCrawlHistory(workspaceId: string, chatbotId: string) {
   return api.get<CrawlJobSummary[]>(`/api/v1/workspaces/${workspaceId}/crawl/history?chatbot_id=${chatbotId}`);
+}
+
+export async function getCrawlRunLogs(
+  workspaceId: string,
+  limit = 50,
+  offset = 0,
+): Promise<CrawlRunLogResponse> {
+  return api.get<CrawlRunLogResponse>(
+    `/api/v1/workspaces/${workspaceId}/logs/crawl-runs?limit=${limit}&offset=${offset}`,
+  );
+}
+
+export async function getDocumentLogs(
+  workspaceId: string,
+  limit = 50,
+  offset = 0,
+): Promise<DocumentLogResponse> {
+  return api.get<DocumentLogResponse>(
+    `/api/v1/workspaces/${workspaceId}/logs/documents?limit=${limit}&offset=${offset}`,
+  );
 }
 
 export function runAutoconfig(workspaceId: string, chatbotId: string, knowledgeBaseId: string) {
