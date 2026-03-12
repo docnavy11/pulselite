@@ -32,8 +32,8 @@ import {
   LLMSettings,
   OpenRouterModel,
   WorkspaceUsage,
-  CrawlRunLogResponse,
-  DocumentLogResponse,
+  type CrawlRunLogResponse,
+  type DocumentLogResponse,
 } from "./types";
 
 // Chatbot CRUD
