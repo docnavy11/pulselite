@@ -88,6 +88,28 @@ class TestCharBudget:
         assert doc.status == "indexed"
         assert doc.char_count == 1000
 
+    async def test_delete_decrements_chars_indexed(self, db, workspace, kb):
+        """Deleting an indexed document decrements workspace.chars_indexed."""
+        from app.services.document_service import delete_document
+
+        workspace.plan = "starter"
+        workspace.chars_indexed = 0
+        await db.flush()
+
+        content = "hello world"
+        doc = await _make_doc(db, workspace, kb, content)
+        await run_ingestion(db, doc.id)
+        await db.flush()
+
+        await db.refresh(workspace)
+        chars_before = workspace.chars_indexed
+        assert chars_before == len(content)
+
+        await delete_document(db, workspace.id, doc.id)
+
+        await db.refresh(workspace)
+        assert workspace.chars_indexed == 0
+
     @pytest.mark.skip(
         reason="Requires commits visible across sessions; "
                "incompatible with savepoint-based test fixtures (db.commit() only releases savepoint)"

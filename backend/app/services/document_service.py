@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, UploadFile, status
 from sqlalchemy import select
+from sqlalchemy import text as sa_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.knowledge import Document
@@ -73,8 +74,18 @@ async def get_document(db: AsyncSession, workspace_id: uuid.UUID, document_id: u
 
 async def delete_document(db: AsyncSession, workspace_id: uuid.UUID, document_id: uuid.UUID) -> None:
     doc = await get_document(db, workspace_id, document_id)
+    char_count = doc.char_count
     await db.delete(doc)
     await db.flush()
+    if char_count and char_count > 0:
+        await db.execute(
+            sa_text("""
+                UPDATE workspaces
+                SET chars_indexed = GREATEST(0, chars_indexed - :char_count)
+                WHERE id = :workspace_id
+            """),
+            {"char_count": char_count, "workspace_id": workspace_id},
+        )
 
 
 async def update_document(
