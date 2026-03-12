@@ -203,7 +203,7 @@ export default function DashboardPage() {
         )}
 
         {/* KPI row */}
-        <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
           {loading ? (
             <>
               <SkeletonCard />
@@ -234,7 +234,7 @@ export default function DashboardPage() {
 
         {/* Satisfaction + Sentiment row */}
         {!loading && (
-          <div className="grid grid-cols-2 gap-4 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
             {/* Satisfaction */}
             <div className="bg-white border border-[#f0ebe3] rounded-xl p-5">
               <h2 className="text-[12px] font-semibold text-gray-500 uppercase tracking-wide mb-4">
@@ -364,7 +364,7 @@ export default function DashboardPage() {
 
         {/* Topics row: answered + unanswered */}
         {!loading && (
-          <div className="grid grid-cols-2 gap-4 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
             {/* Top answered topics */}
             <div className="bg-white border border-[#f0ebe3] rounded-xl p-5">
               <h2 className="text-[12px] font-semibold text-gray-500 uppercase tracking-wide mb-4">
