@@ -23,10 +23,15 @@ async def get_dashboard(
     workspace_id: uuid.UUID = Depends(get_workspace),
     db: AsyncSession = Depends(get_db),
     current_user: Agent = Depends(get_current_user),
+    chatbot_id: uuid.UUID | None = Query(None),
 ):
     now = datetime.now(timezone.utc)
     week_start = now - timedelta(days=7)
     prev_week_start = now - timedelta(days=14)
+
+    conv_base = [Conversation.workspace_id == workspace_id]
+    if chatbot_id:
+        conv_base.append(Conversation.chatbot_id == chatbot_id)
 
     current_result = await db.execute(
         select(
@@ -35,7 +40,7 @@ async def get_dashboard(
             func.count().filter(Conversation.escalation_reason.isnot(None)).label("escalated"),
         )
         .select_from(Conversation)
-        .where(Conversation.workspace_id == workspace_id, Conversation.created_at >= week_start)
+        .where(*conv_base, Conversation.created_at >= week_start)
     )
     current = current_result.one()
 
@@ -46,7 +51,7 @@ async def get_dashboard(
         )
         .select_from(Conversation)
         .where(
-            Conversation.workspace_id == workspace_id,
+            *conv_base,
             Conversation.created_at >= prev_week_start,
             Conversation.created_at < week_start,
         )
@@ -60,7 +65,7 @@ async def get_dashboard(
     escalation_result = await db.execute(
         select(Conversation.escalation_reason, func.count())
         .where(
-            Conversation.workspace_id == workspace_id,
+            *conv_base,
             Conversation.created_at >= week_start,
             Conversation.escalation_reason.isnot(None),
         )
@@ -76,10 +81,7 @@ async def get_dashboard(
             func.count(Conversation.id).label("total"),
             func.count(Conversation.id).filter(Conversation.autonomous_resolved == True).label("resolved"),  # noqa: E712
         )
-        .where(
-            Conversation.workspace_id == workspace_id,
-            Conversation.created_at >= twelve_weeks_ago,
-        )
+        .where(*conv_base, Conversation.created_at >= twelve_weeks_ago)
         .group_by(week_trunc)
         .order_by(week_trunc)
     )
@@ -112,15 +114,16 @@ async def get_dashboard(
     )
     new_articles = articles_result.scalar() or 0
 
+    gap_filters = [GapCluster.workspace_id == workspace_id, GapCluster.status == "open"]
+    if chatbot_id:
+        gap_filters.append(GapCluster.chatbot_id == chatbot_id)
     open_gaps_result = await db.execute(
-        select(func.count())
-        .select_from(GapCluster)
-        .where(GapCluster.workspace_id == workspace_id, GapCluster.status == "open")
+        select(func.count()).select_from(GapCluster).where(*gap_filters)
     )
     open_gaps = open_gaps_result.scalar() or 0
 
     thirty_days_ago = now - timedelta(days=30)
-    feedback_result = await db.execute(
+    feedback_stmt = (
         select(MessageFeedback.rating, func.count().label("n"))
         .where(
             MessageFeedback.workspace_id == workspace_id,
@@ -128,10 +131,29 @@ async def get_dashboard(
         )
         .group_by(MessageFeedback.rating)
     )
+    if chatbot_id:
+        from app.models.conversations import Message
+        feedback_stmt = (
+            select(MessageFeedback.rating, func.count().label("n"))
+            .join(Message, MessageFeedback.message_id == Message.id)
+            .join(Conversation, Message.conversation_id == Conversation.id)
+            .where(
+                MessageFeedback.workspace_id == workspace_id,
+                MessageFeedback.created_at >= thirty_days_ago,
+                Conversation.chatbot_id == chatbot_id,
+            )
+            .group_by(MessageFeedback.rating)
+        )
+    feedback_result = await db.execute(feedback_stmt)
     feedback_counts: dict[str, int] = {row.rating: row.n for row in feedback_result.all()}
 
+    top_topics_params: dict = {"ws": str(workspace_id), "cutoff": thirty_days_ago}
+    chatbot_filter = ""
+    if chatbot_id:
+        chatbot_filter = "AND c.chatbot_id = :chatbot_id"
+        top_topics_params["chatbot_id"] = str(chatbot_id)
     top_topics_result = await db.execute(
-        text("""
+        text(f"""
             SELECT topic, count(*) AS n
             FROM conversation_analysis ca
             JOIN conversations c ON c.id = ca.conversation_id
@@ -139,11 +161,12 @@ async def get_dashboard(
             WHERE ca.workspace_id = :ws
               AND c.autonomous_resolved = TRUE
               AND ca.created_at >= :cutoff
+              {chatbot_filter}
             GROUP BY topic
             ORDER BY n DESC
             LIMIT 5
         """),
-        {"ws": str(workspace_id), "cutoff": thirty_days_ago},
+        top_topics_params,
     )
     top_topics = [{"topic": row[0], "count": row[1]} for row in top_topics_result.all()]
 
