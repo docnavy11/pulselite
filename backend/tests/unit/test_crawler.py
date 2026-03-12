@@ -1,8 +1,7 @@
-# backend/tests/unit/test_crawler.py
 import pytest
 from unittest.mock import patch
 
-from app.services.crawler import CrawlResult, _normalize, _same_domain, discover_urls
+from app.services.crawler import _matches_paths, _normalize, _same_domain, discover_urls
 from app.services.fetcher import FetchResult
 
 
@@ -35,6 +34,32 @@ def test_same_domain_false():
     assert _same_domain("https://b.com/page", "a.com") is False
 
 
+# ── _matches_paths ────────────────────────────────────────────────────────────
+
+def test_matches_paths_no_filter():
+    assert _matches_paths("https://a.com/anything", [], []) is True
+
+def test_matches_paths_include_match():
+    assert _matches_paths("https://a.com/blog/post", ["/blog"], []) is True
+
+def test_matches_paths_include_no_match():
+    assert _matches_paths("https://a.com/about", ["/blog"], []) is False
+
+def test_matches_paths_exclude_match():
+    assert _matches_paths("https://a.com/admin/panel", [], ["/admin"]) is False
+
+def test_matches_paths_exclude_no_match():
+    assert _matches_paths("https://a.com/public", [], ["/admin"]) is True
+
+def test_matches_paths_include_and_exclude():
+    # In include AND not in exclude → True
+    assert _matches_paths("https://a.com/docs/api", ["/docs"], ["/docs/private"]) is True
+
+def test_matches_paths_include_and_excluded():
+    # In include but also in exclude → False
+    assert _matches_paths("https://a.com/docs/private/secret", ["/docs"], ["/docs/private"]) is False
+
+
 # ── discover_urls: sitemap strategy ──────────────────────────────────────────
 
 @pytest.mark.asyncio
@@ -54,36 +79,10 @@ async def test_discover_uses_sitemap_when_available():
         return _make_fetch_result(url)
 
     with patch("app.services.crawler.fetch", side_effect=mock_fetch):
-        result = await discover_urls("https://a.com", max_pages=10)
+        urls = await discover_urls("https://a.com")
 
-    assert result.used_sitemap is True
-    assert len(result.urls) == 4
-    assert result.over_limit is False
-
-
-@pytest.mark.asyncio
-async def test_over_limit_flag():
-    sitemap_xml = """<?xml version="1.0"?>
-    <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-      <url><loc>https://a.com/p1</loc></url>
-      <url><loc>https://a.com/p2</loc></url>
-      <url><loc>https://a.com/p3</loc></url>
-      <url><loc>https://a.com/p4</loc></url>
-      <url><loc>https://a.com/p5</loc></url>
-    </urlset>"""
-
-    async def mock_fetch(url: str) -> FetchResult:
-        if "sitemap" in url:
-            return FetchResult(url=url, html=sitemap_xml, text="", title=None,
-                               theme_color=None, status_code=200, used_playwright=False)
-        return _make_fetch_result(url)
-
-    with patch("app.services.crawler.fetch", side_effect=mock_fetch):
-        result = await discover_urls("https://a.com", max_pages=3)
-
-    assert result.over_limit is True
-    assert result.total_discovered == 5
-    assert len(result.urls) == 3
+    assert len(urls) == 4
+    assert all("a.com" in u for u in urls)
 
 
 @pytest.mark.asyncio
@@ -101,10 +100,9 @@ async def test_sitemap_not_found_falls_back_to_bfs():
                            theme_color=None, status_code=200, used_playwright=False)
 
     with patch("app.services.crawler.fetch", side_effect=mock_fetch):
-        result = await discover_urls("https://a.com", max_pages=10)
+        urls = await discover_urls("https://a.com")
 
-    assert result.used_sitemap is False
-    assert any("a.com" in u for u in result.urls)
+    assert any("a.com" in u for u in urls)
 
 
 @pytest.mark.asyncio
@@ -122,9 +120,9 @@ async def test_bfs_drops_off_domain_links():
                            theme_color=None, status_code=200, used_playwright=False)
 
     with patch("app.services.crawler.fetch", side_effect=mock_fetch):
-        result = await discover_urls("https://a.com", max_pages=20)
+        urls = await discover_urls("https://a.com")
 
-    assert all("other.com" not in u for u in result.urls)
+    assert all("other.com" not in u for u in urls)
 
 
 @pytest.mark.asyncio
@@ -142,13 +140,11 @@ async def test_bfs_drops_urls_with_query_strings():
                            theme_color=None, status_code=200, used_playwright=False)
 
     with patch("app.services.crawler.fetch", side_effect=mock_fetch):
-        result = await discover_urls("https://a.com", max_pages=20)
+        urls = await discover_urls("https://a.com")
 
-    assert not any("foo=bar" in u for u in result.urls)
-    assert any("clean" in u for u in result.urls)
+    assert not any("foo=bar" in u for u in urls)
+    assert any("clean" in u for u in urls)
 
-
-# ── discover_urls: deduplication ─────────────────────────────────────────────
 
 @pytest.mark.asyncio
 async def test_sitemap_deduplicates_urls():
@@ -167,13 +163,10 @@ async def test_sitemap_deduplicates_urls():
         return _make_fetch_result(url)
 
     with patch("app.services.crawler.fetch", side_effect=mock_fetch):
-        result = await discover_urls("https://a.com", max_pages=10)
+        urls = await discover_urls("https://a.com")
 
-    assert result.used_sitemap is True
-    assert len(result.urls) == 3
+    assert len(urls) == 3
 
-
-# ── discover_urls: sitemap index recursion ────────────────────────────────────
 
 @pytest.mark.asyncio
 async def test_sitemap_index_recurses_into_child_sitemaps():
@@ -199,7 +192,53 @@ async def test_sitemap_index_recurses_into_child_sitemaps():
         return _make_fetch_result(url)
 
     with patch("app.services.crawler.fetch", side_effect=mock_fetch):
-        result = await discover_urls("https://a.com", max_pages=10)
+        urls = await discover_urls("https://a.com")
 
-    assert result.used_sitemap is True
-    assert len(result.urls) == 3
+    assert len(urls) == 3
+
+
+# ── Path filter integration tests ─────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_include_paths_filters_sitemap_urls():
+    sitemap_xml = """<?xml version="1.0"?>
+    <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+      <url><loc>https://a.com/blog/post1</loc></url>
+      <url><loc>https://a.com/blog/post2</loc></url>
+      <url><loc>https://a.com/about</loc></url>
+    </urlset>"""
+
+    async def mock_fetch(url: str) -> FetchResult:
+        if "sitemap" in url:
+            return FetchResult(url=url, html=sitemap_xml, text="", title=None,
+                               theme_color=None, status_code=200, used_playwright=False)
+        return _make_fetch_result(url)
+
+    with patch("app.services.crawler.fetch", side_effect=mock_fetch):
+        urls = await discover_urls("https://a.com", include_paths=["/blog"])
+
+    assert all("/blog" in u for u in urls)
+    assert not any("/about" in u for u in urls)
+
+
+@pytest.mark.asyncio
+async def test_exclude_paths_filters_sitemap_urls():
+    sitemap_xml = """<?xml version="1.0"?>
+    <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+      <url><loc>https://a.com/public/page1</loc></url>
+      <url><loc>https://a.com/admin/panel</loc></url>
+      <url><loc>https://a.com/public/page2</loc></url>
+      <url><loc>https://a.com/public/page3</loc></url>
+    </urlset>"""
+
+    async def mock_fetch(url: str) -> FetchResult:
+        if "sitemap" in url:
+            return FetchResult(url=url, html=sitemap_xml, text="", title=None,
+                               theme_color=None, status_code=200, used_playwright=False)
+        return _make_fetch_result(url)
+
+    with patch("app.services.crawler.fetch", side_effect=mock_fetch):
+        urls = await discover_urls("https://a.com", exclude_paths=["/admin"])
+
+    assert not any("/admin" in u for u in urls)
+    assert len(urls) == 3
