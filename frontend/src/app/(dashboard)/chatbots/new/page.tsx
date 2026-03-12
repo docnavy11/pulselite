@@ -139,6 +139,10 @@ export default function NewBotWizardPage() {
   const [reviewTone, setReviewTone] = useState("professional");
   const [reviewLanguage, setReviewLanguage] = useState("en");
 
+  // back-navigation state
+  const [editingStep1, setEditingStep1] = useState(false);
+  const [editingStep3, setEditingStep3] = useState(false);
+
   useEffect(() => {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
@@ -277,6 +281,25 @@ export default function NewBotWizardPage() {
     }
   }
 
+  function handleRestart() {
+    if (pollRef.current) clearInterval(pollRef.current);
+    setCrawlStatus(null);
+    setCrawlJobId("");
+    setCrawlKbId("");
+    setAutoconfigRunning(false);
+    setAutoconfigError("");
+    setConfig(null);
+    setChatbotId("");
+    setReviewName("");
+    setReviewWelcome("");
+    setReviewColor("");
+    setReviewTone("professional");
+    setReviewLanguage("en");
+    setEditingStep1(false);
+    setEditingStep3(false);
+    setStep("url");
+  }
+
   function handleCopy(text: string) {
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
@@ -287,6 +310,30 @@ export default function NewBotWizardPage() {
   const stepIndex = STEPS.findIndex((s) => s.id === step);
   const embedCode = `<script src="https://cdn.pulse.ai/widget.js" data-key="${chatbotId}"></script>`;
   const activePlatformGuide = PLATFORM_GUIDES.find((p) => p.id === activePlatform)!;
+
+  // Timeline derived state
+  const step2Done =
+    (step === "review" || step === "done") &&
+    !crawlStatus?.stalled &&
+    !autoconfigError;
+  const step2Error = step === "crawling" && (!!crawlStatus?.stalled || !!autoconfigError);
+
+  const step1Completed = stepIndex > 0;
+  const step2Completed = step2Done;
+  const step3Completed = step === "done";
+
+  const line12Color = step1Completed && step2Completed ? "bg-primary-500" : "bg-gray-200";
+  const line23Color = step2Completed && step3Completed ? "bg-primary-500" : "bg-gray-200";
+  const line34Color = step3Completed ? "bg-primary-500" : "bg-gray-200";
+
+  const hostnameChip = (() => {
+    try {
+      return new URL(url.startsWith("http") ? url : `https://${url}`)
+        .hostname.replace(/^www\./, "");
+    } catch {
+      return url;
+    }
+  })();
 
   // Phase states for crawling step
   const crawlPct = !crawlStatus || crawlStatus.status === "pending"
