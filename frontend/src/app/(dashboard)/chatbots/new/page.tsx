@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Globe, CheckCircle, ChevronRight, Copy, Check, Sparkles, AlertTriangle, RefreshCw } from "lucide-react";
+import { Globe, CheckCircle, ChevronRight, Copy, Check, AlertTriangle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card, CardContent } from "@/components/ui/Card";
@@ -117,6 +117,8 @@ export default function NewBotWizardPage() {
   const pollRef = useRef<NodeJS.Timeout | null>(null);
   const pollStartRef = useRef<number>(0);
   const POLL_TIMEOUT_MS = 10 * 60 * 1000; // 10 min client-side safety net
+  const [elapsedSec, setElapsedSec] = useState(0);
+  const elapsedRef = useRef<NodeJS.Timeout | null>(null);
 
   // result state
   const [config, setConfig] = useState<AutoConfigResponse | null>(null);
@@ -139,6 +141,7 @@ export default function NewBotWizardPage() {
   useEffect(() => {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
+      if (elapsedRef.current) clearInterval(elapsedRef.current);
     };
   }, []);
 
@@ -187,9 +190,13 @@ export default function NewBotWizardPage() {
       const crawl = await startCrawl(workspace.id, normalized, [], [], chatbot.id);
       setCrawlJobId(crawl.job_id);
       setCrawlKbId(crawl.kb_id);
-      setCrawlStatus({ job_id: crawl.job_id, status: "pending", pages_discovered: crawl.pages_discovered, pages_queued: 0, pages_failed: 0, docs_indexed: 0, docs_total: 0, docs_failed: 0, docs_skipped: 0, stalled: false });
+      setCrawlStatus({ job_id: crawl.job_id, status: "pending", phase: null, error_message: null, pages_discovered: crawl.pages_discovered, pages_queued: 0, pages_failed: 0, docs_indexed: 0, docs_total: 0, docs_failed: 0, docs_skipped: 0, stalled: false });
 
       pollStartRef.current = Date.now();
+      setElapsedSec(0);
+      elapsedRef.current = setInterval(() => {
+        setElapsedSec(Math.floor((Date.now() - pollStartRef.current) / 1000));
+      }, 1000);
       pollRef.current = setInterval(async () => {
         // Client-side timeout safety net
         if (Date.now() - pollStartRef.current > POLL_TIMEOUT_MS) {
@@ -203,8 +210,8 @@ export default function NewBotWizardPage() {
 
           if (status.status === "failed") {
             clearInterval(pollRef.current!);
-            setError("The crawl failed. Check that the URL is reachable and try again.");
-            setStep("url");
+            clearInterval(elapsedRef.current!);
+            // error_message from backend is surfaced in the UI — stay on crawling step
             return;
           }
 
@@ -221,6 +228,7 @@ export default function NewBotWizardPage() {
 
           if (crawlDone && docsSettled) {
             clearInterval(pollRef.current!);
+            clearInterval(elapsedRef.current!);
             if (status.docs_indexed === 0) {
               setError("All pages failed to index. The site may block crawlers.");
               setStep("url");
@@ -276,6 +284,8 @@ export default function NewBotWizardPage() {
 
   function handleRestart() {
     if (pollRef.current) clearInterval(pollRef.current);
+    if (elapsedRef.current) clearInterval(elapsedRef.current);
+    setElapsedSec(0);
     setCrawlStatus(null);
     setCrawlJobId("");
     setCrawlKbId("");
@@ -483,153 +493,165 @@ export default function NewBotWizardPage() {
             <p className="text-[11px] font-medium text-gray-400 pt-1">Crawl &amp; analyse</p>
           )}
 
-          {/* Active: crawling card (always expanded while on this step) */}
-          {step === "crawling" && (
-            <Card>
-              <CardContent className="pt-8 pb-8">
-                <div className="flex flex-col items-center text-center gap-6 py-4">
-                  {crawlStatus?.stalled
-                    ? <AlertTriangle className="h-10 w-10 text-amber-400" />
-                    : autoconfigError
-                    ? <AlertTriangle className="h-10 w-10 text-amber-400" />
-                    : <Spinner className="h-10 w-10 text-primary-500" />
-                  }
-                  <h2 className="text-lg font-semibold text-gray-900">
-                    {crawlStatus?.stalled
-                      ? "Taking longer than expected"
-                      : autoconfigError
-                      ? "Almost there…"
-                      : "Setting up your bot…"}
-                  </h2>
-                  {/* Phase 1: Crawling */}
-                  <div className="w-full max-w-sm space-y-1.5">
-                    <div className="flex justify-between text-sm">
-                      <span className={`font-medium ${crawlComplete ? "text-gray-400 line-through" : "text-gray-700"}`}>
-                        Crawling pages
-                      </span>
-                      <span className="text-gray-500">
-                        {!crawlStatus || crawlStatus.status === "pending"
-                          ? "Starting…"
-                          : crawlComplete
-                          ? `${crawlStatus.pages_queued} pages ✓`
-                          : `${crawlStatus.pages_queued} / ${crawlStatus.pages_discovered} pages`}
-                      </span>
-                    </div>
-                    <div className="h-2 w-full rounded-full bg-gray-100">
-                      <div className="h-2 rounded-full bg-primary-500 transition-all duration-500" style={{ width: `${crawlPct}%` }} />
-                    </div>
-                    {crawlStatus && crawlStatus.pages_failed > 0 && (
-                      <p className="text-[11px] text-amber-600 text-left flex items-center gap-1">
-                        <AlertTriangle className="h-3 w-3 flex-shrink-0" />
-                        {crawlStatus.pages_failed} page{crawlStatus.pages_failed > 1 ? "s" : ""} couldn't be fetched
-                      </p>
-                    )}
-                  </div>
-                  {/* Phase 2: Indexing */}
-                  <div className="w-full max-w-sm space-y-1.5">
-                    <div className="flex justify-between text-sm">
-                      <span className={`font-medium ${indexComplete ? "text-gray-400 line-through" : "text-gray-700"}`}>
-                        Indexing content
-                      </span>
-                      <span className="text-gray-500">
-                        {!crawlStatus || crawlStatus.docs_total === 0
-                          ? "Waiting…"
-                          : indexComplete
-                          ? `${crawlStatus.docs_indexed} pages ✓`
-                          : `${crawlStatus.docs_indexed} / ${crawlStatus.docs_total} pages`}
-                      </span>
-                    </div>
-                    <div className="h-2 w-full rounded-full bg-gray-100">
-                      <div className="h-2 rounded-full bg-primary-400 transition-all duration-500" style={{ width: `${indexPct}%` }} />
-                    </div>
-                    {crawlStatus && crawlStatus.docs_failed > 0 && (
-                      <p className="text-[11px] text-amber-600 text-left flex items-center gap-1">
-                        <AlertTriangle className="h-3 w-3 flex-shrink-0" />
-                        {crawlStatus.docs_failed} page{crawlStatus.docs_failed > 1 ? "s" : ""} failed to index
-                      </p>
-                    )}
-                  </div>
-                  {/* Phase 3: Analysing */}
-                  <div className="w-full max-w-sm space-y-1.5">
-                    <div className="flex justify-between text-sm">
-                      <span className={`font-medium flex items-center gap-1.5 ${autoconfigRunning ? "text-primary-600" : "text-gray-400"}`}>
-                        {autoconfigRunning && <Sparkles className="h-3.5 w-3.5 animate-pulse" />}
-                        Analysing content
-                      </span>
-                      <span className="text-gray-500">
-                        {autoconfigRunning ? "Generating config…" : indexComplete ? "Queued" : "Waiting…"}
-                      </span>
-                    </div>
-                    <div className="h-2 w-full rounded-full bg-gray-100">
-                      <div
-                        className={`h-2 rounded-full bg-primary-300 transition-all duration-1000 ${autoconfigRunning ? "animate-pulse" : ""}`}
-                        style={{ width: autoconfigRunning ? "60%" : "0%" }}
-                      />
-                    </div>
-                  </div>
-                  {/* Stalled */}
-                  {crawlStatus?.stalled && !autoconfigError && (
-                    <div className="w-full max-w-sm bg-amber-50 border border-amber-200 rounded-lg p-3 text-left space-y-2">
-                      <p className="text-[12px] text-amber-800 font-medium">The crawl is taking longer than usual.</p>
-                      <p className="text-[11px] text-amber-600">The site may be slow or blocking crawlers. You can wait or start over.</p>
-                      <div className="flex gap-2 pt-1">
-                        <button
-                          onClick={() => { handleRestart(); }}
-                          className="px-3 py-1.5 text-[11px] font-medium text-amber-700 border border-amber-300 rounded-lg hover:bg-amber-100 transition-colors"
-                        >
-                          Start over
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                  {/* Autoconfig error */}
-                  {autoconfigError && !autoconfigRunning && (
-                    <div className="w-full max-w-sm bg-amber-50 border border-amber-200 rounded-lg p-3 text-left space-y-2">
-                      <p className="text-[12px] text-amber-800 font-medium">AI configuration failed.</p>
-                      <p className="text-[11px] text-amber-600">{autoconfigError}</p>
-                      <div className="flex gap-2 pt-1">
-                        <button
-                          onClick={async () => {
-                            if (!workspace || !chatbotId || !crawlKbId) return;
-                            setAutoconfigRunning(true);
-                            setAutoconfigError("");
-                            try {
-                              const result = await runAutoconfig(workspace.id, chatbotId, crawlKbId);
-                              setConfig(result);
-                              setReviewName(result.name);
-                              setReviewWelcome(result.welcome_message ?? "");
-                              setReviewColor(result.brand_color ?? "#ff6b35");
-                              setReviewTone(result.tone ?? "professional");
-                              setReviewLanguage(result.language ?? "en");
-                              setStep("review");
-                            } catch (acErr: unknown) {
-                              const msg = acErr instanceof Error ? acErr.message : "AI configuration failed.";
-                              setAutoconfigError(msg);
-                            } finally {
-                              setAutoconfigRunning(false);
-                            }
-                          }}
-                          className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-white bg-primary-500 hover:bg-primary-600 rounded-lg transition-colors"
-                        >
-                          <RefreshCw className="h-3 w-3" />
-                          Retry
-                        </button>
-                        <button
-                          onClick={() => { handleRestart(); }}
-                          className="px-3 py-1.5 text-[11px] font-medium text-gray-600 border border-[#f0ebe3] rounded-lg hover:bg-[#faf8f5] transition-colors"
-                        >
-                          Start over
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                  {!crawlStatus?.stalled && !autoconfigError && (
-                    <p className="text-xs text-gray-400">This usually takes under a minute.</p>
-                  )}
+          {/* Active: crawling card */}
+          {step === "crawling" && (() => {
+            const isFailed = crawlStatus?.status === "failed";
+            const isDiscovering = !isFailed && (crawlStatus?.phase === "discovering" || (!crawlStatus?.phase && crawlStatus?.status === "running" && !crawlStatus?.pages_discovered));
+            const isFetching = !isFailed && (crawlStatus?.phase === "fetching" || (crawlStatus?.status === "running" && (crawlStatus?.pages_discovered ?? 0) > 0));
+            const isIndexing = !isFailed && (crawlStatus?.docs_total ?? 0) > 0 && !indexComplete;
+            const isAutoconfiguring = !isFailed && autoconfigRunning;
+            const elapsed = `${Math.floor(elapsedSec / 60)}:${String(elapsedSec % 60).padStart(2, "0")}`;
+
+            type RowState = "done" | "active" | "error" | "waiting";
+            const PhaseRow = ({ state, label, detail, children }: { state: RowState; label: string; detail?: string; children?: React.ReactNode }) => (
+              <div className="flex items-start gap-3 py-2.5 border-b border-gray-100 last:border-0">
+                <div className="flex-shrink-0 mt-0.5">
+                  {state === "done" && <div className="h-5 w-5 rounded-full bg-green-100 flex items-center justify-center"><Check className="h-3 w-3 text-green-600" /></div>}
+                  {state === "active" && <Spinner className="h-5 w-5 text-primary-500" />}
+                  {state === "error" && <div className="h-5 w-5 rounded-full bg-red-100 flex items-center justify-center"><AlertTriangle className="h-3 w-3 text-red-500" /></div>}
+                  {state === "waiting" && <div className="h-5 w-5 rounded-full border-2 border-gray-200" />}
                 </div>
-              </CardContent>
-            </Card>
-          )}
+                <div className="flex-1 min-w-0">
+                  <p className={`text-[13px] font-medium ${state === "done" ? "text-gray-500 line-through" : state === "error" ? "text-red-700" : state === "active" ? "text-gray-900" : "text-gray-400"}`}>{label}</p>
+                  {detail && <p className={`text-[11px] mt-0.5 ${state === "error" ? "text-red-600" : "text-gray-500"}`}>{detail}</p>}
+                  {children}
+                </div>
+              </div>
+            );
+
+            return (
+              <Card>
+                <CardContent className="pt-5 pb-5">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-[13px] font-semibold text-gray-900">
+                      {isFailed ? "Setup failed" : isAutoconfiguring ? "Almost there…" : "Setting up your bot…"}
+                    </h2>
+                    {!isFailed && <span className="text-[11px] text-gray-400 tabular-nums">{elapsed}</span>}
+                  </div>
+
+                  <div className="divide-y divide-gray-100">
+                    {/* Queued */}
+                    <PhaseRow state="done" label="Job queued" />
+
+                    {/* Discovering pages */}
+                    <PhaseRow
+                      state={isFailed && !crawlStatus?.pages_discovered ? "error" : (crawlStatus?.pages_discovered ?? 0) > 0 ? "done" : isDiscovering ? "active" : "waiting"}
+                      label="Discovering pages"
+                      detail={
+                        isFailed && !crawlStatus?.pages_discovered
+                          ? (crawlStatus?.error_message ?? "Discovery failed")
+                          : isDiscovering
+                          ? "Checking sitemap · crawling links"
+                          : (crawlStatus?.pages_discovered ?? 0) > 0
+                          ? `${crawlStatus!.pages_discovered} page${crawlStatus!.pages_discovered === 1 ? "" : "s"} found`
+                          : undefined
+                      }
+                    />
+
+                    {/* Fetching pages */}
+                    <PhaseRow
+                      state={isFailed && (crawlStatus?.pages_discovered ?? 0) > 0 ? "error" : crawlComplete ? "done" : isFetching ? "active" : "waiting"}
+                      label="Fetching pages"
+                      detail={
+                        isFailed && (crawlStatus?.pages_discovered ?? 0) > 0
+                          ? (crawlStatus?.error_message ?? "Fetch failed")
+                          : crawlComplete
+                          ? `${crawlStatus!.pages_queued} fetched${crawlStatus!.pages_failed > 0 ? ` · ${crawlStatus!.pages_failed} failed` : ""}`
+                          : isFetching && (crawlStatus?.pages_discovered ?? 0) > 0
+                          ? `${crawlStatus!.pages_queued} / ${crawlStatus!.pages_discovered}`
+                          : undefined
+                      }
+                    >
+                      {isFetching && (crawlStatus?.pages_discovered ?? 0) > 0 && (
+                        <div className="h-1.5 w-full rounded-full bg-gray-100 mt-1.5">
+                          <div className="h-1.5 rounded-full bg-primary-500 transition-all duration-500" style={{ width: `${crawlPct}%` }} />
+                        </div>
+                      )}
+                    </PhaseRow>
+
+                    {/* Indexing content */}
+                    <PhaseRow
+                      state={indexComplete ? "done" : isIndexing ? "active" : "waiting"}
+                      label="Indexing content"
+                      detail={
+                        indexComplete
+                          ? `${crawlStatus!.docs_indexed} indexed${crawlStatus!.docs_failed > 0 ? ` · ${crawlStatus!.docs_failed} failed` : ""}`
+                          : isIndexing
+                          ? `${crawlStatus!.docs_indexed} / ${crawlStatus!.docs_total}`
+                          : undefined
+                      }
+                    >
+                      {isIndexing && (
+                        <div className="h-1.5 w-full rounded-full bg-gray-100 mt-1.5">
+                          <div className="h-1.5 rounded-full bg-primary-400 transition-all duration-500" style={{ width: `${indexPct}%` }} />
+                        </div>
+                      )}
+                    </PhaseRow>
+
+                    {/* AI configuration */}
+                    <PhaseRow
+                      state={isAutoconfiguring ? "active" : autoconfigError ? "error" : "waiting"}
+                      label="AI configuration"
+                      detail={autoconfigError || (isAutoconfiguring ? "Generating config…" : undefined)}
+                    >
+                      {autoconfigError && !autoconfigRunning && (
+                        <div className="flex gap-2 mt-2">
+                          <button
+                            onClick={async () => {
+                              if (!workspace || !chatbotId || !crawlKbId) return;
+                              setAutoconfigRunning(true);
+                              setAutoconfigError("");
+                              try {
+                                const result = await runAutoconfig(workspace.id, chatbotId, crawlKbId);
+                                setConfig(result);
+                                setReviewName(result.name);
+                                setReviewWelcome(result.welcome_message ?? "");
+                                setReviewColor(result.brand_color ?? "#ff6b35");
+                                setReviewTone(result.tone ?? "professional");
+                                setReviewLanguage(result.language ?? "en");
+                                setStep("review");
+                              } catch (acErr: unknown) {
+                                const msg = acErr instanceof Error ? acErr.message : "AI configuration failed.";
+                                setAutoconfigError(msg);
+                              } finally {
+                                setAutoconfigRunning(false);
+                              }
+                            }}
+                            className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-white bg-primary-500 hover:bg-primary-600 rounded-lg transition-colors"
+                          >
+                            <RefreshCw className="h-3 w-3" /> Retry
+                          </button>
+                          <button onClick={handleRestart} className="px-2.5 py-1 text-[11px] text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                            Start over
+                          </button>
+                        </div>
+                      )}
+                    </PhaseRow>
+                  </div>
+
+                  {/* Stalled warning */}
+                  {crawlStatus?.stalled && !isFailed && (
+                    <div className="mt-4 bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-2">
+                      <p className="text-[12px] text-amber-800 font-medium">Taking longer than expected.</p>
+                      <p className="text-[11px] text-amber-600">The site may be slow or blocking crawlers.</p>
+                      <button onClick={handleRestart} className="px-3 py-1.5 text-[11px] font-medium text-amber-700 border border-amber-300 rounded-lg hover:bg-amber-100 transition-colors">
+                        Start over
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Hard failure with error message */}
+                  {isFailed && (
+                    <div className="mt-4 flex justify-end">
+                      <button onClick={handleRestart} className="px-3 py-1.5 text-[11px] font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                        Start over
+                      </button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           {/* Collapsed chip (step 2 done) */}
           {step2Completed && (

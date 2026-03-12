@@ -70,6 +70,8 @@ export interface CrawlJobSummary {
 export interface CrawlStatusResponse {
   job_id: string;
   status: string;
+  phase: string | null;
+  error_message: string | null;
   pages_discovered: number;
   pages_queued: number;
   pages_failed: number;
