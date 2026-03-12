@@ -12,7 +12,7 @@ class TestCrawlEndpoint:
             mock_task.delay.return_value = None
             r = await auth_client.post(
                 f"/api/v1/workspaces/{workspace.id}/crawl",
-                json={"url": "https://a.com", "max_pages": 50},
+                json={"url": "https://a.com"},
             )
 
         assert r.status_code == 201
@@ -32,7 +32,7 @@ class TestCrawlEndpoint:
             mock_task.delay.return_value = None
             r = await auth_client.post(
                 f"/api/v1/workspaces/{workspace.id}/crawl",
-                json={"url": "https://a.com", "max_pages": 10},
+                json={"url": "https://a.com"},
             )
 
         assert r.status_code == 201
@@ -56,7 +56,7 @@ class TestCrawlEndpoint:
             mock_task.delay.return_value = None
             r = await auth_client.post(
                 f"/api/v1/workspaces/{workspace.id}/crawl",
-                json={"url": "https://a.com", "max_pages": 5, "chatbot_id": str(bot.id)},
+                json={"url": "https://a.com", "chatbot_id": str(bot.id)},
             )
 
         assert r.status_code == 201
@@ -73,7 +73,7 @@ class TestCrawlEndpoint:
             mock_task.delay.return_value = None
             post_r = await auth_client.post(
                 f"/api/v1/workspaces/{workspace.id}/crawl",
-                json={"url": "https://a.com", "max_pages": 5},
+                json={"url": "https://a.com"},
             )
         job_id = post_r.json()["job_id"]
 
@@ -95,13 +95,26 @@ class TestCrawlEndpoint:
     async def test_crawl_invalid_url_scheme(self, auth_client, workspace):
         r = await auth_client.post(
             f"/api/v1/workspaces/{workspace.id}/crawl",
-            json={"url": "ftp://evil.com", "max_pages": 10},
+            json={"url": "ftp://evil.com"},
         )
         assert r.status_code == 422
 
-    async def test_crawl_max_pages_zero_rejected(self, auth_client, workspace):
-        r = await auth_client.post(
-            f"/api/v1/workspaces/{workspace.id}/crawl",
-            json={"url": "https://a.com", "max_pages": 0},
-        )
+    async def test_crawl_rejects_path_not_starting_with_slash(self, auth_client, workspace):
+        """include_paths entries must start with '/'."""
+        with patch("app.api.v1.crawl.crawl_website") as mock_task:
+            mock_task.delay.return_value = None
+            r = await auth_client.post(
+                f"/api/v1/workspaces/{workspace.id}/crawl",
+                json={"url": "https://a.com", "include_paths": ["blog"]},
+            )
         assert r.status_code == 422
+
+    async def test_workspace_usage_endpoint(self, auth_client, workspace):
+        """GET /usage returns chars_indexed, chars_limit, chars_remaining, plan."""
+        r = await auth_client.get(f"/api/v1/workspaces/{workspace.id}/usage")
+        assert r.status_code == 200
+        data = r.json()
+        assert "chars_indexed" in data
+        assert "plan" in data
+        # chars_indexed is 0 for a fresh test workspace
+        assert data["chars_indexed"] == 0
