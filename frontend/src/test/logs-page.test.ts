@@ -68,19 +68,16 @@ describe("getCrawlRunLogs", () => {
   });
 
   it("passes limit and offset params", async () => {
-    // eslint-disable-next-line prefer-const
-    let capturedParams: URLSearchParams | null = null;
+    const captured = { params: null as URLSearchParams | null };
     server.use(
       http.get(`${BASE}/logs/crawl-runs`, ({ request }) => {
-        capturedParams = new URL(request.url).searchParams;
+        captured.params = new URL(request.url).searchParams;
         return HttpResponse.json({ total: 0, items: [] });
       }),
     );
     await getCrawlRunLogs(WS, 10, 50);
-    // TypeScript narrows capturedParams to null after assignment in callback; cast via unknown
-    const params = capturedParams as unknown as URLSearchParams;
-    expect(params.get("limit")).toBe("10");
-    expect(params.get("offset")).toBe("50");
+    expect(captured.params?.get("limit")).toBe("10");
+    expect(captured.params?.get("offset")).toBe("50");
   });
 });
 
