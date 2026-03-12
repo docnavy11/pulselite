@@ -60,6 +60,7 @@ async def _mark_document_failed(document_id: uuid.UUID, reason: str) -> None:
             doc = result.scalar_one_or_none()
             if doc and doc.status not in ("indexed", "skipped", "failed"):
                 doc.status = "failed"
+                doc.error_message = reason
                 await session.commit()
         except Exception as e:
             logger.error("Failed to mark document %s as failed: %s", document_id, e)
