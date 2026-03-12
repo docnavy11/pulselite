@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Spinner } from "@/components/ui/Spinner";
-import { BillingPlan, CreditBalance, UsageBreakdown } from "@/lib/types";
+import { BillingPlan, CreditBalance, UsageBreakdown, WorkspaceUsage } from "@/lib/types";
 import {
   getBillingPlans,
   createCheckoutSession,
@@ -21,8 +21,50 @@ import {
   getAutoRecharge,
   updateAutoRecharge,
   getUsageBreakdown,
+  getWorkspaceUsage,
 } from "@/lib/api-functions";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+
+function CharUsageBar({ usage }: { usage: WorkspaceUsage }) {
+  if (usage.chars_limit === null) {
+    return (
+      <div className="text-sm text-gray-600">
+        <span className="font-medium">{usage.chars_indexed.toLocaleString()}</span> characters indexed
+        {" "}<span className="text-gray-400">(unlimited plan)</span>
+      </div>
+    );
+  }
+
+  const pct = Math.min(100, Math.round((usage.chars_indexed / usage.chars_limit) * 100));
+  const barColor =
+    pct >= 95 ? "bg-red-500" :
+    pct >= 80 ? "bg-amber-500" :
+    "bg-green-500";
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex justify-between text-xs text-gray-600">
+        <span>
+          <span className="font-medium">{usage.chars_indexed.toLocaleString()}</span>
+          {" / "}
+          {usage.chars_limit.toLocaleString()} characters indexed
+        </span>
+        <span className="text-gray-400">{pct}%</span>
+      </div>
+      <div className="h-2 w-full rounded-full bg-gray-100">
+        <div
+          className={`h-2 rounded-full transition-all duration-500 ${barColor}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      {usage.chars_remaining !== null && (
+        <p className="text-[11px] text-gray-400">
+          {usage.chars_remaining.toLocaleString()} characters remaining
+        </p>
+      )}
+    </div>
+  );
+}
 
 export default function BillingPage() {
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);
@@ -34,6 +76,7 @@ export default function BillingPage() {
   const [autoRecharge, setAutoRecharge] = useState({
     enabled: false, threshold: 200, amount: 1000,
   });
+  const [charUsage, setCharUsage] = useState<WorkspaceUsage | null>(null);
   const [savingAutoRecharge, setSavingAutoRecharge] = useState(false);
   useEffect(() => {
     const promises: Promise<unknown>[] = [
@@ -42,6 +85,7 @@ export default function BillingPage() {
     if (workspace) {
       promises.push(getCreditsBalance(workspace.id).then(setCredits));
       promises.push(getUsageBreakdown(workspace.id).then(setUsage).catch(() => {}));
+      promises.push(getWorkspaceUsage(workspace.id).then(setCharUsage).catch(() => {}));
     }
     Promise.all(promises)
       .catch(() => {})
@@ -142,6 +186,16 @@ export default function BillingPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Knowledge base character usage */}
+      {charUsage && (
+        <Card className="mb-8">
+          <CardContent className="p-4 space-y-2">
+            <h3 className="text-sm font-semibold text-gray-700">Knowledge Base Usage</h3>
+            <CharUsageBar usage={charUsage} />
+          </CardContent>
+        </Card>
+      )}
 
       {/* Billing interval toggle */}
       <div className="flex justify-center mb-6">
