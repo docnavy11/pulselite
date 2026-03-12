@@ -79,7 +79,7 @@ export default function ChatbotsPage() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 min-[1200px]:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 min-[1200px]:grid-cols-3">
         {chatbots.map((chatbot) => (
           <div key={chatbot.id} className="group relative">
             {/* Delete confirmation overlay */}
