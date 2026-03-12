@@ -158,6 +158,8 @@ class CrawlJob(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     pages_discovered: Mapped[int] = mapped_column(Integer, server_default=text("0"))
     pages_queued: Mapped[int] = mapped_column(Integer, server_default=text("0"))
     pages_failed: Mapped[int] = mapped_column(Integer, server_default=text("0"))
+    phase: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     include_paths: Mapped[list] = mapped_column(JSONB, server_default=text("'[]'::jsonb"), nullable=False)
     exclude_paths: Mapped[list] = mapped_column(JSONB, server_default=text("'[]'::jsonb"), nullable=False)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

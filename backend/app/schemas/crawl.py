@@ -55,6 +55,8 @@ class CrawlJobSummary(BaseModel):
     docs_skipped: int = 0
     created_at: str
     completed_at: Optional[str] = None
+    phase: Optional[str] = None
+    error_message: Optional[str] = None
 
 
 class CrawlJobStatusResponse(BaseModel):
@@ -72,6 +74,8 @@ class CrawlJobStatusResponse(BaseModel):
     created_at: str
     started_at: Optional[str] = None
     completed_at: Optional[str] = None
+    phase: Optional[str] = None
+    error_message: Optional[str] = None
 
 
 class WorkspaceUsageResponse(BaseModel):

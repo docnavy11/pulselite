@@ -122,6 +122,8 @@ async def get_latest_crawl_for_chatbot(
         created_at=job.created_at.isoformat(),
         started_at=job.started_at.isoformat() if job.started_at else None,
         completed_at=job.completed_at.isoformat() if job.completed_at else None,
+        phase=job.phase,
+        error_message=job.error_message,
     )
 
 
@@ -190,6 +192,8 @@ async def list_crawl_history(
             docs_skipped=skipped_counts.get(str(j.id), 0),
             created_at=j.created_at.isoformat(),
             completed_at=j.completed_at.isoformat() if j.completed_at else None,
+            phase=j.phase,
+            error_message=j.error_message,
         )
         for j in jobs
     ]
@@ -258,4 +262,6 @@ async def get_crawl_status(
         created_at=job.created_at.isoformat(),
         started_at=job.started_at.isoformat() if job.started_at else None,
         completed_at=job.completed_at.isoformat() if job.completed_at else None,
+        phase=job.phase,
+        error_message=job.error_message,
     )

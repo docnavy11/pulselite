@@ -19,22 +19,19 @@ def crawl_website(self, job_id: str) -> dict:
 
 
 async def _run(job_id: uuid.UUID) -> None:
-    from app.models.knowledge import CrawlJob
     from app.services.crawl_service import execute_crawl
-    from sqlalchemy import select
 
     await engine.dispose()
     async with async_session_factory() as session:
-        job_id_str = str(job_id)
         try:
             await execute_crawl(session, job_id)
-        except Exception:
+        except Exception as exc:
             await session.rollback()
-            await _mark_job_failed(job_id_str)
+            await _mark_job_failed(str(job_id), error_message=f"Unexpected error: {exc}")
             raise
 
 
-async def _mark_job_failed(job_id: str) -> None:
+async def _mark_job_failed(job_id: str, error_message: str | None = None) -> None:
     from app.models.knowledge import CrawlJob
     from datetime import datetime, timezone
     from sqlalchemy import select
@@ -46,6 +43,9 @@ async def _mark_job_failed(job_id: str) -> None:
             job = result.scalar_one_or_none()
             if job:
                 job.status = "failed"
+                job.phase = None
+                if error_message:
+                    job.error_message = error_message
                 job.completed_at = datetime.now(timezone.utc)
                 await session.commit()
         except Exception as e:

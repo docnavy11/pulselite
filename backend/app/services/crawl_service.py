@@ -80,8 +80,8 @@ async def prepare_crawl(
 
 async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
     """Discover URLs, fetch each page, create Documents, fire ingest tasks.
-    Updates CrawlJob.pages_queued after every successfully fetched page so
-    the polling endpoint reflects live progress."""
+    Updates CrawlJob.phase and CrawlJob.error_message at each transition so
+    the polling endpoint gives the frontend real-time visibility."""
     from app.workers.tasks.ingest_document import ingest_document
 
     r = await db.execute(select(CrawlJob).where(CrawlJob.id == job_id))
@@ -89,16 +89,39 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
 
     job.started_at = datetime.now(timezone.utc)
     job.status = "running"
+    job.phase = "discovering"
     await db.commit()
     await db.refresh(job)
 
-    # Phase 1: discover URLs
-    urls = await discover_urls(
-        job.root_url,
-        include_paths=job.include_paths or None,
-        exclude_paths=job.exclude_paths or None,
-    )
+    # Phase 1: discover URLs — wrap so any error is stored and surfaced immediately
+    try:
+        urls = await discover_urls(
+            job.root_url,
+            include_paths=job.include_paths or None,
+            exclude_paths=job.exclude_paths or None,
+        )
+    except Exception as exc:
+        logger.error("URL discovery failed for job %s: %s", job_id, exc)
+        job.status = "failed"
+        job.phase = None
+        job.error_message = f"Could not discover pages: {exc}"
+        job.completed_at = datetime.now(timezone.utc)
+        await db.commit()
+        return
+
+    if not urls:
+        job.status = "failed"
+        job.phase = None
+        job.error_message = (
+            "No pages found on this site. "
+            "Check that the URL is correct and the site is publicly accessible."
+        )
+        job.completed_at = datetime.now(timezone.utc)
+        await db.commit()
+        return
+
     job.pages_discovered = len(urls)
+    job.phase = "fetching"
     await db.commit()
     await db.refresh(job)
 
@@ -208,11 +231,24 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
             task.cancel()
         raise
 
+    # Check if any pages were successfully fetched
+    if not doc_ids and job.pages_failed == len(urls):
+        job.status = "failed"
+        job.phase = None
+        job.error_message = (
+            "All pages failed to fetch. "
+            "The site may be blocking crawlers or requiring authentication."
+        )
+        job.completed_at = datetime.now(timezone.utc)
+        await db.commit()
+        return
+
     # Fire ingest tasks — all docs committed, workers can read them
     for doc_id in doc_ids:
         ingest_document.delay(doc_id)
 
     # Mark job as completed
     job.status = "completed"
+    job.phase = None
     job.completed_at = datetime.now(timezone.utc)
     await db.commit()
