@@ -33,7 +33,12 @@ const PLAN_LABELS: Record<string, string> = {
   free: "Free", starter: "Starter", growth: "Growth", enterprise: "Enterprise",
 };
 
-export function Sidebar() {
+interface SidebarProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { pathname } = useLocation();
   const user = useAuthStore((s) => s.user);
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);
@@ -65,6 +70,11 @@ export function Sidebar() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, [wsSwitcherOpen]);
 
+  // Close drawer on any route change (mobile)
+  useEffect(() => {
+    onClose();
+  }, [pathname, onClose]);
+
   async function handleCreateWorkspace() {
     const name = newWsName.trim();
     if (!name) return;
@@ -89,7 +99,15 @@ export function Sidebar() {
   const userInitial = userName[0]?.toUpperCase() ?? "?";
 
   return (
-    <aside className="flex h-screen w-56 flex-col bg-white border-r border-[#f0ebe3] flex-shrink-0">
+    <aside className={clsx(
+      "flex h-screen w-56 flex-col bg-white border-r border-[#f0ebe3]",
+      // Below xl: fixed overlay, slides in/out
+      "fixed inset-y-0 left-0 z-50 transition-transform duration-200 ease-in-out",
+      // At xl+: back to normal document flow
+      "xl:static xl:z-auto xl:flex-shrink-0 xl:translate-x-0",
+      // Open/closed (only meaningful below xl — xl:translate-x-0 overrides)
+      isOpen ? "translate-x-0" : "-translate-x-full",
+    )}>
       {/* Logo + workspace switcher */}
       <div className="px-4 pt-5 pb-4 border-b border-[#f0ebe3]">
         <div className="flex items-center gap-2 mb-3">

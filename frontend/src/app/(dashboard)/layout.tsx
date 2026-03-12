@@ -1,3 +1,4 @@
+import { useState, useCallback } from 'react'
 import { Outlet } from 'react-router-dom'
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
@@ -10,17 +11,31 @@ import { CopilotPanel } from "@/components/copilot/CopilotPanel";
 
 function DashboardShell() {
   useKeyboardShortcuts();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Stable reference so Sidebar's useEffect dep array doesn't re-fire on every render
+  const closeSidebar = useCallback(() => setSidebarOpen(false), []);
+
   return (
     <ProtectedRoute>
       <div className="flex h-screen overflow-hidden">
-        <Sidebar />
+        {/* Backdrop — mobile/tablet only, dismisses drawer */}
+        {sidebarOpen && (
+          <div
+            className="fixed inset-0 bg-black/40 z-40 xl:hidden"
+            onClick={closeSidebar}
+          />
+        )}
+        <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} />
         <div className="flex flex-1 flex-col overflow-hidden">
-          <TopBar />
+          <TopBar onMenuToggle={() => setSidebarOpen((o) => !o)} />
           <div className="flex flex-1 overflow-hidden">
             <main className="flex-1 overflow-auto bg-[#faf8f5] p-6">
               <Outlet />
             </main>
-            <CopilotPanel />
+            {/* CopilotPanel hidden below xl */}
+            <div className="hidden xl:flex">
+              <CopilotPanel />
+            </div>
           </div>
         </div>
       </div>
