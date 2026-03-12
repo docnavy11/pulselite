@@ -6,9 +6,11 @@ from pydantic import BaseModel, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import PLAN_CHAR_LIMITS
 from app.database import get_db
 from app.dependencies import get_current_user, get_workspace
 from app.models.organizational import Agent, Workspace
+from app.schemas.crawl import WorkspaceUsageResponse
 from app.schemas.workspaces import WorkspaceCreate, WorkspaceResponse
 from app.services import workspace_service
 from app.services.encryption import decrypt_api_key, encrypt_api_key
@@ -182,4 +184,26 @@ async def update_data_retention(
     await db.refresh(workspace)
     return DataRetentionResponse(data_retention_days=workspace.data_retention_days)
 
+
+@router.get("/{workspace_id}/usage", response_model=WorkspaceUsageResponse)
+async def get_workspace_usage(
+    workspace_id: _uuid.UUID = Depends(get_workspace),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Workspace).where(Workspace.id == workspace_id))
+    workspace = result.scalar_one_or_none()
+    if workspace is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found")
+
+    limit = PLAN_CHAR_LIMITS.get(workspace.plan)
+    chars_remaining: int | None = None
+    if limit is not None:
+        chars_remaining = max(0, limit - workspace.chars_indexed)
+
+    return WorkspaceUsageResponse(
+        chars_indexed=workspace.chars_indexed,
+        chars_limit=limit,
+        chars_remaining=chars_remaining,
+        plan=workspace.plan,
+    )
 

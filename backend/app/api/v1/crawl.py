@@ -23,7 +23,13 @@ async def crawl_website_endpoint(
 ):
     try:
         job_id, kb_id = await prepare_crawl(
-            db, workspace_id, body.url, body.max_pages, body.knowledge_base_id, body.chatbot_id
+            db,
+            workspace_id=workspace_id,
+            url=body.url,
+            include_paths=body.include_paths or None,
+            exclude_paths=body.exclude_paths or None,
+            kb_id=body.knowledge_base_id,
+            chatbot_id=body.chatbot_id,
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -35,8 +41,6 @@ async def crawl_website_endpoint(
         kb_id=kb_id,
         pages_discovered=0,
         pages_queued=0,
-        over_limit=False,
-        limit=body.max_pages,
     )
 
 
@@ -90,6 +94,14 @@ async def get_latest_crawl_for_chatbot(
     docs_indexed = docs_indexed_result.scalar() or 0
     docs_failed = docs_failed_result.scalar() or 0
 
+    docs_skipped_result = await db.execute(
+        select(func.count()).select_from(Document).where(
+            Document.knowledge_base_id == job.kb_id,
+            Document.status == "skipped",
+        )
+    )
+    docs_skipped = docs_skipped_result.scalar() or 0
+
     stalled = False
     if job.status in ("running", "pending") and job.started_at:
         elapsed = (datetime.now(timezone.utc) - job.started_at).total_seconds()
@@ -105,9 +117,8 @@ async def get_latest_crawl_for_chatbot(
         docs_indexed=docs_indexed,
         docs_total=docs_total,
         docs_failed=docs_failed,
+        docs_skipped=docs_skipped,
         stalled=stalled,
-        over_limit=job.over_limit,
-        limit=job.max_pages,
         created_at=job.created_at.isoformat(),
         started_at=job.started_at.isoformat() if job.started_at else None,
         completed_at=job.completed_at.isoformat() if job.completed_at else None,
@@ -155,6 +166,18 @@ async def list_crawl_history(
         for kb_id, cnt in indexed_result:
             kb_indexed[str(kb_id)] = cnt
 
+    # Get skipped counts for all returned jobs in one query
+    skipped_counts: dict[str, int] = {}
+    if jobs:
+        skipped_result = await db.execute(
+            select(Document.knowledge_base_id, func.count().label("cnt"))
+            .where(Document.knowledge_base_id.in_([job.kb_id for job in jobs]))
+            .where(Document.status == "skipped")
+            .group_by(Document.knowledge_base_id)
+        )
+        kb_skipped = {str(row.knowledge_base_id): row.cnt for row in skipped_result}
+        skipped_counts = {str(job.id): kb_skipped.get(str(job.kb_id), 0) for job in jobs}
+
     return [
         CrawlJobSummary(
             job_id=str(j.id),
@@ -164,6 +187,7 @@ async def list_crawl_history(
             pages_queued=j.pages_queued,
             pages_failed=j.pages_failed,
             docs_indexed=kb_indexed.get(str(j.kb_id), 0),
+            docs_skipped=skipped_counts.get(str(j.id), 0),
             created_at=j.created_at.isoformat(),
             completed_at=j.completed_at.isoformat() if j.completed_at else None,
         )
@@ -205,6 +229,14 @@ async def get_crawl_status(
     docs_indexed = docs_indexed_result.scalar() or 0
     docs_failed = docs_failed_result.scalar() or 0
 
+    docs_skipped_result = await db.execute(
+        select(func.count()).select_from(Document).where(
+            Document.knowledge_base_id == job.kb_id,
+            Document.status == "skipped",
+        )
+    )
+    docs_skipped = docs_skipped_result.scalar() or 0
+
     # Stalled: still "running" or "pending" with no progress for > 15 minutes
     stalled = False
     if job.status in ("running", "pending") and job.started_at:
@@ -221,9 +253,8 @@ async def get_crawl_status(
         docs_indexed=docs_indexed,
         docs_total=docs_total,
         docs_failed=docs_failed,
+        docs_skipped=docs_skipped,
         stalled=stalled,
-        over_limit=job.over_limit,
-        limit=job.max_pages,
         created_at=job.created_at.isoformat(),
         started_at=job.started_at.isoformat() if job.started_at else None,
         completed_at=job.completed_at.isoformat() if job.completed_at else None,
