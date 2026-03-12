@@ -52,8 +52,6 @@ export interface CrawlResponse {
   kb_id: string;
   pages_discovered: number;
   pages_queued: number;
-  over_limit: boolean;
-  limit: number;
 }
 
 export interface CrawlJobSummary {
@@ -64,6 +62,7 @@ export interface CrawlJobSummary {
   pages_queued: number;
   pages_failed: number;
   docs_indexed: number;
+  docs_skipped: number;
   created_at: string;
   completed_at: string | null;
 }
@@ -77,7 +76,15 @@ export interface CrawlStatusResponse {
   docs_indexed: number;
   docs_total: number;
   docs_failed: number;
+  docs_skipped: number;
   stalled: boolean;
+}
+
+export interface WorkspaceUsage {
+  chars_indexed: number;
+  chars_limit: number | null;
+  chars_remaining: number | null;
+  plan: string;
 }
 
 export interface AutoConfigResponse {

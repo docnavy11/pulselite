@@ -187,10 +187,10 @@ export default function NewBotWizardPage() {
       const chatbot = await createChatbot(workspace.id, { name });
       setChatbotId(chatbot.id);
 
-      const crawl = await startCrawl(workspace.id, normalized, 50, chatbot.id);
+      const crawl = await startCrawl(workspace.id, normalized, [], [], chatbot.id);
       setCrawlJobId(crawl.job_id);
       setCrawlKbId(crawl.kb_id);
-      setCrawlStatus({ job_id: crawl.job_id, status: "pending", pages_discovered: crawl.pages_discovered, pages_queued: 0, pages_failed: 0, docs_indexed: 0, docs_total: 0, docs_failed: 0, stalled: false });
+      setCrawlStatus({ job_id: crawl.job_id, status: "pending", pages_discovered: crawl.pages_discovered, pages_queued: 0, pages_failed: 0, docs_indexed: 0, docs_total: 0, docs_failed: 0, docs_skipped: 0, stalled: false });
 
       pollStartRef.current = Date.now();
       pollRef.current = setInterval(async () => {

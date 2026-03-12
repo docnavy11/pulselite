@@ -31,6 +31,7 @@ import {
   Webhook,
   LLMSettings,
   OpenRouterModel,
+  WorkspaceUsage,
 } from "./types";
 
 // Chatbot CRUD
@@ -81,8 +82,23 @@ export function duplicateChatbot(workspaceId: string, chatbotId: string) {
   return api.post<Chatbot>(`/api/v1/workspaces/${workspaceId}/chatbots/${chatbotId}/duplicate`);
 }
 
-export function startCrawl(workspaceId: string, url: string, maxPages: number, chatbotId?: string) {
-  return api.post<CrawlResponse>(`/api/v1/workspaces/${workspaceId}/crawl`, { url, max_pages: maxPages, chatbot_id: chatbotId });
+export function startCrawl(
+  workspaceId: string,
+  url: string,
+  includePaths: string[],
+  excludePaths: string[],
+  chatbotId?: string,
+) {
+  return api.post<CrawlResponse>(`/api/v1/workspaces/${workspaceId}/crawl`, {
+    url,
+    include_paths: includePaths,
+    exclude_paths: excludePaths,
+    chatbot_id: chatbotId,
+  });
+}
+
+export function getWorkspaceUsage(workspaceId: string) {
+  return api.get<WorkspaceUsage>(`/api/v1/workspaces/${workspaceId}/usage`);
 }
 
 export function getCrawlStatus(workspaceId: string, jobId: string) {
