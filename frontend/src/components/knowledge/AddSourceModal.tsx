@@ -5,7 +5,11 @@ import {
   createDocumentFromUrl,
   createDocumentFromFile,
   createDocumentFromText,
+  startCrawl,
 } from "@/lib/api-functions";
+
+const parsePathList = (raw: string): string[] =>
+  raw.split(",").map((s) => s.trim()).filter(Boolean);
 
 const SOURCE_TYPES = [
   {
@@ -111,6 +115,8 @@ export function AddSourceModal({
   const [textMode, setTextMode] = useState<"plain" | "qa">("plain");
 
   const [sitemapUrl, setSitemapUrl] = useState("");
+  const [includePaths, setIncludePaths] = useState("");
+  const [excludePaths, setExcludePaths] = useState("");
   const [googleDriveUrl, setGoogleDriveUrl] = useState("");
   const [zendeskSubdomain, setZendeskSubdomain] = useState("");
   const [dropboxFolderPath, setDropboxFolderPath] = useState("");
@@ -167,7 +173,7 @@ export function AddSourceModal({
       } else if (activeSource === "text" && textContent.trim()) {
         await createDocumentFromText(workspaceId, { raw_content: textContent, content_type: textMode, knowledge_base_id: knowledgeBaseId });
       } else if (activeSource === "sitemap" && sitemapUrl.trim()) {
-        await createDocumentFromUrl(workspaceId, { source_url: sitemapUrl.trim(), source_type: "sitemap", knowledge_base_id: knowledgeBaseId });
+        await startCrawl(workspaceId, sitemapUrl.trim(), parsePathList(includePaths), parsePathList(excludePaths));
       } else if (activeSource === "google_drive" && googleDriveUrl.trim()) {
         await createDocumentFromUrl(workspaceId, { source_url: googleDriveUrl.trim(), source_type: "google_drive", knowledge_base_id: knowledgeBaseId });
       } else if (activeSource === "zendesk" && zendeskSubdomain.trim()) {
@@ -493,6 +499,42 @@ export function AddSourceModal({
                 <p className="text-xs" style={{ color: "rgba(255,255,255,0.3)" }}>
                   Every URL in the sitemap will be crawled and indexed automatically.
                 </p>
+
+                {/* Include paths */}
+                <div>
+                  <label className="block text-xs font-medium mb-1" style={{ color: "rgba(255,255,255,0.5)" }}>
+                    Include paths <span style={{ color: "rgba(255,255,255,0.25)", fontWeight: 400 }}>(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={includePaths}
+                    onChange={(e) => setIncludePaths(e.target.value)}
+                    placeholder="/blog, /docs"
+                    className="w-full rounded-lg px-4 py-2.5 text-sm outline-none transition-all duration-200"
+                    style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff", fontFamily: "ui-monospace, monospace" }}
+                    onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = active.color; (e.target as HTMLInputElement).style.boxShadow = `0 0 0 3px ${active.color}20`; }}
+                    onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = "rgba(255,255,255,0.1)"; (e.target as HTMLInputElement).style.boxShadow = "none"; }}
+                  />
+                  <p className="mt-1 text-[11px]" style={{ color: "rgba(255,255,255,0.25)" }}>Only crawl URLs matching these path prefixes. Leave empty to crawl all pages.</p>
+                </div>
+
+                {/* Exclude paths */}
+                <div>
+                  <label className="block text-xs font-medium mb-1" style={{ color: "rgba(255,255,255,0.5)" }}>
+                    Exclude paths <span style={{ color: "rgba(255,255,255,0.25)", fontWeight: 400 }}>(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={excludePaths}
+                    onChange={(e) => setExcludePaths(e.target.value)}
+                    placeholder="/admin, /private"
+                    className="w-full rounded-lg px-4 py-2.5 text-sm outline-none transition-all duration-200"
+                    style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff", fontFamily: "ui-monospace, monospace" }}
+                    onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = active.color; (e.target as HTMLInputElement).style.boxShadow = `0 0 0 3px ${active.color}20`; }}
+                    onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = "rgba(255,255,255,0.1)"; (e.target as HTMLInputElement).style.boxShadow = "none"; }}
+                  />
+                  <p className="mt-1 text-[11px]" style={{ color: "rgba(255,255,255,0.25)" }}>Skip URLs matching these path prefixes.</p>
+                </div>
               </div>
             )}
 

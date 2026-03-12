@@ -168,6 +168,13 @@ export function CrawlStatusPanel({ chatbot_id, job_id }: Props) {
           ✓ Crawl complete — {status.docs_indexed} pages indexed
         </div>
       )}
+
+      {(status.docs_skipped ?? 0) > 0 && (
+        <div className="flex items-center gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-[11px] text-amber-800">
+          <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+          {status.docs_skipped} page{status.docs_skipped > 1 ? "s were" : " was"} skipped — character limit reached.
+        </div>
+      )}
     </div>
   );
 }
