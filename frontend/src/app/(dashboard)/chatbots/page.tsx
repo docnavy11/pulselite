@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Plus, Bot } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/Card";
@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Spinner } from "@/components/ui/Spinner";
 import { Chatbot } from "@/lib/types";
+import { useSocketEvent, getSocket } from "@/lib/socket";
+import type { ChatbotStatusEvent, CrawlProgressEvent } from "@/lib/types";
 import { getChatbots, getChatbotStats, updateChatbot, deleteChatbot } from "@/lib/api-functions";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useChatbotStore } from "@/stores/chatbot-store";
@@ -13,10 +15,6 @@ import { useCopilot } from "@/components/copilot/CopilotProvider";
 
 function isSetupInProgress(s: string | null | undefined) {
   return ["crawling", "configuring", "ready", "setup_failed"].includes(s ?? "");
-}
-
-function needsActivePoll(s: string | null | undefined) {
-  return ["crawling", "configuring"].includes(s ?? "");
 }
 
 function getSetupBadgeLabel(s: string | null | undefined): string | null {
@@ -46,7 +44,6 @@ export default function ChatbotsPage() {
   const [loading, setLoading] = useState(true);
   const [actionPending, setActionPending] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const handleToggle = async (e: { preventDefault: () => void }, chatbot: Chatbot) => {
     e.preventDefault();
@@ -94,28 +91,34 @@ export default function ChatbotsPage() {
       .finally(() => setLoading(false));
   }, [workspace]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Poll every 3s only while any bot is actively crawling or configuring
-  useEffect(() => {
-    const hasActive = chatbots.some((b) => needsActivePoll(b.setup_status));
-    if (hasActive) {
-      if (!pollRef.current) {
-        pollRef.current = setInterval(() => {
-          loadBots().catch(() => {});
-        }, 3000);
-      }
-    } else {
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
+  // Real-time chatbot status updates
+  useSocketEvent<ChatbotStatusEvent>("chatbot:status_changed", (data) => {
+    patchChatbotInList(data.chatbot_id, { setup_status: data.setup_status });
+    // Refetch full list when a bot becomes ready (to get stats)
+    if (data.setup_status === "ready") {
+      loadBots().catch(() => {});
     }
-    return () => {
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
-    };
-  }, [chatbots, workspace]); // eslint-disable-line react-hooks/exhaustive-deps
+  });
+
+  // Real-time crawl progress on chatbot cards
+  useSocketEvent<CrawlProgressEvent>("crawl:progress", (data) => {
+    if (data.chatbot_id) {
+      patchChatbotInList(data.chatbot_id, {
+        crawl_progress: {
+          pages_discovered: data.pages_discovered,
+          pages_queued: data.pages_queued,
+        },
+      } as Partial<Chatbot>);
+    }
+  });
+
+  // Refetch on reconnect to sync state after disconnection
+  useEffect(() => {
+    const s = getSocket();
+    const onReconnect = () => { loadBots().catch(() => {}); };
+    s.on("connect", onReconnect);
+    return () => { s.off("connect", onReconnect); };
+  }, [workspace]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) {
     return (
