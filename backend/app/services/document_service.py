@@ -8,6 +8,7 @@ from sqlalchemy import text as sa_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.knowledge import Document
+from app.services.realtime import emit_to_workspace
 
 UPLOAD_DIR = "/app/uploads"
 ALLOWED_EXTENSIONS = {".pdf", ".docx", ".csv", ".txt", ".md", ".html"}
@@ -86,6 +87,19 @@ async def delete_document(db: AsyncSession, workspace_id: uuid.UUID, document_id
             """),
             {"char_count": char_count, "workspace_id": workspace_id},
         )
+        # Emit usage update
+        from app.config import PLAN_CHAR_LIMITS
+        ws_result = await db.execute(
+            sa_text("SELECT chars_indexed, plan FROM workspaces WHERE id = :id"),
+            {"id": workspace_id},
+        )
+        ws_row = ws_result.one_or_none()
+        if ws_row:
+            await emit_to_workspace(str(workspace_id), "workspace:usage_updated", {
+                "chars_indexed": ws_row.chars_indexed,
+                "chars_limit": PLAN_CHAR_LIMITS.get(ws_row.plan, 0),
+                "plan": ws_row.plan,
+            })
 
 
 async def update_document(
