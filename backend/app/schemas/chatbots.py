@@ -62,6 +62,21 @@ class ChatbotUpdate(BaseModel):
     welcome_message: str | None = None
     brand_color: str | None = None
     suggested_questions: list[str] | None = None
+    setup_status: str | None = None
+
+    @field_validator("setup_status")
+    @classmethod
+    def setup_status_client_allowed_values(cls, v: str | None) -> str | None:
+        if v is not None and v != "done":
+            raise ValueError("setup_status can only be set to 'done' by clients")
+        return v
+
+
+class CrawlProgressResponse(BaseModel):
+    pages_queued: int
+    pages_discovered: int
+    status: str
+    error_message: str | None = None
 
 
 class ChatbotResponse(BaseModel):
@@ -90,6 +105,9 @@ class ChatbotResponse(BaseModel):
     brand_color: str | None = None
     welcome_message: str | None = None
     suggested_questions: list[str] | None = None
+    setup_status: str | None = None
+    active_crawl_job_id: uuid.UUID | None = None
+    crawl_progress: CrawlProgressResponse | None = None
 
     model_config = {"from_attributes": True}
 

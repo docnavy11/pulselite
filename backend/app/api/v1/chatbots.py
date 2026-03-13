@@ -9,7 +9,7 @@ from app.database import get_db
 from app.dependencies import get_workspace
 from app.models.conversations import Conversation
 from app.models.knowledge import Chatbot as ChatbotModel
-from app.schemas.chatbots import AutoConfigRequest, AutoConfigResponse, ChatbotCreate, ChatbotResponse, ChatbotUpdate
+from app.schemas.chatbots import AutoConfigRequest, AutoConfigResponse, ChatbotCreate, ChatbotResponse, ChatbotUpdate, CrawlProgressResponse
 from app.schemas.widget import LLMConfigUpdate, PersonaUpdate, WidgetConfig
 from app.services import chatbot_service
 from app.services.encryption import encrypt_api_key
@@ -32,7 +32,32 @@ async def list_chatbots(
     workspace_id: uuid.UUID = Depends(get_workspace),
     db: AsyncSession = Depends(get_db),
 ):
-    return await chatbot_service.list_chatbots(db, workspace_id)
+    chatbots = await chatbot_service.list_chatbots(db, workspace_id)
+
+    # Batch-fetch CrawlJob data for bots with active_crawl_job_id (no N+1)
+    from app.models.knowledge import CrawlJob
+    crawl_job_ids = [c.active_crawl_job_id for c in chatbots if c.active_crawl_job_id]
+    crawl_jobs: dict[uuid.UUID, CrawlJob] = {}
+    if crawl_job_ids:
+        result = await db.execute(select(CrawlJob).where(CrawlJob.id.in_(crawl_job_ids)))
+        for job in result.scalars():
+            crawl_jobs[job.id] = job
+
+    responses = []
+    for c in chatbots:
+        r = ChatbotResponse.model_validate(c)
+        if c.active_crawl_job_id and c.active_crawl_job_id in crawl_jobs:
+            job = crawl_jobs[c.active_crawl_job_id]
+            r = r.model_copy(update={
+                "crawl_progress": CrawlProgressResponse(
+                    pages_queued=job.pages_queued,
+                    pages_discovered=job.pages_discovered,
+                    status=job.status,
+                    error_message=job.error_message,
+                )
+            })
+        responses.append(r)
+    return responses
 
 
 @router.get("/stats/summary")
