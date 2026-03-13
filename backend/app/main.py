@@ -33,6 +33,67 @@ from app.api.v1 import (
 from app.api.v1.public_chat import limiter
 from app.config import settings
 
+import socketio as socketio_lib
+from app.utils.security import decode_token
+
+# Socket.IO server — Redis adapter for multi-process delivery
+sio = socketio_lib.AsyncServer(
+    async_mode="asgi",
+    cors_allowed_origins=[],  # handled by FastAPI CORS
+    client_manager=socketio_lib.AsyncRedisManager(settings.REDIS_URL),
+    logger=False,
+    engineio_logger=False,
+)
+
+
+async def _sio_connect(sid: str, environ: dict, auth_data: dict | None) -> None:
+    """Authenticate Socket.IO connections via JWT."""
+    token = auth_data.get("token") if auth_data else None
+    if not token:
+        raise socketio_lib.exceptions.ConnectionRefusedError("Missing token")
+    payload = decode_token(token)
+    if payload is None or payload.get("type") != "access":
+        raise socketio_lib.exceptions.ConnectionRefusedError("Invalid token")
+    await sio.save_session(sid, {"user_id": payload["sub"]})
+
+
+sio.on("connect", _sio_connect)
+
+
+@sio.event
+async def join_workspace(sid: str, data: dict) -> None:
+    """Join a workspace room after verifying membership."""
+    import uuid
+    from sqlalchemy import select
+    from app.database import async_session_factory
+    from app.models.organizational import WorkspaceMembership
+
+    workspace_id = data.get("workspace_id")
+    if not workspace_id:
+        return
+    session_data = await sio.get_session(sid)
+    user_id = session_data.get("user_id")
+    if not user_id:
+        return
+    # Verify workspace membership
+    async with async_session_factory() as db:
+        result = await db.execute(
+            select(WorkspaceMembership).where(
+                WorkspaceMembership.workspace_id == uuid.UUID(str(workspace_id)),
+                WorkspaceMembership.agent_id == uuid.UUID(str(user_id)),
+            )
+        )
+        if result.scalar_one_or_none() is None:
+            return  # silently reject — not a member
+    await sio.enter_room(sid, str(workspace_id))
+
+
+@sio.event
+async def leave_workspace(sid: str, data: dict) -> None:
+    workspace_id = data.get("workspace_id")
+    if workspace_id:
+        await sio.leave_room(sid, str(workspace_id))
+
 
 def create_app() -> FastAPI:
     application = FastAPI(title="Pulselite API", version="0.1.0", docs_url="/api/docs", redoc_url="/api/redoc")
@@ -81,3 +142,6 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
+
+# Combined ASGI app — Socket.IO handles /socket.io, FastAPI handles everything else
+combined_app = socketio_lib.ASGIApp(sio, other_app=app)
