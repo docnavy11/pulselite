@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Plus,
   Globe,
@@ -13,6 +13,7 @@ import { Card, CardContent } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Spinner } from "@/components/ui/Spinner";
 import { Document, KnowledgeBase } from "@/lib/types";
+import type { DocumentStatusEvent } from "@/lib/types";
 import {
   getDocuments,
   deleteDocument,
@@ -24,6 +25,7 @@ import {
 import { CrawlJobSummary } from "@/lib/types";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { AddSourceModal } from "@/components/knowledge/AddSourceModal";
+import { useSocketEvent } from "@/lib/socket";
 
 function errorDescription(error: string): string {
   if (!error) return "Unknown error";
@@ -72,7 +74,6 @@ export function SourcesTab({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [failedOpen, setFailedOpen] = useState(true);
   const [retryingAll, setRetryingAll] = useState(false);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const primaryKb = knowledgeBases[0];
 
@@ -98,18 +99,15 @@ export function SourcesTab({
     }
   }, [fetchDocuments, workspace, chatbotId]);
 
-  useEffect(() => {
-    const hasProcessing = documents.some((d) => d.status === "processing" || d.status === "pending");
-    if (hasProcessing) {
-      pollRef.current = setInterval(fetchDocuments, 5000);
-    } else if (pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-  }, [documents, fetchDocuments]);
+  // Real-time document status updates
+  useSocketEvent<DocumentStatusEvent>("document:status_changed", (data) => {
+    if (primaryKb && data.knowledge_base_id !== primaryKb.id) return;
+    setDocuments((prev) => prev.map((doc) =>
+      doc.id === data.document_id
+        ? { ...doc, status: data.status, title: data.title || doc.title }
+        : doc
+    ));
+  });
 
   async function handleDelete(docId: string) {
     if (!workspace) return;

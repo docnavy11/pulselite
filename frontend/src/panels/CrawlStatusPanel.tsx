@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { getCrawlStatus, getLatestCrawlForChatbot } from "@/lib/api-functions";
 import { CrawlStatusResponse } from "@/lib/types";
+import type { CrawlProgressEvent, CrawlCompletedEvent } from "@/lib/types";
 import { Spinner } from "@/components/ui/Spinner";
+import { useSocketEvent, getSocket } from "@/lib/socket";
 
 interface Props {
   chatbot_id?: string;
@@ -15,8 +17,8 @@ export function CrawlStatusPanel({ chatbot_id, job_id }: Props) {
   const [status, setStatus] = useState<CrawlStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
-  const pollRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Initial fetch to get current state
   useEffect(() => {
     if (!workspace || (!chatbot_id && !job_id)) {
       setLoading(false);
@@ -38,9 +40,6 @@ export function CrawlStatusPanel({ chatbot_id, job_id }: Props) {
           return;
         }
         setStatus(data);
-        if (data.status === "running" || data.status === "pending") {
-          startPolling(data.job_id);
-        }
       } catch {
         setNotFound(true);
       } finally {
@@ -48,24 +47,52 @@ export function CrawlStatusPanel({ chatbot_id, job_id }: Props) {
       }
     }
 
-    function startPolling(jid: string) {
-      pollRef.current = setInterval(async () => {
-        if (!workspace) return;
-        try {
-          const data = await getCrawlStatus(workspace.id, jid);
-          setStatus(data);
-          if (data.status !== "running" && data.status !== "pending") {
-            clearInterval(pollRef.current!);
-          }
-        } catch {
-          // network blip — keep polling
-        }
-      }, 2000);
-    }
-
     fetchInitial();
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [workspace?.id, chatbot_id, job_id]);
+
+  // Real-time crawl progress
+  useSocketEvent<CrawlProgressEvent>("crawl:progress", (data) => {
+    if (job_id && data.job_id !== job_id) return;
+    if (!job_id && data.chatbot_id !== chatbot_id) return;
+    setStatus((prev) => prev ? {
+      ...prev,
+      phase: data.phase,
+      pages_discovered: data.pages_discovered,
+      pages_queued: data.pages_queued,
+      pages_failed: data.pages_failed,
+      status: "running",
+    } : prev);
+  });
+
+  // Real-time crawl completed
+  useSocketEvent<CrawlCompletedEvent>("crawl:completed", (data) => {
+    if (job_id && data.job_id !== job_id) return;
+    if (!job_id && data.chatbot_id !== chatbot_id) return;
+    setStatus((prev) => prev ? {
+      ...prev,
+      status: data.status,
+      pages_queued: data.pages_queued,
+      pages_failed: data.pages_failed,
+      error_message: data.error_message ?? null,
+      phase: null,
+    } : prev);
+  });
+
+  // Refetch on reconnect
+  useEffect(() => {
+    const s = getSocket();
+    const onReconnect = () => {
+      if (!workspace) return;
+      const fetch = job_id
+        ? getCrawlStatus(workspace.id, job_id)
+        : chatbot_id
+        ? getLatestCrawlForChatbot(workspace.id, chatbot_id)
+        : null;
+      fetch?.then(setStatus).catch(() => {});
+    };
+    s.on("connect", onReconnect);
+    return () => { s.off("connect", onReconnect); };
+  }, [workspace?.id, chatbot_id, job_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) return (
     <div className="flex justify-center py-8">
