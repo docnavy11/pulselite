@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.knowledge import Chatbot, CrawlJob, Document, KnowledgeBase
 from app.services.crawler import DiscoveredUrl, discover_urls
 from app.services.fetcher import fetch
+from app.services.realtime import emit_to_workspace
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +85,14 @@ async def prepare_crawl(
             chatbot.active_crawl_job_id = job.id
 
     await db.commit()
+
+    # Emit chatbot status change
+    if chatbot_id is not None:
+        await emit_to_workspace(str(workspace_id), "chatbot:status_changed", {
+            "chatbot_id": str(chatbot_id),
+            "setup_status": "crawling",
+        })
+
     return str(job.id), str(kb_id)
 
 
@@ -102,6 +111,23 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
     await db.commit()
     await db.refresh(job)
 
+    # Resolve chatbot_id from KB (CrawlJob does not have chatbot_id)
+    _kb_result = await db.execute(
+        select(KnowledgeBase.chatbot_id).where(KnowledgeBase.id == job.kb_id)
+    )
+    _kb_row = _kb_result.one_or_none()
+    _chatbot_id = str(_kb_row.chatbot_id) if _kb_row and _kb_row.chatbot_id else None
+
+    await emit_to_workspace(str(job.workspace_id), "crawl:progress", {
+        "job_id": str(job.id),
+        "chatbot_id": _chatbot_id,
+        "phase": "discovering",
+        "pages_discovered": 0,
+        "pages_queued": 0,
+        "pages_failed": 0,
+        "status": "running",
+    })
+
     # Phase 1: discover URLs — wrap so any error is stored and surfaced immediately
     try:
         urls = await discover_urls(
@@ -116,6 +142,14 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
         job.error_message = f"Could not discover pages: {exc}"
         job.completed_at = datetime.now(timezone.utc)
         await db.commit()
+        await emit_to_workspace(str(job.workspace_id), "crawl:completed", {
+            "job_id": str(job.id),
+            "chatbot_id": _chatbot_id,
+            "status": "failed",
+            "pages_queued": 0,
+            "pages_failed": 0,
+            "error_message": job.error_message,
+        })
         return
 
     if not urls:
@@ -127,12 +161,30 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
         )
         job.completed_at = datetime.now(timezone.utc)
         await db.commit()
+        await emit_to_workspace(str(job.workspace_id), "crawl:completed", {
+            "job_id": str(job.id),
+            "chatbot_id": _chatbot_id,
+            "status": "failed",
+            "pages_queued": 0,
+            "pages_failed": 0,
+            "error_message": job.error_message,
+        })
         return
 
     job.pages_discovered = len(urls)
     job.phase = "fetching"
     await db.commit()
     await db.refresh(job)
+
+    await emit_to_workspace(str(job.workspace_id), "crawl:progress", {
+        "job_id": str(job.id),
+        "chatbot_id": _chatbot_id,
+        "phase": "fetching",
+        "pages_discovered": job.pages_discovered,
+        "pages_queued": 0,
+        "pages_failed": 0,
+        "status": "running",
+    })
 
     # Phase 2: fetch pages concurrently (with live DB progress updates).
     # AsyncSession is not concurrency-safe, so fetches run concurrently but
@@ -191,6 +243,8 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
         return _FetchResult(url=page_url, text="", title="", failed=True, error="HTTP 429 (rate limited)")
 
     # Write to DB as each fetch completes — gives live pages_queued progress
+    import time as _time
+    _last_progress_emit = 0.0
     doc_ids: list[str] = []
     fetch_tasks = [asyncio.create_task(_fetch(d)) for d in urls]
 
@@ -215,6 +269,20 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
                     .values(pages_failed=CrawlJob.pages_failed + 1)
                 )
                 await db.commit()
+
+                # Debounced progress emit
+                now = _time.monotonic()
+                if now - _last_progress_emit >= 1.0:
+                    _last_progress_emit = now
+                    await emit_to_workspace(str(job.workspace_id), "crawl:progress", {
+                        "job_id": str(job.id),
+                        "chatbot_id": _chatbot_id,
+                        "phase": "fetching",
+                        "pages_discovered": job.pages_discovered,
+                        "pages_queued": job.pages_queued,
+                        "pages_failed": job.pages_failed + 1,
+                        "status": "running",
+                    })
                 continue
 
             doc = Document(
@@ -235,6 +303,20 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
                 .values(pages_queued=CrawlJob.pages_queued + 1)
             )
             await db.commit()
+
+            # Debounced progress emit (at most every 1s)
+            now = _time.monotonic()
+            if now - _last_progress_emit >= 1.0:
+                _last_progress_emit = now
+                await emit_to_workspace(str(job.workspace_id), "crawl:progress", {
+                    "job_id": str(job.id),
+                    "chatbot_id": _chatbot_id,
+                    "phase": "fetching",
+                    "pages_discovered": job.pages_discovered,
+                    "pages_queued": job.pages_queued + 1,
+                    "pages_failed": job.pages_failed,
+                    "status": "running",
+                })
     except Exception:
         for task in fetch_tasks:
             task.cancel()
@@ -250,6 +332,14 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
         )
         job.completed_at = datetime.now(timezone.utc)
         await db.commit()
+        await emit_to_workspace(str(job.workspace_id), "crawl:completed", {
+            "job_id": str(job.id),
+            "chatbot_id": _chatbot_id,
+            "status": "failed",
+            "pages_queued": 0,
+            "pages_failed": len(urls),
+            "error_message": job.error_message,
+        })
         return
 
     # Fire ingest tasks — all docs committed, workers can read them
@@ -261,3 +351,12 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
     job.phase = None
     job.completed_at = datetime.now(timezone.utc)
     await db.commit()
+
+    await emit_to_workspace(str(job.workspace_id), "crawl:completed", {
+        "job_id": str(job.id),
+        "chatbot_id": _chatbot_id,
+        "status": "completed",
+        "pages_queued": len(doc_ids),
+        "pages_failed": job.pages_failed,
+        "error_message": None,
+    })
