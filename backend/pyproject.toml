@@ -45,6 +45,7 @@ dependencies = [
     "defusedxml>=0.7.1",
     "playwright>=1.44.0",
     "beautifulsoup4>=4.12.3",
+    "python-socketio[asyncio]>=5.11",
 ]
 
 [project.optional-dependencies]
