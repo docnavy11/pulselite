@@ -45,10 +45,10 @@ Respond with ONLY a JSON object in this exact format:
 }}
 
 Rules:
-- name: short, descriptive chatbot name (e.g. "Acme Support Bot")
-- welcome_message: friendly greeting, 1-2 sentences
-- system_prompt: helpful assistant context, max 300 words
-- suggested_questions: exactly 4 questions visitors might ask
+- name: use the actual brand or business name from the content (e.g. "Linkflow Assistant", "QIS Support Bot") — NOT a generic name like "Support Bot"
+- welcome_message: friendly greeting in the brand voice, 1-2 sentences
+- system_prompt: behavioral guidance ONLY — describe the assistant's persona, tone, scope, and conversation style. Do NOT include specific facts, pricing, product details, or any content from the website. That information is retrieved from the knowledge base at query time.
+- suggested_questions: exactly 4 questions visitors commonly ask about this type of business
 - fallback_message: polite message for questions outside scope
 - tone: infer from the website — must be exactly one of: professional, friendly, casual, formal
 {language_instruction}

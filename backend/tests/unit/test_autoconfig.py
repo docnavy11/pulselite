@@ -1,10 +1,102 @@
 # backend/tests/unit/test_autoconfig.py
-"""Unit tests for app.services.autoconfig — pure LLM config generation."""
+"""Unit tests for autoconfig prompt quality and generate() output."""
 import json
 import pytest
 from unittest.mock import AsyncMock, patch
 
-from app.services.autoconfig import AutoConfigResult, extract_brand_color, generate
+from app.services.autoconfig import AutoConfigResult, extract_brand_color, generate, _PROMPT
+
+
+def _make_llm_response(**overrides) -> str:
+    """Helper to create a mock LLM response with optional overrides."""
+    base = {
+        "name": "Linkflow Assistant",
+        "welcome_message": "Hi! How can I help?",
+        "system_prompt": "You are a helpful assistant for Linkflow. Be concise and professional.",
+        "suggested_questions": ["Q1?", "Q2?", "Q3?", "Q4?"],
+        "fallback_message": "I don't have info on that. Please contact support.",
+        "tone": "professional",
+    }
+    base.update(overrides)
+    return json.dumps(base)
+
+
+class TestPromptContent:
+    """Verify that _PROMPT guides LLM toward behavioral-only system prompts."""
+
+    def test_system_prompt_instruction_is_behavioral(self):
+        """System prompt instruction must say 'behavioral' and forbid facts."""
+        prompt_lower = _PROMPT.lower()
+        assert "behavioral" in prompt_lower or "persona" in prompt_lower or "behavior" in prompt_lower, \
+            "_PROMPT must mention 'behavioral', 'behavior', or 'persona'"
+
+    def test_system_prompt_instruction_forbids_facts(self):
+        """Prompt must explicitly tell LLM not to include facts/pricing in system_prompt."""
+        prompt_lower = _PROMPT.lower()
+        # Must contain some negation
+        assert "not" in prompt_lower or "do not" in prompt_lower or "avoid" in prompt_lower, \
+            "_PROMPT must contain negation (not/do not/avoid)"
+        # Must mention what NOT to include
+        forbidden_keywords = ["pricing", "facts", "specific", "product details", "content"]
+        assert any(kw in prompt_lower for kw in forbidden_keywords), \
+            "Prompt should mention what NOT to include in system_prompt (pricing, facts, etc.)"
+
+    def test_name_instruction_mentions_brand(self):
+        """Name instruction should guide LLM to extract brand/business name."""
+        prompt_lower = _PROMPT.lower()
+        assert "brand" in prompt_lower or "business" in prompt_lower or "company" in prompt_lower, \
+            "_PROMPT must mention extracting 'brand', 'business', or 'company' name"
+
+
+class TestGenerate:
+    """Test generate() output constraints."""
+
+    @pytest.mark.asyncio
+    async def test_system_prompt_capped_at_300_words(self):
+        """Verify system_prompt is capped at 300 words."""
+        long_prompt = " ".join(["word"] * 400)
+        mock_response = _make_llm_response(system_prompt=long_prompt)
+        with patch("app.services.autoconfig._llm_client") as mock_client:
+            mock_client.generate = AsyncMock(return_value=mock_response)
+            result = await generate(["some content"], "<html></html>")
+        assert len(result.system_prompt.split()) <= 300, \
+            f"system_prompt has {len(result.system_prompt.split())} words, should be <= 300"
+
+    @pytest.mark.asyncio
+    async def test_exactly_4_suggested_questions(self):
+        """Verify suggested_questions is always exactly 4 items."""
+        mock_response = _make_llm_response(suggested_questions=["Q1?", "Q2?"])
+        with patch("app.services.autoconfig._llm_client") as mock_client:
+            mock_client.generate = AsyncMock(return_value=mock_response)
+            result = await generate(["content"], "<html></html>")
+        assert len(result.suggested_questions) == 4, \
+            f"suggested_questions has {len(result.suggested_questions)} items, should be exactly 4"
+
+    @pytest.mark.asyncio
+    async def test_returns_all_required_fields(self):
+        """Verify generate() returns all required fields."""
+        mock_response = _make_llm_response()
+        with patch("app.services.autoconfig._llm_client") as mock_client:
+            mock_client.generate = AsyncMock(return_value=mock_response)
+            result = await generate(["content"], "<html></html>")
+        assert result.name == "Linkflow Assistant"
+        assert result.welcome_message == "Hi! How can I help?"
+        assert result.system_prompt
+        assert result.fallback_message
+        assert result.tone == "professional"
+
+    @pytest.mark.asyncio
+    async def test_language_instruction_injected(self):
+        """Verify language parameter is injected into prompt."""
+        captured = {}
+        async def fake_generate(messages, **kwargs):
+            captured["prompt"] = messages[0]["content"]
+            return _make_llm_response()
+        with patch("app.services.autoconfig._llm_client") as mock_client:
+            mock_client.generate = fake_generate
+            await generate(["content"], "<html></html>", language="nl")
+        assert "Dutch" in captured["prompt"], \
+            "Language parameter should be injected into the prompt"
 
 
 # ── extract_brand_color ───────────────────────────────────────────────────────
