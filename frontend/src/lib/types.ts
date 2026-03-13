@@ -434,3 +434,44 @@ export interface ActionUpdate {
   is_enabled?: boolean;
   parameters?: ActionParameter[];
 }
+
+// Socket.IO event payloads
+
+export interface CrawlProgressEvent {
+  job_id: string;
+  chatbot_id: string | null;
+  phase: "discovering" | "fetching";
+  pages_discovered: number;
+  pages_queued: number;
+  pages_failed: number;
+  status: string;
+}
+
+export interface CrawlCompletedEvent {
+  job_id: string;
+  chatbot_id: string | null;
+  status: "completed" | "failed";
+  pages_queued: number;
+  pages_failed: number;
+  error_message: string | null;
+}
+
+export interface DocumentStatusEvent {
+  document_id: string;
+  knowledge_base_id: string;
+  status: "processing" | "indexed" | "failed" | "skipped";
+  char_count: number;
+  title: string;
+  error_message: string | null;
+}
+
+export interface ChatbotStatusEvent {
+  chatbot_id: string;
+  setup_status: "crawling" | "configuring" | "ready" | "setup_failed";
+}
+
+export interface WorkspaceUsageEvent {
+  chars_indexed: number;
+  chars_limit: number | null;
+  plan: string;
+}
