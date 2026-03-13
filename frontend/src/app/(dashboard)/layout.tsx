@@ -6,11 +6,13 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { CommandPalette } from "@/components/CommandPalette";
 import { ToastProvider } from "@/components/ui/Toast";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
+import { useRealtimeNotifications } from "@/hooks/useRealtimeNotifications";
 import { CopilotProvider } from "@/components/copilot/CopilotProvider";
 import { CopilotPanel } from "@/components/copilot/CopilotPanel";
 
 function DashboardShell() {
   useKeyboardShortcuts();
+  useRealtimeNotifications();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarPinned, setSidebarPinned] = useState<boolean>(() => {
     const stored = localStorage.getItem("sidebar-pinned");
