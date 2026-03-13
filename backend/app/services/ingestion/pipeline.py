@@ -19,6 +19,7 @@ from app.services.ingestion.extractors.text_extractor import extract_from_text
 from app.services.ingestion.extractors.sitemap_extractor import extract_urls_from_sitemap
 from app.services.ingestion.extractors.url_extractor import extract_from_url
 from app.services.ingestion.vector_store import delete_by_document, insert_chunks
+from app.services.realtime import emit_to_workspace
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,15 @@ async def run_ingestion(db: AsyncSession, document_id: uuid.UUID) -> None:
 
     document.status = "processing"
     await db.flush()
+
+    await emit_to_workspace(str(document.workspace_id), "document:status_changed", {
+        "document_id": str(document.id),
+        "knowledge_base_id": str(document.knowledge_base_id),
+        "status": "processing",
+        "char_count": 0,
+        "title": document.title or "",
+        "error_message": None,
+    })
 
     steps: list[dict] = []
 
@@ -469,6 +479,15 @@ async def run_ingestion(db: AsyncSession, document_id: uuid.UUID) -> None:
         document.error_message = str(exc)
         document.ingestion_steps = steps
         await db.commit()
+
+        await emit_to_workspace(str(document.workspace_id), "document:status_changed", {
+            "document_id": str(document.id),
+            "knowledge_base_id": str(document.knowledge_base_id),
+            "status": "failed",
+            "char_count": 0,
+            "title": document.title or "",
+            "error_message": str(exc),
+        })
         raise
 
     # Character budget enforcement
@@ -505,10 +524,30 @@ async def run_ingestion(db: AsyncSession, document_id: uuid.UUID) -> None:
             document.char_count = 0
             document.ingestion_steps = steps
             await db.flush()
+
+            await emit_to_workspace(str(document.workspace_id), "document:status_changed", {
+                "document_id": str(document.id),
+                "knowledge_base_id": str(document.knowledge_base_id),
+                "status": "skipped",
+                "char_count": 0,
+                "title": document.title or "",
+                "error_message": "Character limit reached",
+            })
             return
 
         _record("budget_check", "ok", t0, detail=f"{n} chars accepted")
         document.char_count = n
+
+        # Emit updated usage
+        ws_refresh = await db.execute(
+            select(Workspace.chars_indexed, Workspace.plan).where(Workspace.id == document.workspace_id)
+        )
+        ws_row = ws_refresh.one()
+        await emit_to_workspace(str(document.workspace_id), "workspace:usage_updated", {
+            "chars_indexed": ws_row.chars_indexed,
+            "chars_limit": PLAN_CHAR_LIMITS.get(ws_row.plan, 0),
+            "plan": ws_row.plan,
+        })
 
     t0 = datetime.now(timezone.utc)
     try:
@@ -528,6 +567,15 @@ async def run_ingestion(db: AsyncSession, document_id: uuid.UUID) -> None:
         document.error_message = str(exc)
         document.ingestion_steps = steps
         await db.commit()
+
+        await emit_to_workspace(str(document.workspace_id), "document:status_changed", {
+            "document_id": str(document.id),
+            "knowledge_base_id": str(document.knowledge_base_id),
+            "status": "failed",
+            "char_count": 0,
+            "title": document.title or "",
+            "error_message": str(exc),
+        })
         raise
 
     t0 = datetime.now(timezone.utc)
@@ -541,6 +589,15 @@ async def run_ingestion(db: AsyncSession, document_id: uuid.UUID) -> None:
         document.error_message = str(exc)
         document.ingestion_steps = steps
         await db.commit()
+
+        await emit_to_workspace(str(document.workspace_id), "document:status_changed", {
+            "document_id": str(document.id),
+            "knowledge_base_id": str(document.knowledge_base_id),
+            "status": "failed",
+            "char_count": 0,
+            "title": document.title or "",
+            "error_message": str(exc),
+        })
         raise
 
     t0 = datetime.now(timezone.utc)
@@ -561,6 +618,15 @@ async def run_ingestion(db: AsyncSession, document_id: uuid.UUID) -> None:
         document.error_message = str(exc)
         document.ingestion_steps = steps
         await db.commit()
+
+        await emit_to_workspace(str(document.workspace_id), "document:status_changed", {
+            "document_id": str(document.id),
+            "knowledge_base_id": str(document.knowledge_base_id),
+            "status": "failed",
+            "char_count": 0,
+            "title": document.title or "",
+            "error_message": str(exc),
+        })
         raise
 
     document.status = "indexed"
@@ -568,6 +634,15 @@ async def run_ingestion(db: AsyncSession, document_id: uuid.UUID) -> None:
     document.last_indexed_at = datetime.now(timezone.utc)
     document.ingestion_steps = steps
     await db.flush()
+
+    await emit_to_workspace(str(document.workspace_id), "document:status_changed", {
+        "document_id": str(document.id),
+        "knowledge_base_id": str(document.knowledge_base_id),
+        "status": "indexed",
+        "char_count": document.char_count or 0,
+        "title": document.title or "",
+        "error_message": None,
+    })
 
 
 def _extract(document: Document) -> str:
