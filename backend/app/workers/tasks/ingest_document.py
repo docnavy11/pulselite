@@ -6,6 +6,7 @@ from celery.exceptions import MaxRetriesExceededError
 
 from app.database import async_session_factory, engine
 from app.services.ingestion.pipeline import run_ingestion
+from app.services.realtime import emit_to_workspace
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -70,6 +71,15 @@ async def _mark_document_failed(document_id: uuid.UUID, reason: str) -> None:
                 doc.status = "failed"
                 doc.error_message = reason
                 await session.commit()
+
+                await emit_to_workspace(str(doc.workspace_id), "document:status_changed", {
+                    "document_id": str(document_id),
+                    "knowledge_base_id": str(doc.knowledge_base_id),
+                    "status": "failed",
+                    "char_count": 0,
+                    "title": doc.title or "",
+                    "error_message": reason,
+                })
         except Exception as e:
             logger.error("Failed to mark document %s as failed: %s", document_id, e)
 
@@ -124,5 +134,17 @@ async def _check_and_trigger_autoconfig(document_id: uuid.UUID) -> None:
         )
         await session.commit()
 
-        if update_result.scalar_one_or_none() is not None and run_autoconfig_for_chatbot is not None:
-            run_autoconfig_for_chatbot.delay(str(chatbot_id))
+        if update_result.scalar_one_or_none() is not None:
+            # Emit configuring status
+            chatbot_result = await session.execute(
+                select(Chatbot.workspace_id).where(Chatbot.id == chatbot_id)
+            )
+            chatbot_row = chatbot_result.one_or_none()
+            if chatbot_row:
+                await emit_to_workspace(str(chatbot_row.workspace_id), "chatbot:status_changed", {
+                    "chatbot_id": str(chatbot_id),
+                    "setup_status": "configuring",
+                })
+
+            if run_autoconfig_for_chatbot is not None:
+                run_autoconfig_for_chatbot.delay(str(chatbot_id))

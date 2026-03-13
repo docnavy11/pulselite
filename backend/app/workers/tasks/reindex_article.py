@@ -8,6 +8,7 @@ from sqlalchemy import select
 from app.database import async_session_factory, engine
 from app.models.knowledge import Article, Document
 from app.services.ingestion.chunkers.markdown_chunker import chunk_markdown
+from app.services.realtime import emit_to_workspace
 from app.services.ingestion.embedder import embed_chunks
 from app.services.ingestion.vector_store import delete_by_document, insert_chunks
 from app.workers.celery_app import celery_app
@@ -47,6 +48,14 @@ async def _reindex(article_id: uuid.UUID) -> dict:
                 doc.raw_content = article.body
                 doc.title = article.title
                 doc.status = "processing"
+                await emit_to_workspace(str(doc.workspace_id), "document:status_changed", {
+                    "document_id": str(doc.id),
+                    "knowledge_base_id": str(doc.knowledge_base_id),
+                    "status": "processing",
+                    "char_count": 0,
+                    "title": doc.title or "",
+                    "error_message": None,
+                })
             else:
                 doc = Document(
                     knowledge_base_id=article.knowledge_base_id,
@@ -60,12 +69,30 @@ async def _reindex(article_id: uuid.UUID) -> dict:
                 session.add(doc)
                 await session.flush()
 
+                await emit_to_workspace(str(doc.workspace_id), "document:status_changed", {
+                    "document_id": str(doc.id),
+                    "knowledge_base_id": str(doc.knowledge_base_id),
+                    "status": "processing",
+                    "char_count": 0,
+                    "title": doc.title or "",
+                    "error_message": None,
+                })
+
             chunks = chunk_markdown(article.body)
             if not chunks:
                 doc.status = "indexed"
                 doc.chunk_count = 0
                 doc.last_indexed_at = datetime.now(timezone.utc)
                 await session.commit()
+
+                await emit_to_workspace(str(doc.workspace_id), "document:status_changed", {
+                    "document_id": str(doc.id),
+                    "knowledge_base_id": str(doc.knowledge_base_id),
+                    "status": "indexed",
+                    "char_count": doc.char_count or 0,
+                    "title": doc.title or "",
+                    "error_message": None,
+                })
                 return {"status": "success", "chunks": 0}
 
             texts = [c["content"] for c in chunks]
@@ -85,6 +112,15 @@ async def _reindex(article_id: uuid.UUID) -> dict:
             doc.last_indexed_at = datetime.now(timezone.utc)
 
             await session.commit()
+
+            await emit_to_workspace(str(doc.workspace_id), "document:status_changed", {
+                "document_id": str(doc.id),
+                "knowledge_base_id": str(doc.knowledge_base_id),
+                "status": "indexed",
+                "char_count": doc.char_count or 0,
+                "title": doc.title or "",
+                "error_message": None,
+            })
             return {"status": "success", "chunks": count, "article_id": str(article_id)}
         except Exception:
             await session.rollback()

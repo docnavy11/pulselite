@@ -9,6 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from app.database import async_session_factory, engine
 from app.services import autoconfig_service
+from app.services.realtime import emit_to_workspace
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -46,6 +47,11 @@ async def _run(chatbot_id: uuid.UUID) -> None:
         chatbot.setup_status = "ready"
         await session.commit()
 
+        await emit_to_workspace(str(chatbot.workspace_id), "chatbot:status_changed", {
+            "chatbot_id": str(chatbot_id),
+            "setup_status": "ready",
+        })
+
 
 async def _mark_setup_failed(chatbot_id: uuid.UUID) -> None:
     await engine.dispose()
@@ -57,3 +63,8 @@ async def _mark_setup_failed(chatbot_id: uuid.UUID) -> None:
         if chatbot and chatbot.setup_status == "configuring":
             chatbot.setup_status = "setup_failed"
             await session.commit()
+
+            await emit_to_workspace(str(chatbot.workspace_id), "chatbot:status_changed", {
+                "chatbot_id": str(chatbot_id),
+                "setup_status": "setup_failed",
+            })
