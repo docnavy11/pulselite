@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.knowledge import CrawlJob, Document, KnowledgeBase
+from app.models.knowledge import Chatbot, CrawlJob, Document, KnowledgeBase
 from app.services.crawler import DiscoveredUrl, discover_urls
 from app.services.fetcher import fetch
 
@@ -74,6 +74,15 @@ async def prepare_crawl(
     )
     db.add(job)
     await db.flush()
+
+    # If this crawl is for a chatbot wizard, mark the chatbot as setting up
+    if chatbot_id is not None:
+        chatbot_result = await db.execute(select(Chatbot).where(Chatbot.id == chatbot_id))
+        chatbot = chatbot_result.scalar_one_or_none()
+        if chatbot is not None:
+            chatbot.setup_status = "crawling"
+            chatbot.active_crawl_job_id = job.id
+
     await db.commit()
     return str(job.id), str(kb_id)
 
