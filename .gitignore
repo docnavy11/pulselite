@@ -62,4 +62,5 @@ celerybeat-schedule
 
 # Superpowers AI development tools
 .superpowers/
-docs/superpowers/
+docs/superpowers/plans/
+docs/superpowers/specs/.brainstorm/
