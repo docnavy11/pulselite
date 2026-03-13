@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Plus, Bot } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/Card";
@@ -11,6 +11,32 @@ import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useChatbotStore } from "@/stores/chatbot-store";
 import { useCopilot } from "@/components/copilot/CopilotProvider";
 
+function isSetupInProgress(s: string | null | undefined) {
+  return ["crawling", "configuring", "ready", "setup_failed"].includes(s ?? "");
+}
+
+function needsActivePoll(s: string | null | undefined) {
+  return ["crawling", "configuring"].includes(s ?? "");
+}
+
+function getSetupBadgeLabel(s: string | null | undefined): string | null {
+  if (s === "crawling") return "Crawling";
+  if (s === "configuring") return "Configuring";
+  if (s === "ready") return "Review needed";
+  if (s === "setup_failed") return "Setup failed";
+  return null;
+}
+
+function getProgressText(bot: Chatbot): string | null {
+  if (bot.setup_status === "crawling" && bot.crawl_progress) {
+    const { pages_queued, pages_discovered } = bot.crawl_progress;
+    if (pages_discovered > 0) return `${pages_queued} / ${pages_discovered} pages`;
+    return "Discovering pages…";
+  }
+  if (bot.setup_status === "configuring" || bot.setup_status === "ready") return "Almost there…";
+  return null;
+}
+
 export default function ChatbotsPage() {
   const navigate = useNavigate();
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);
@@ -20,6 +46,7 @@ export default function ChatbotsPage() {
   const [loading, setLoading] = useState(true);
   const [actionPending, setActionPending] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const handleToggle = async (e: { preventDefault: () => void }, chatbot: Chatbot) => {
     e.preventDefault();
@@ -46,20 +73,49 @@ export default function ChatbotsPage() {
     }
   };
 
-  useEffect(() => {
+  const loadBots = async () => {
     if (!workspace) return;
-    Promise.all([
+    const [bots, s] = await Promise.all([
       getChatbots(workspace.id),
       getChatbotStats(workspace.id).catch(() => ({})),
-    ])
-      .then(([bots, s]) => {
-        setChatbots(bots);
-        setStats(s);
-        register({ page: "chatbots", data: { chatbot_count: bots.length } });
+    ]);
+    setChatbots(bots);
+    setStats(s);
+    return bots;
+  };
+
+  useEffect(() => {
+    if (!workspace) return;
+    loadBots()
+      .then((bots) => {
+        if (bots) register({ page: "chatbots", data: { chatbot_count: bots.length } });
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [workspace]);
+  }, [workspace]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Poll every 3s only while any bot is actively crawling or configuring
+  useEffect(() => {
+    const hasActive = chatbots.some((b) => needsActivePoll(b.setup_status));
+    if (hasActive) {
+      if (!pollRef.current) {
+        pollRef.current = setInterval(() => {
+          loadBots().catch(() => {});
+        }, 3000);
+      }
+    } else {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    }
+    return () => {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
+  }, [chatbots, workspace]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) {
     return (
@@ -80,81 +136,85 @@ export default function ChatbotsPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 min-[1200px]:grid-cols-3">
-        {chatbots.map((chatbot) => (
-          <div key={chatbot.id} className="group relative">
-            {/* Delete confirmation overlay */}
-            {confirmDelete === chatbot.id && (
-              <div className="absolute inset-0 z-10 bg-white border border-red-200 rounded-xl flex flex-col items-center justify-center gap-3 p-4 shadow-lg">
-                <p className="text-[13px] font-semibold text-gray-800 text-center">Delete "{chatbot.display_name || chatbot.name}"?</p>
-                <p className="text-[11px] text-gray-400 text-center">This cannot be undone.</p>
-                <div className="flex gap-2">
-                  <button
-                    onClick={(e) => handleDelete(e, chatbot.id)}
-                    disabled={actionPending === chatbot.id}
-                    className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-60"
-                  >
-                    {actionPending === chatbot.id ? "Deleting…" : "Delete"}
-                  </button>
-                  <button
-                    onClick={() => setConfirmDelete(null)}
-                    className="px-3 py-1.5 bg-[#faf8f5] border border-[#f0ebe3] text-gray-600 rounded-lg text-[11px] font-medium"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
+        {chatbots.map((chatbot) => {
+          const inProgress = isSetupInProgress(chatbot.setup_status);
+          const badgeLabel = getSetupBadgeLabel(chatbot.setup_status);
+          const progressText = getProgressText(chatbot);
 
-            <Link to={`/chatbots/${chatbot.id}`}>
-              <Card className="cursor-pointer hover:shadow-md transition-all duration-200">
-                <CardContent className="py-5">
-                  <div className="flex items-start gap-3">
-                    <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${chatbot.is_active ? "bg-primary-50 text-primary-500" : "bg-gray-100 text-gray-400"}`}>
-                      <Bot className="h-5 w-5" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h3 className={`text-sm font-semibold truncate ${chatbot.is_active ? "text-gray-900" : "text-gray-400"}`}>
-                          {chatbot.display_name || chatbot.name}
-                        </h3>
+          const cardContent = (
+            <Card className={`cursor-pointer hover:shadow-md transition-all duration-200 ${inProgress ? "opacity-80" : ""}`}>
+              <CardContent className="py-5">
+                <div className="flex items-start gap-3">
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${
+                    inProgress
+                      ? "bg-gray-100 text-gray-400"
+                      : chatbot.is_active
+                        ? "bg-primary-50 text-primary-500"
+                        : "bg-gray-100 text-gray-400"
+                  }`}>
+                    <Bot className="h-5 w-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h3 className={`text-sm font-semibold truncate ${inProgress || !chatbot.is_active ? "text-gray-400" : "text-gray-900"}`}>
+                        {chatbot.display_name || chatbot.name}
+                      </h3>
+                      {badgeLabel ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-100 text-amber-700">
+                          <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
+                          {badgeLabel}
+                        </span>
+                      ) : (
                         <Badge variant={chatbot.is_active ? "success" : "default"}>
                           {chatbot.is_active ? "Active" : "Inactive"}
                         </Badge>
-                      </div>
+                      )}
+                    </div>
+
+                    {inProgress && progressText ? (
+                      <>
+                        <div className="mt-2 h-1 bg-gray-100 rounded-full overflow-hidden">
+                          <div className="h-full bg-primary-300 rounded-full animate-pulse w-1/2" />
+                        </div>
+                        <p className="mt-1 text-xs text-gray-400">{progressText}</p>
+                      </>
+                    ) : (
                       <p className="mt-1 text-xs text-gray-500">
                         {chatbot.llm_model.split("/").pop()} / {chatbot.tone}
                       </p>
-                    </div>
+                    )}
                   </div>
+                </div>
 
-                  {/* Stats row */}
-                  {(() => {
-                    const s = stats[chatbot.id];
-                    return (
-                      <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-                        <div>
-                          <div className="text-[15px] font-black text-gray-900">{s?.conversations_30d ?? 0}</div>
-                          <div className="text-[10px] text-gray-400 uppercase tracking-wide mt-0.5">Chats</div>
-                        </div>
-                        <div>
-                          <div className="text-[15px] font-black text-gray-900">
-                            {s ? `${Math.round(s.resolution_rate * 100)}%` : "—"}
-                          </div>
-                          <div className="text-[10px] text-gray-400 uppercase tracking-wide mt-0.5">Resolved</div>
-                        </div>
-                        <div>
-                          <div className="text-[13px] font-semibold text-gray-900 truncate">
-                            {s?.last_active
-                              ? new Date(s.last_active).toLocaleDateString(undefined, { month: "short", day: "numeric" })
-                              : "—"}
-                          </div>
-                          <div className="text-[10px] text-gray-400 uppercase tracking-wide mt-0.5">Last chat</div>
-                        </div>
+                {/* Stats row — only for fully configured bots */}
+                {!inProgress && (() => {
+                  const s = stats[chatbot.id];
+                  return (
+                    <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+                      <div>
+                        <div className="text-[15px] font-black text-gray-900">{s?.conversations_30d ?? 0}</div>
+                        <div className="text-[10px] text-gray-400 uppercase tracking-wide mt-0.5">Chats</div>
                       </div>
-                    );
-                  })()}
+                      <div>
+                        <div className="text-[15px] font-black text-gray-900">
+                          {s ? `${Math.round(s.resolution_rate * 100)}%` : "—"}
+                        </div>
+                        <div className="text-[10px] text-gray-400 uppercase tracking-wide mt-0.5">Resolved</div>
+                      </div>
+                      <div>
+                        <div className="text-[13px] font-semibold text-gray-900 truncate">
+                          {s?.last_active
+                            ? new Date(s.last_active).toLocaleDateString(undefined, { month: "short", day: "numeric" })
+                            : "—"}
+                        </div>
+                        <div className="text-[10px] text-gray-400 uppercase tracking-wide mt-0.5">Last chat</div>
+                      </div>
+                    </div>
+                  );
+                })()}
 
-                  {/* Hover actions */}
+                {/* Hover actions */}
+                {!inProgress && (
                   <div className="flex items-center gap-2 mt-3 pt-3 border-t border-[#faf8f5] opacity-0 group-hover:opacity-100 transition-opacity duration-150">
                     <button
                       onClick={(e) => handleToggle(e, chatbot)}
@@ -170,11 +230,48 @@ export default function ChatbotsPage() {
                       Delete
                     </button>
                   </div>
-                </CardContent>
-              </Card>
-            </Link>
-          </div>
-        ))}
+                )}
+              </CardContent>
+            </Card>
+          );
+
+          return (
+            <div key={chatbot.id} className="group relative">
+              {/* Delete confirmation overlay */}
+              {confirmDelete === chatbot.id && (
+                <div className="absolute inset-0 z-10 bg-white border border-red-200 rounded-xl flex flex-col items-center justify-center gap-3 p-4 shadow-lg">
+                  <p className="text-[13px] font-semibold text-gray-800 text-center">Delete "{chatbot.display_name || chatbot.name}"?</p>
+                  <p className="text-[11px] text-gray-400 text-center">This cannot be undone.</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={(e) => handleDelete(e, chatbot.id)}
+                      disabled={actionPending === chatbot.id}
+                      className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-60"
+                    >
+                      {actionPending === chatbot.id ? "Deleting…" : "Delete"}
+                    </button>
+                    <button
+                      onClick={() => setConfirmDelete(null)}
+                      className="px-3 py-1.5 bg-[#faf8f5] border border-[#f0ebe3] text-gray-600 rounded-lg text-[11px] font-medium"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {inProgress ? (
+                <div onClick={() => navigate(`/chatbots/${chatbot.id}/setup`)}>
+                  {cardContent}
+                </div>
+              ) : (
+                <Link to={`/chatbots/${chatbot.id}`}>
+                  {cardContent}
+                </Link>
+              )}
+            </div>
+          );
+        })}
 
         {chatbots.length === 0 && !loading && (
           <div className="col-span-full flex flex-col items-center justify-center py-16 text-center">
