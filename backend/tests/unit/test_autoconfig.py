@@ -101,28 +101,27 @@ class TestGenerate:
 
 # ── extract_brand_color ───────────────────────────────────────────────────────
 
-def test_extract_brand_color_meta_tag():
-    html = '<head><meta name="theme-color" content="#4F46E5"></head>'
-    assert extract_brand_color(html) == "#4F46E5"
+class TestExtractBrandColor:
+    """Test extract_brand_color() functionality."""
 
+    def test_extract_brand_color_meta_tag(self):
+        html = '<head><meta name="theme-color" content="#4F46E5"></head>'
+        assert extract_brand_color(html) == "#4F46E5"
 
-def test_extract_brand_color_reversed_attrs():
-    html = '<head><meta content="#4F46E5" name="theme-color"></head>'
-    assert extract_brand_color(html) == "#4F46E5"
+    def test_extract_brand_color_reversed_attrs(self):
+        html = '<head><meta content="#4F46E5" name="theme-color"></head>'
+        assert extract_brand_color(html) == "#4F46E5"
 
+    def test_extract_brand_color_css_var(self):
+        html = "<html><head><style>:root { --primary: #1a73e8; }</style></head></html>"
+        assert extract_brand_color(html) == "#1a73e8"
 
-def test_extract_brand_color_css_var():
-    html = "<html><head><style>:root { --primary: #1a73e8; }</style></head></html>"
-    assert extract_brand_color(html) == "#1a73e8"
+    def test_extract_brand_color_empty_html(self):
+        assert extract_brand_color("") is None
 
-
-def test_extract_brand_color_empty_html():
-    assert extract_brand_color("") is None
-
-
-def test_extract_brand_color_not_found():
-    html = "<html><body><p>No color information here.</p></body></html>"
-    assert extract_brand_color(html) is None
+    def test_extract_brand_color_not_found(self):
+        html = "<html><body><p>No color information here.</p></body></html>"
+        assert extract_brand_color(html) is None
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
