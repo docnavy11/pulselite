@@ -49,7 +49,7 @@ describe("wizard step 3 save payload", () => {
     expect(payload.fallback_message).toBe("Sorry, I can't help with that.");
   });
 
-  it("all 7 fields present in payload", () => {
+  it("all key fields present in payload", () => {
     const payload = buildSavePayload({
       name: "Bot",
       welcome: "Hi!",
