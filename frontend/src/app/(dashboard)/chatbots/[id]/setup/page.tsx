@@ -3,9 +3,10 @@ import { useParams, useNavigate } from "react-router-dom";
 import { CheckCircle, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
-import { getChatbot, getCrawlStatus, updateChatbot } from "@/lib/api-functions";
+import { getChatbot, updateChatbot } from "@/lib/api-functions";
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import type { Chatbot, CrawlStatusResponse } from "@/lib/types";
+import { useSocketEvent, getSocket } from "@/lib/socket";
+import type { Chatbot, CrawlProgressEvent, CrawlCompletedEvent, ChatbotStatusEvent } from "@/lib/types";
 
 // Maps setup_status to a wizard step
 function getSetupStep(
@@ -25,7 +26,7 @@ export default function ChatbotSetupPage() {
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);
 
   const [chatbot, setChatbot] = useState<Chatbot | null>(null);
-  const [crawlStatus, setCrawlStatus] = useState<CrawlStatusResponse | null>(null);
+  const [crawlProgress, setCrawlProgress] = useState<{ pages_discovered: number; pages_queued: number; pages_failed: number; error_message?: string | null; status?: string } | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   // Review form state (step "ready")
@@ -38,15 +39,8 @@ export default function ChatbotSetupPage() {
   const [reviewLanguage, setReviewLanguage] = useState("en");
   const [saving, setSaving] = useState(false);
 
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const configuringStartRef = useRef<number | null>(null);
   const CONFIGURING_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
-
-  useEffect(() => {
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-  }, []);
 
   // Load chatbot on mount
   useEffect(() => {
@@ -62,12 +56,8 @@ export default function ChatbotSetupPage() {
         if (step === "review") {
           populateReviewForm(bot);
         }
-        if (step === "crawling" && bot.active_crawl_job_id) {
-          startCrawlPolling(bot.active_crawl_job_id);
-        }
         if (step === "configuring") {
           configuringStartRef.current = Date.now();
-          startConfiguringPolling();
         }
       })
       .catch(() => setLoadError("Failed to load chatbot"));
@@ -83,63 +73,62 @@ export default function ChatbotSetupPage() {
     setReviewLanguage((bot as Chatbot & { language?: string }).language ?? "en");
   }
 
-  function startCrawlPolling(jobId: string) {
-    if (pollRef.current) clearInterval(pollRef.current);
-    pollRef.current = setInterval(async () => {
-      if (!workspace || !id) return;
-      try {
-        const status = await getCrawlStatus(workspace.id, jobId);
-        setCrawlStatus(status);
-        if (status.status === "failed") {
-          clearInterval(pollRef.current!);
-          return;
-        }
-        // Crawl done + docs settled → refetch chatbot to get updated setup_status
-        const docsTotal = status.docs_total ?? 0;
-        const docsDone = (status.docs_indexed ?? 0) + (status.docs_failed ?? 0) + (status.docs_skipped ?? 0);
-        if (status.status === "completed" && docsTotal > 0 && docsDone >= docsTotal) {
-          clearInterval(pollRef.current!);
-          const bot = await getChatbot(workspace.id, id);
-          setChatbot(bot);
-          const step = getSetupStep(bot.setup_status);
-          if (step === "configuring") {
-            configuringStartRef.current = Date.now();
-            startConfiguringPolling();
-          } else if (step === "review") {
-            populateReviewForm(bot);
-          }
-        }
-      } catch {
-        // network blip — keep polling
-      }
-    }, 2000);
-  }
+  // Real-time crawl progress
+  useSocketEvent<CrawlProgressEvent>("crawl:progress", (data) => {
+    if (data.chatbot_id !== id) return;
+    setCrawlProgress({
+      pages_discovered: data.pages_discovered,
+      pages_queued: data.pages_queued,
+      pages_failed: data.pages_failed,
+      status: "running",
+    });
+  });
 
-  function startConfiguringPolling() {
-    if (pollRef.current) clearInterval(pollRef.current);
-    pollRef.current = setInterval(async () => {
+  // Real-time crawl completed
+  useSocketEvent<CrawlCompletedEvent>("crawl:completed", (data) => {
+    if (data.chatbot_id !== id) return;
+    setCrawlProgress((prev) => ({
+      pages_discovered: prev?.pages_discovered ?? 0,
+      pages_queued: data.pages_queued,
+      pages_failed: data.pages_failed,
+      error_message: data.error_message,
+      status: data.status,
+    }));
+  });
+
+  // Real-time chatbot status transitions (crawling → configuring → ready/failed)
+  useSocketEvent<ChatbotStatusEvent>("chatbot:status_changed", (data) => {
+    if (data.chatbot_id !== id) return;
+    setChatbot((prev) => prev ? { ...prev, setup_status: data.setup_status } : prev);
+    const step = getSetupStep(data.setup_status);
+    if (step === "configuring") {
+      configuringStartRef.current = Date.now();
+    }
+    if (step === "review" && workspace) {
+      // Refetch full chatbot to populate review form with autoconfig results
+      getChatbot(workspace.id, data.chatbot_id).then(populateReviewForm).catch(() => {});
+    }
+    if (step === "done") {
+      navigate(`/chatbots/${id}`, { replace: true });
+    }
+  });
+
+  // Refetch on reconnect to sync state after disconnection
+  useEffect(() => {
+    const s = getSocket();
+    const onReconnect = () => {
       if (!workspace || !id) return;
-      // Timeout check
-      if (configuringStartRef.current && Date.now() - configuringStartRef.current > CONFIGURING_TIMEOUT_MS) {
-        clearInterval(pollRef.current!);
-        return; // UI will show timeout message based on elapsed time
-      }
-      try {
-        const bot = await getChatbot(workspace.id, id);
+      getChatbot(workspace.id, id).then((bot) => {
         setChatbot(bot);
         const step = getSetupStep(bot.setup_status);
-        if (step === "review") {
-          clearInterval(pollRef.current!);
-          populateReviewForm(bot);
-        } else if (step === "failed" || step === "done") {
-          clearInterval(pollRef.current!);
-          if (step === "done") navigate(`/chatbots/${id}`, { replace: true });
-        }
-      } catch {
-        // network blip
-      }
-    }, 3000);
-  }
+        if (step === "done") navigate(`/chatbots/${id}`, { replace: true });
+        if (step === "review") populateReviewForm(bot);
+        if (step === "configuring") configuringStartRef.current = Date.now();
+      }).catch(() => {});
+    };
+    s.on("connect", onReconnect);
+    return () => { s.off("connect", onReconnect); };
+  }, [workspace, id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleSave() {
     if (!workspace || !id) return;
@@ -185,12 +174,9 @@ export default function ChatbotSetupPage() {
 
   // ── Step: crawling ──────────────────────────────────────────────────────────
   if (step === "crawling") {
-    const pagesQueued = crawlStatus?.pages_queued ?? chatbot.crawl_progress?.pages_queued ?? 0;
-    const pagesDiscovered = crawlStatus?.pages_discovered ?? chatbot.crawl_progress?.pages_discovered ?? 0;
-    const docsIndexed = crawlStatus?.docs_indexed ?? 0;
-    const docsTotal = crawlStatus?.docs_total ?? 0;
-    const isFailed = crawlStatus?.status === "failed";
-    const isIndexing = crawlStatus?.status === "completed" && docsTotal > 0;
+    const pagesQueued = crawlProgress?.pages_queued ?? chatbot.crawl_progress?.pages_queued ?? 0;
+    const pagesDiscovered = crawlProgress?.pages_discovered ?? chatbot.crawl_progress?.pages_discovered ?? 0;
+    const isFailed = crawlProgress?.status === "failed";
 
     return (
       <div className="max-w-lg mx-auto py-16 px-4">
@@ -205,7 +191,7 @@ export default function ChatbotSetupPage() {
           <div className="bg-red-50 border border-red-200 rounded-xl p-5 text-sm text-red-700 space-y-3">
             <div className="flex items-start gap-2">
               <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-              <span>{crawlStatus?.error_message || "The crawl could not complete."}</span>
+              <span>{crawlProgress?.error_message || "The crawl could not complete."}</span>
             </div>
             <p className="text-xs text-red-500">
               Your bot was created but has no knowledge base content. You can delete it and start over, or configure it manually.
@@ -255,28 +241,6 @@ export default function ChatbotSetupPage() {
               </div>
             )}
 
-            {/* Indexing */}
-            {isIndexing && (
-              <div className="flex items-center gap-3">
-                {docsIndexed >= docsTotal ? (
-                  <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0" />
-                ) : (
-                  <Spinner className="h-5 w-5 text-primary-500 flex-shrink-0" />
-                )}
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-medium text-gray-700">Indexing content</span>
-                    <span className="text-xs text-gray-400">{docsIndexed} / {docsTotal}</span>
-                  </div>
-                  <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-primary-400 rounded-full transition-all duration-500"
-                      style={{ width: docsTotal > 0 ? `${(docsIndexed / docsTotal) * 100}%` : "0%" }}
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         )}
       </div>
