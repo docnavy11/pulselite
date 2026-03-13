@@ -24,6 +24,13 @@ export interface AuthResponse {
   tokens: AuthTokens;
 }
 
+export interface CrawlProgress {
+  pages_queued: number;
+  pages_discovered: number;
+  status: string;
+  error_message: string | null;
+}
+
 export interface Chatbot {
   id: string;
   name: string;
@@ -45,6 +52,9 @@ export interface Chatbot {
   welcome_message?: string;
   suggested_questions?: string[];
   fallback_message?: string;
+  setup_status?: string | null;
+  active_crawl_job_id?: string | null;
+  crawl_progress?: CrawlProgress | null;
 }
 
 export interface CrawlResponse {
