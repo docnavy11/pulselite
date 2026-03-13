@@ -124,5 +124,5 @@ async def _check_and_trigger_autoconfig(document_id: uuid.UUID) -> None:
         )
         await session.commit()
 
-        if update_result.scalar_one_or_none() is not None:
+        if update_result.scalar_one_or_none() is not None and run_autoconfig_for_chatbot is not None:
             run_autoconfig_for_chatbot.delay(str(chatbot_id))
