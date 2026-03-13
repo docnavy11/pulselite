@@ -34,6 +34,7 @@ class Chatbot(UUIDPrimaryKeyMixin, TimestampUpdateMixin, Base):
     fallback_type: Mapped[str] = mapped_column(Text, server_default=text("'escalate'"))
     fallback_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, server_default=text("TRUE"))
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     widget_config: Mapped[dict] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
     brand_color: Mapped[str | None] = mapped_column(String(7), nullable=True)
     welcome_message: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -84,6 +85,7 @@ class Document(UUIDPrimaryKeyMixin, TimestampUpdateMixin, Base):
     next_sync_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     sync_frequency: Mapped[str] = mapped_column(Text, server_default=text("'weekly'"))
     metadata_: Mapped[dict] = mapped_column("metadata", JSONB, server_default=text("'{}'::jsonb"))
+    content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     knowledge_base: Mapped["KnowledgeBase"] = relationship(back_populates="documents")
     chunks: Mapped[list["Chunk"]] = relationship(back_populates="document", cascade="all, delete-orphan")

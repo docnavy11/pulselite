@@ -13,6 +13,7 @@ import {
   CrawlStatusResponse,
   KnowledgeBase,
   Document,
+  DocumentContentResponse,
   Article,
   Conversation,
   Message,
@@ -63,6 +64,14 @@ export function deleteChatbot(workspaceId: string, id: string) {
   return api.delete<void>(`/api/v1/workspaces/${workspaceId}/chatbots/${id}`);
 }
 
+export function archiveChatbot(workspaceId: string, id: string) {
+  return api.post<Chatbot>(`/api/v1/workspaces/${workspaceId}/chatbots/${id}/archive`, {});
+}
+
+export function unarchiveChatbot(workspaceId: string, id: string) {
+  return api.post<Chatbot>(`/api/v1/workspaces/${workspaceId}/chatbots/${id}/unarchive`, {});
+}
+
 export function updateLLMConfig(
   workspaceId: string,
   chatbotId: string,
@@ -84,18 +93,24 @@ export function duplicateChatbot(workspaceId: string, chatbotId: string) {
   return api.post<Chatbot>(`/api/v1/workspaces/${workspaceId}/chatbots/${chatbotId}/duplicate`);
 }
 
+export function previewCrawl(workspaceId: string, url: string) {
+  return api.post<{ urls: string[]; source: string }>(`/api/v1/workspaces/${workspaceId}/crawl/preview`, { url });
+}
+
 export function startCrawl(
   workspaceId: string,
   url: string,
   includePaths: string[],
   excludePaths: string[],
   chatbotId?: string,
+  kbId?: string,
 ) {
   return api.post<CrawlResponse>(`/api/v1/workspaces/${workspaceId}/crawl`, {
     url,
     include_paths: includePaths,
     exclude_paths: excludePaths,
     chatbot_id: chatbotId,
+    knowledge_base_id: kbId,
   });
 }
 
@@ -219,6 +234,12 @@ export function deleteDocument(workspaceId: string, documentId: string) {
 
 export function reindexDocument(workspaceId: string, documentId: string) {
   return api.post<Document>(`/api/v1/workspaces/${workspaceId}/documents/${documentId}/reindex`);
+}
+
+export function getDocumentContent(workspaceId: string, documentId: string) {
+  return api.get<DocumentContentResponse>(
+    `/api/v1/workspaces/${workspaceId}/documents/${documentId}/content`,
+  );
 }
 
 // Articles
@@ -354,7 +375,8 @@ export function getDashboardData(
   range: string,
   chatbotId?: string,
 ) {
-  const params = new URLSearchParams({ range });
+  const days = range === "7d" ? 7 : range === "90d" ? 90 : 30;
+  const params = new URLSearchParams({ days: String(days) });
   if (chatbotId) params.set("chatbot_id", chatbotId);
   return api.get<DashboardData>(
     `/api/v1/workspaces/${workspaceId}/dashboard?${params}`,

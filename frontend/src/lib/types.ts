@@ -55,6 +55,7 @@ export interface Chatbot {
   setup_status?: string | null;
   active_crawl_job_id?: string | null;
   crawl_progress?: CrawlProgress | null;
+  archived_at?: string | null;
 }
 
 export interface CrawlResponse {
@@ -94,9 +95,9 @@ export interface CrawlStatusResponse {
 
 export interface IngestionStep {
   step: string;
-  status: "ok" | "failed" | "skipped";
-  started_at: string;
-  duration_ms: number;
+  status: string;
+  started_at: string | null;
+  duration_ms: number | null;
   detail: string | null;
   error: string | null;
 }
@@ -178,6 +179,29 @@ export interface Document {
   last_indexed_at?: string;
   sync_frequency?: string;
   metadata_?: Record<string, string>;
+}
+
+export interface ChunkItem {
+  id: string;
+  chunk_index: number;
+  content: string;
+  heading_path: string | null;
+  token_count: number | null;
+}
+
+export interface DocumentContentResponse {
+  id: string;
+  title: string | null;
+  source_type: string;
+  source_url: string | null;
+  status: string;
+  error_message: string | null;
+  char_count: number;
+  chunk_count: number;
+  raw_content: string | null;
+  chunks: ChunkItem[];
+  ingestion_steps: IngestionStep[] | null;
+  last_indexed_at: string | null;
 }
 
 export interface Article {

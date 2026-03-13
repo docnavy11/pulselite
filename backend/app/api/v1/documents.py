@@ -6,7 +6,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import get_workspace
-from app.schemas.documents import DocumentCreate, DocumentResponse, DocumentUpdate
+from sqlalchemy import select
+
+from app.models.knowledge import Chunk
+from app.schemas.documents import DocumentCreate, DocumentContentResponse, DocumentResponse, DocumentUpdate, ChunkResponse
 from app.services import document_service
 from app.workers.tasks.ingest_document import ingest_document
 
@@ -74,6 +77,35 @@ async def update_document(
     return doc
 
 
+@router.get("/{document_id}/content", response_model=DocumentContentResponse)
+async def get_document_content(
+    document_id: uuid.UUID,
+    workspace_id: uuid.UUID = Depends(get_workspace),
+    db: AsyncSession = Depends(get_db),
+):
+    doc = await document_service.get_document(db, workspace_id, document_id)
+    chunk_result = await db.execute(
+        select(Chunk)
+        .where(Chunk.document_id == doc.id)
+        .order_by(Chunk.chunk_index)
+    )
+    chunks = chunk_result.scalars().all()
+    return DocumentContentResponse(
+        id=doc.id,
+        title=doc.title,
+        source_type=doc.source_type,
+        source_url=doc.source_url,
+        status=doc.status,
+        error_message=doc.error_message,
+        char_count=doc.char_count,
+        chunk_count=doc.chunk_count,
+        raw_content=doc.raw_content,
+        chunks=[ChunkResponse.model_validate(c) for c in chunks],
+        ingestion_steps=doc.ingestion_steps,
+        last_indexed_at=doc.last_indexed_at,
+    )
+
+
 @router.post("/{document_id}/reindex", response_model=DocumentResponse)
 async def reindex_document(
     document_id: uuid.UUID,
@@ -83,5 +115,6 @@ async def reindex_document(
     doc = await document_service.get_document(db, workspace_id, document_id)
     doc.status = "pending"
     await db.commit()
+    await db.refresh(doc)
     ingest_document.delay(str(doc.id))
     return doc

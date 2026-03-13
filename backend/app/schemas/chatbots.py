@@ -108,6 +108,7 @@ class ChatbotResponse(BaseModel):
     setup_status: str | None = None
     active_crawl_job_id: uuid.UUID | None = None
     crawl_progress: CrawlProgressResponse | None = None
+    archived_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 

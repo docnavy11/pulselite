@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,8 +31,9 @@ async def create_chatbot(
 async def list_chatbots(
     workspace_id: uuid.UUID = Depends(get_workspace),
     db: AsyncSession = Depends(get_db),
+    include_archived: bool = Query(False),
 ):
-    chatbots = await chatbot_service.list_chatbots(db, workspace_id)
+    chatbots = await chatbot_service.list_chatbots(db, workspace_id, include_archived=include_archived)
 
     # Batch-fetch CrawlJob data for bots with active_crawl_job_id (no N+1)
     crawl_job_ids = [c.active_crawl_job_id for c in chatbots if c.active_crawl_job_id]
@@ -131,6 +132,26 @@ async def delete_chatbot(
     db: AsyncSession = Depends(get_db),
 ):
     await chatbot_service.delete_chatbot(db, workspace_id, chatbot_id)
+
+
+@router.post("/{chatbot_id}/archive", response_model=ChatbotResponse)
+async def archive_chatbot(
+    chatbot_id: uuid.UUID,
+    workspace_id: uuid.UUID = Depends(get_workspace),
+    db: AsyncSession = Depends(get_db),
+):
+    chatbot = await chatbot_service.archive_chatbot(db, workspace_id, chatbot_id)
+    return chatbot
+
+
+@router.post("/{chatbot_id}/unarchive", response_model=ChatbotResponse)
+async def unarchive_chatbot(
+    chatbot_id: uuid.UUID,
+    workspace_id: uuid.UUID = Depends(get_workspace),
+    db: AsyncSession = Depends(get_db),
+):
+    chatbot = await chatbot_service.unarchive_chatbot(db, workspace_id, chatbot_id)
+    return chatbot
 
 
 @router.get("/{chatbot_id}/widget-config", response_model=WidgetConfig)

@@ -45,3 +45,39 @@ class DocumentResponse(BaseModel):
     ingestion_steps: Optional[list] = None
 
     model_config = {"from_attributes": True}
+
+
+class ChunkResponse(BaseModel):
+    id: uuid.UUID
+    chunk_index: int
+    content: str
+    heading_path: str | None
+    token_count: int | None
+
+    model_config = {"from_attributes": True}
+
+
+class IngestionStepResponse(BaseModel):
+    step: str
+    status: str
+    started_at: str | None = None
+    duration_ms: int | None = None
+    detail: str | None = None
+    error: str | None = None
+
+
+class DocumentContentResponse(BaseModel):
+    id: uuid.UUID
+    title: str | None
+    source_type: str
+    source_url: str | None
+    status: str
+    error_message: str | None
+    char_count: int
+    chunk_count: int
+    raw_content: str | None
+    chunks: list[ChunkResponse]
+    ingestion_steps: list[IngestionStepResponse] | None = None
+    last_indexed_at: datetime | None = None
+
+    model_config = {"from_attributes": True}

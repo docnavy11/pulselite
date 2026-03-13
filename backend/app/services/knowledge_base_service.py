@@ -1,10 +1,10 @@
 import uuid
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select, text as sa_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.knowledge import KnowledgeBase
+from app.models.knowledge import Document, KnowledgeBase
 
 
 async def create_knowledge_base(db: AsyncSession, workspace_id: uuid.UUID, **kwargs) -> KnowledgeBase:
@@ -36,5 +36,31 @@ async def get_knowledge_base(db: AsyncSession, workspace_id: uuid.UUID, kb_id: u
 
 async def delete_knowledge_base(db: AsyncSession, workspace_id: uuid.UUID, kb_id: uuid.UUID) -> None:
     kb = await get_knowledge_base(db, workspace_id, kb_id)
+
+    # Sum char_count of all documents in this KB and release from workspace budget
+    total_result = await db.execute(
+        select(func.coalesce(func.sum(Document.char_count), 0)).where(
+            Document.knowledge_base_id == kb_id
+        )
+    )
+    total_chars = total_result.scalar() or 0
+    if total_chars > 0:
+        await db.execute(
+            sa_text("""
+                UPDATE workspaces
+                SET chars_indexed = GREATEST(0, chars_indexed - :n)
+                WHERE id = :workspace_id
+            """),
+            {"n": total_chars, "workspace_id": workspace_id},
+        )
+
+    # Delete documents first (FK constraint), then the KB
+    docs_result = await db.execute(
+        select(Document).where(Document.knowledge_base_id == kb_id)
+    )
+    for doc in docs_result.scalars().all():
+        await db.delete(doc)
+    await db.flush()
+
     await db.delete(kb)
     await db.flush()

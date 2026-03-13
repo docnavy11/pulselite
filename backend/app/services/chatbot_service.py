@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timezone
 
 from fastapi import HTTPException, status
 from sqlalchemy import delete, func, select, update
@@ -18,8 +19,15 @@ async def create_chatbot(db: AsyncSession, workspace_id: uuid.UUID, **kwargs) ->
     return chatbot
 
 
-async def list_chatbots(db: AsyncSession, workspace_id: uuid.UUID) -> list[Chatbot]:
-    result = await db.execute(select(Chatbot).where(Chatbot.workspace_id == workspace_id))
+async def list_chatbots(
+    db: AsyncSession,
+    workspace_id: uuid.UUID,
+    include_archived: bool = False,
+) -> list[Chatbot]:
+    stmt = select(Chatbot).where(Chatbot.workspace_id == workspace_id)
+    if not include_archived:
+        stmt = stmt.where(Chatbot.archived_at.is_(None))
+    result = await db.execute(stmt)
     return list(result.scalars().all())
 
 
@@ -43,7 +51,18 @@ async def update_chatbot(db: AsyncSession, workspace_id: uuid.UUID, chatbot_id: 
 
 async def delete_chatbot(db: AsyncSession, workspace_id: uuid.UUID, chatbot_id: uuid.UUID) -> None:
     chatbot = await get_chatbot(db, workspace_id, chatbot_id)
-    # Calculate total chars to release
+
+    # Block deletion if the chatbot has conversations — archive instead
+    conv_count_result = await db.execute(
+        select(func.count()).select_from(Conversation).where(Conversation.chatbot_id == chatbot_id)
+    )
+    if (conv_count_result.scalar() or 0) > 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot delete a chatbot that has conversations. Archive it instead.",
+        )
+
+    # Release character budget for all documents in this chatbot's KBs
     kb_subq = select(KnowledgeBase.id).where(KnowledgeBase.chatbot_id == chatbot_id).scalar_subquery()
     total_result = await db.execute(
         select(func.coalesce(func.sum(Document.char_count), 0)).where(
@@ -60,6 +79,22 @@ async def delete_chatbot(db: AsyncSession, workspace_id: uuid.UUID, chatbot_id: 
             """),
             {"n": total_chars, "workspace_id": workspace_id},
         )
+
+    # Delete documents, then KBs (FK-safe order)
+    docs_result = await db.execute(
+        select(Document).where(Document.knowledge_base_id.in_(kb_subq))
+    )
+    for doc in docs_result.scalars().all():
+        await db.delete(doc)
+    await db.flush()
+
+    kb_result = await db.execute(
+        select(KnowledgeBase).where(KnowledgeBase.chatbot_id == chatbot_id)
+    )
+    for kb in kb_result.scalars().all():
+        await db.delete(kb)
+    await db.flush()
+
     # Delete child records in FK-safe order before deleting chatbot
     # GapEvents reference RetrievalLogs, so delete them first
     retrieval_log_subq = select(RetrievalLog.id).where(RetrievalLog.chatbot_id == chatbot_id).scalar_subquery()
@@ -69,11 +104,6 @@ async def delete_chatbot(db: AsyncSession, workspace_id: uuid.UUID, chatbot_id: 
     )
     await db.execute(
         delete(GapCluster).where(GapCluster.chatbot_id == chatbot_id)
-    )
-    await db.execute(
-        update(Conversation)
-        .where(Conversation.chatbot_id == chatbot_id)
-        .values(chatbot_id=None)
     )
     await db.delete(chatbot)
     await db.flush()
@@ -91,3 +121,24 @@ async def delete_chatbot(db: AsyncSession, workspace_id: uuid.UUID, chatbot_id: 
                 "chars_limit": PLAN_CHAR_LIMITS.get(ws_row.plan, 0),
                 "plan": ws_row.plan,
             })
+
+
+async def archive_chatbot(db: AsyncSession, workspace_id: uuid.UUID, chatbot_id: uuid.UUID) -> Chatbot:
+    chatbot = await get_chatbot(db, workspace_id, chatbot_id)
+    if chatbot.archived_at is not None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Chatbot is already archived")
+    chatbot.archived_at = datetime.now(timezone.utc)
+    chatbot.is_active = False
+    await db.flush()
+    await db.refresh(chatbot)
+    return chatbot
+
+
+async def unarchive_chatbot(db: AsyncSession, workspace_id: uuid.UUID, chatbot_id: uuid.UUID) -> Chatbot:
+    chatbot = await get_chatbot(db, workspace_id, chatbot_id)
+    if chatbot.archived_at is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Chatbot is not archived")
+    chatbot.archived_at = None
+    await db.flush()
+    await db.refresh(chatbot)
+    return chatbot

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Fragment } from "react";
 import {
   Plus,
   Globe,
@@ -13,7 +13,7 @@ import { Card, CardContent } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Spinner } from "@/components/ui/Spinner";
 import { Document, KnowledgeBase } from "@/lib/types";
-import type { DocumentStatusEvent } from "@/lib/types";
+import type { DocumentStatusEvent, WorkspaceUsageEvent } from "@/lib/types";
 import {
   getDocuments,
   deleteDocument,
@@ -21,11 +21,13 @@ import {
   createKnowledgeBase,
   updateDocument,
   getCrawlHistory,
+  getWorkspaceUsage,
 } from "@/lib/api-functions";
-import { CrawlJobSummary } from "@/lib/types";
+import { CrawlJobSummary, WorkspaceUsage } from "@/lib/types";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { AddSourceModal } from "@/components/knowledge/AddSourceModal";
 import { useSocketEvent } from "@/lib/socket";
+import { DocumentContentPanel } from "./DocumentContentPanel";
 
 function errorDescription(error: string): string {
   if (!error) return "Unknown error";
@@ -74,6 +76,9 @@ export function SourcesTab({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [failedOpen, setFailedOpen] = useState(true);
   const [retryingAll, setRetryingAll] = useState(false);
+  const [expandedDocId, setExpandedDocId] = useState<string | null>(null);
+  const [contentRefreshKey, setContentRefreshKey] = useState(0);
+  const [charUsage, setCharUsage] = useState<WorkspaceUsage | null>(null);
 
   const primaryKb = knowledgeBases[0];
 
@@ -96,6 +101,7 @@ export function SourcesTab({
     fetchDocuments();
     if (workspace) {
       getCrawlHistory(workspace.id, chatbotId).then(setCrawlHistory).catch(() => {});
+      getWorkspaceUsage(workspace.id).then(setCharUsage).catch(() => {});
     }
   }, [fetchDocuments, workspace, chatbotId]);
 
@@ -109,11 +115,22 @@ export function SourcesTab({
     ));
   });
 
+  // Real-time workspace usage updates
+  useSocketEvent<WorkspaceUsageEvent>("workspace:usage_updated", (data) => {
+    setCharUsage({
+      chars_indexed: data.chars_indexed,
+      chars_limit: data.chars_limit,
+      chars_remaining: data.chars_limit !== null ? Math.max(0, data.chars_limit - data.chars_indexed) : null,
+      plan: data.plan,
+    });
+  });
+
   async function handleDelete(docId: string) {
     if (!workspace) return;
     try {
       await deleteDocument(workspace.id, docId);
       setDocuments((prev) => prev.filter((d) => d.id !== docId));
+      getWorkspaceUsage(workspace.id).then(setCharUsage).catch(() => {});
     } catch {
       // handle error
     }
@@ -124,6 +141,9 @@ export function SourcesTab({
     try {
       const updated = await reindexDocument(workspace.id, docId);
       setDocuments((prev) => prev.map((d) => (d.id === docId ? updated : d)));
+      if (expandedDocId === docId) {
+        setContentRefreshKey((k) => k + 1);
+      }
     } catch {
       // handle error
     }
@@ -178,6 +198,29 @@ export function SourcesTab({
   const failedFromHistory = crawlHistory.length > 0 ? crawlHistory[0].pages_failed : 0;
   const hasUnrecordedFailures = failedDocs.length === 0 && failedFromHistory > 0;
 
+  // Group active docs by source type
+  const groupOrder = ["url", "text", "file", "sitemap", "google_drive", "zendesk", "salesforce", "dropbox", "notion", "qa"];
+  const groupLabels: Record<string, string> = {
+    url: "Web Pages",
+    text: "Text",
+    file: "Files",
+    sitemap: "Sitemaps",
+    google_drive: "Google Drive",
+    zendesk: "Zendesk",
+    salesforce: "Salesforce",
+    dropbox: "Dropbox",
+    notion: "Notion",
+    qa: "Q&A",
+  };
+  const grouped = activeDocs.reduce<Record<string, typeof activeDocs>>((acc, doc) => {
+    const key = doc.source_type || "other";
+    (acc[key] ??= []).push(doc);
+    return acc;
+  }, {});
+  const sortedGroups = Object.keys(grouped).sort(
+    (a, b) => (groupOrder.indexOf(a) === -1 ? 99 : groupOrder.indexOf(a)) - (groupOrder.indexOf(b) === -1 ? 99 : groupOrder.indexOf(b))
+  );
+
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
@@ -188,7 +231,29 @@ export function SourcesTab({
         </Button>
       </div>
 
-      {/* Active sources table */}
+      {/* Character usage bar */}
+      {charUsage && charUsage.chars_limit !== null && (() => {
+        const pct = Math.min(100, Math.round((charUsage.chars_indexed / charUsage.chars_limit!) * 100));
+        const barColor = pct >= 95 ? "bg-red-500" : pct >= 80 ? "bg-amber-500" : "bg-primary-500";
+        const textColor = pct >= 95 ? "text-red-600" : pct >= 80 ? "text-amber-600" : "text-gray-500";
+        return (
+          <div className="mb-4 flex items-center gap-3 text-xs">
+            <div className="h-1.5 flex-1 rounded-full bg-gray-100 max-w-xs">
+              <div
+                className={`h-1.5 rounded-full transition-all duration-500 ${barColor}`}
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+            <span className={textColor}>
+              {charUsage.chars_indexed.toLocaleString()} / {charUsage.chars_limit!.toLocaleString()} chars
+              {pct >= 95 && " — limit reached"}
+              {pct >= 80 && pct < 95 && " — approaching limit"}
+            </span>
+          </div>
+        );
+      })()}
+
+      {/* Active sources — grouped by type */}
       {activeDocs.length === 0 && failedDocs.length === 0 && !hasUnrecordedFailures ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12 text-gray-400">
@@ -199,107 +264,128 @@ export function SourcesTab({
             </p>
           </CardContent>
         </Card>
-      ) : activeDocs.length > 0 ? (
-        <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-200 bg-gray-50">
-                <th className="text-left px-4 py-3 font-medium text-gray-500">Source</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">Type</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">Status</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">Last synced</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">Sync</th>
-                <th className="text-right px-4 py-3 font-medium text-gray-500">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {activeDocs.map((doc) => {
-                const Icon = sourceTypeIcon[doc.source_type] || FileText;
-                return (
-                  <tr
-                    key={doc.id}
-                    className="group border-b border-[#faf8f5] last:border-0 hover:bg-[#faf8f5] transition-colors"
-                  >
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <Icon className="h-4 w-4 text-gray-400 shrink-0" />
-                        <span className="truncate max-w-xs">
-                          {doc.title || doc.source_url || "Untitled"}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-gray-500 capitalize">{doc.source_type}</td>
-                    <td className="px-4 py-3">
-                      {doc.status === "processing" && (
-                        <span className="flex items-center gap-1.5 text-amber-500 text-[11px] animate-pulse">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
-                          Processing…
-                        </span>
-                      )}
-                      {doc.status === "pending" && (
-                        <span className="flex items-center gap-1.5 text-gray-400 text-[11px]">
-                          <span className="w-1.5 h-1.5 rounded-full bg-gray-300 inline-block" />
-                          Pending
-                        </span>
-                      )}
-                      {doc.status === "indexed" && (
-                        <span className="flex items-center gap-1.5 text-green-600 text-[11px]">
-                          <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />
-                          Indexed
-                        </span>
-                      )}
-                      {!["processing", "pending", "indexed"].includes(doc.status) && (
-                        <Badge variant={statusVariant[doc.status] || "default"}>
-                          {doc.status}
-                        </Badge>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-gray-500 text-[11px]">
-                      {doc.last_indexed_at
-                        ? new Date(doc.last_indexed_at).toLocaleDateString()
-                        : "-"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <select
-                        value={doc.sync_frequency || "manual"}
-                        onChange={async (e) => {
-                          if (!workspace) return;
-                          const updated = await updateDocument(workspace.id, doc.id, {
-                            sync_frequency: e.target.value,
-                          });
-                          setDocuments((prev) => prev.map((d) => (d.id === doc.id ? updated : d)));
-                        }}
-                        className="text-xs text-gray-600 border border-gray-200 rounded px-2 py-1"
-                      >
-                        <option value="manual">Manual</option>
-                        <option value="daily">Daily</option>
-                        <option value="weekly">Weekly</option>
-                        <option value="monthly">Monthly</option>
-                      </select>
-                    </td>
-                    <td className="py-3 px-4 text-right">
-                      <div className="flex items-center gap-2 justify-end opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-                        <button
-                          onClick={() => handleReindex(doc.id)}
-                          className="text-[11px] text-gray-400 hover:text-gray-700"
-                        >
-                          Reindex
-                        </button>
-                        <button
-                          onClick={() => handleDelete(doc.id)}
-                          className="text-[11px] text-red-400 hover:text-red-600"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+      ) : (
+        <div className="space-y-5">
+          {sortedGroups.map((sourceType) => {
+            const docs = grouped[sourceType];
+            const Icon = sourceTypeIcon[sourceType] || FileText;
+            const label = groupLabels[sourceType] || sourceType;
+            return (
+              <div key={sourceType}>
+                <div className="flex items-center gap-2 mb-2">
+                  <Icon className="h-4 w-4 text-gray-400" />
+                  <h3 className="text-sm font-medium text-gray-700">{label}</h3>
+                  <span className="text-xs text-gray-400">{docs.length}</span>
+                </div>
+                <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
+                  <table className="w-full text-sm">
+                    <tbody>
+                      {docs.map((doc) => (
+                        <Fragment key={doc.id}>
+                          <tr
+                            onClick={() => setExpandedDocId(expandedDocId === doc.id ? null : doc.id)}
+                            className="group border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors cursor-pointer"
+                          >
+                            <td className="px-4 py-3">
+                              <div className="min-w-0">
+                                <span className="truncate block max-w-xs">
+                                  {doc.title || doc.source_url || "Untitled"}
+                                </span>
+                                {doc.source_url && doc.title && (
+                                  <span className="truncate block max-w-xs text-[11px] text-gray-400">
+                                    {doc.source_url}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 w-24">
+                              {doc.status === "processing" && (
+                                <span className="flex items-center gap-1.5 text-amber-500 text-[11px] animate-pulse">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
+                                  Processing…
+                                </span>
+                              )}
+                              {doc.status === "pending" && (
+                                <span className="flex items-center gap-1.5 text-gray-400 text-[11px]">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-gray-300 inline-block" />
+                                  Pending
+                                </span>
+                              )}
+                              {doc.status === "indexed" && (
+                                <span className="flex items-center gap-1.5 text-green-600 text-[11px]">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />
+                                  Indexed
+                                </span>
+                              )}
+                              {!["processing", "pending", "indexed"].includes(doc.status) && (
+                                <Badge variant={statusVariant[doc.status] || "default"}>
+                                  {doc.status}
+                                </Badge>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-gray-400 text-[11px] w-24">
+                              {doc.last_indexed_at
+                                ? new Date(doc.last_indexed_at).toLocaleDateString()
+                                : "-"}
+                            </td>
+                            <td className="px-4 py-3 w-24">
+                              <select
+                                value={doc.sync_frequency || "manual"}
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={async (e) => {
+                                  e.stopPropagation();
+                                  if (!workspace) return;
+                                  const updated = await updateDocument(workspace.id, doc.id, {
+                                    sync_frequency: e.target.value,
+                                  });
+                                  setDocuments((prev) => prev.map((d) => (d.id === doc.id ? updated : d)));
+                                }}
+                                className="text-xs text-gray-600 border border-gray-200 rounded px-2 py-1"
+                              >
+                                <option value="manual">Manual</option>
+                                <option value="daily">Daily</option>
+                                <option value="weekly">Weekly</option>
+                                <option value="monthly">Monthly</option>
+                              </select>
+                            </td>
+                            <td className="py-3 px-4 text-right w-24">
+                              <div className="flex items-center gap-2 justify-end opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleReindex(doc.id); }}
+                                  className="text-[11px] text-gray-400 hover:text-gray-700"
+                                >
+                                  Reindex
+                                </button>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleDelete(doc.id); }}
+                                  className="text-[11px] text-red-400 hover:text-red-600"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                          {expandedDocId === doc.id && (
+                            <tr>
+                              <td colSpan={5} className="bg-gray-50 border-b border-gray-200">
+                                <DocumentContentPanel
+                                  workspaceId={workspace!.id}
+                                  documentId={doc.id}
+                                  refreshKey={contentRefreshKey}
+                                />
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })}
         </div>
-      ) : null}
+      )}
 
       {/* Failed pages section */}
       {(failedDocs.length > 0 || hasUnrecordedFailures) && (
@@ -490,6 +576,7 @@ export function SourcesTab({
       {showAddSource && workspace && (
         <AddSourceModal
           workspaceId={workspace.id}
+          chatbotId={chatbotId}
           getKnowledgeBaseId={ensureKnowledgeBase}
           onClose={() => setShowAddSource(false)}
           onAdded={handleSourcesAdded}

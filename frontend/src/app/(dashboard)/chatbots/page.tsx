@@ -8,7 +8,7 @@ import { Spinner } from "@/components/ui/Spinner";
 import { Chatbot } from "@/lib/types";
 import { useSocketEvent, getSocket } from "@/lib/socket";
 import type { ChatbotStatusEvent, CrawlProgressEvent } from "@/lib/types";
-import { getChatbots, getChatbotStats, updateChatbot, deleteChatbot } from "@/lib/api-functions";
+import { getChatbots, getChatbotStats, updateChatbot, deleteChatbot, archiveChatbot, unarchiveChatbot } from "@/lib/api-functions";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useChatbotStore } from "@/stores/chatbot-store";
 import { useCopilot } from "@/components/copilot/CopilotProvider";
@@ -44,6 +44,7 @@ export default function ChatbotsPage() {
   const [loading, setLoading] = useState(true);
   const [actionPending, setActionPending] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [showArchiveHint, setShowArchiveHint] = useState<string | null>(null);
 
   const handleToggle = async (e: { preventDefault: () => void }, chatbot: Chatbot) => {
     e.preventDefault();
@@ -64,9 +65,40 @@ export default function ChatbotsPage() {
     try {
       await deleteChatbot(workspace.id, id);
       removeChatbotFromList(id);
+      setConfirmDelete(null);
+    } catch (err: unknown) {
+      const status = (err as { status?: number })?.status ?? (err as { response?: { status?: number } })?.response?.status;
+      if (status === 409) {
+        setShowArchiveHint(id);
+      }
+    } finally {
+      setActionPending(null);
+    }
+  };
+
+  const handleArchive = async (e: { preventDefault: () => void }, id: string) => {
+    e.preventDefault();
+    if (!workspace) return;
+    setActionPending(id);
+    try {
+      await archiveChatbot(workspace.id, id);
+      removeChatbotFromList(id);
     } finally {
       setActionPending(null);
       setConfirmDelete(null);
+      setShowArchiveHint(null);
+    }
+  };
+
+  const handleUnarchive = async (e: { preventDefault: () => void }, id: string) => {
+    e.preventDefault();
+    if (!workspace) return;
+    setActionPending(id);
+    try {
+      const updated = await unarchiveChatbot(workspace.id, id);
+      patchChatbotInList(id, { archived_at: updated.archived_at, is_active: updated.is_active });
+    } finally {
+      setActionPending(null);
     }
   };
 
@@ -243,23 +275,51 @@ export default function ChatbotsPage() {
               {/* Delete confirmation overlay */}
               {confirmDelete === chatbot.id && (
                 <div className="absolute inset-0 z-10 bg-white border border-red-200 rounded-xl flex flex-col items-center justify-center gap-3 p-4 shadow-lg">
-                  <p className="text-[13px] font-semibold text-gray-800 text-center">Delete "{chatbot.display_name || chatbot.name}"?</p>
-                  <p className="text-[11px] text-gray-400 text-center">This cannot be undone.</p>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={(e) => handleDelete(e, chatbot.id)}
-                      disabled={actionPending === chatbot.id}
-                      className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-60"
-                    >
-                      {actionPending === chatbot.id ? "Deleting…" : "Delete"}
-                    </button>
-                    <button
-                      onClick={() => setConfirmDelete(null)}
-                      className="px-3 py-1.5 bg-[#faf8f5] border border-[#f0ebe3] text-gray-600 rounded-lg text-[11px] font-medium"
-                    >
-                      Cancel
-                    </button>
-                  </div>
+                  {showArchiveHint === chatbot.id ? (
+                    <>
+                      <p className="text-[13px] font-semibold text-gray-800 text-center">
+                        This chatbot has conversations
+                      </p>
+                      <p className="text-[11px] text-gray-400 text-center">
+                        Archive it instead to preserve conversation history and stats.
+                      </p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={(e) => handleArchive(e, chatbot.id)}
+                          disabled={actionPending === chatbot.id}
+                          className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-60"
+                        >
+                          {actionPending === chatbot.id ? "Archiving…" : "Archive"}
+                        </button>
+                        <button
+                          onClick={() => { setConfirmDelete(null); setShowArchiveHint(null); }}
+                          className="px-3 py-1.5 bg-[#faf8f5] border border-[#f0ebe3] text-gray-600 rounded-lg text-[11px] font-medium"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-[13px] font-semibold text-gray-800 text-center">Delete "{chatbot.display_name || chatbot.name}"?</p>
+                      <p className="text-[11px] text-gray-400 text-center">This cannot be undone.</p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={(e) => handleDelete(e, chatbot.id)}
+                          disabled={actionPending === chatbot.id}
+                          className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-60"
+                        >
+                          {actionPending === chatbot.id ? "Deleting…" : "Delete"}
+                        </button>
+                        <button
+                          onClick={() => setConfirmDelete(null)}
+                          className="px-3 py-1.5 bg-[#faf8f5] border border-[#f0ebe3] text-gray-600 rounded-lg text-[11px] font-medium"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
 

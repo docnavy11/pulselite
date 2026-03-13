@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import uuid
 from datetime import datetime, timezone
@@ -489,6 +490,21 @@ async def run_ingestion(db: AsyncSession, document_id: uuid.UUID) -> None:
             "error_message": str(exc),
         })
         raise
+
+    # Content hash check — skip re-ingestion if content unchanged
+    t0 = datetime.now(timezone.utc)
+    new_hash = hashlib.sha256(content.encode()).hexdigest()
+    if document.content_hash == new_hash:
+        _record("hash_check", "skipped", t0, detail="content unchanged")
+        document.status = "indexed"
+        document.error_message = None
+        document.last_indexed_at = datetime.now(timezone.utc)
+        document.ingestion_steps = steps
+        logger.info("Document %s: content unchanged, skipping re-ingestion", document_id)
+        await db.flush()
+        return
+    _record("hash_check", "ok", t0, detail="content changed" if document.content_hash else "first ingestion")
+    document.content_hash = new_hash
 
     # Character budget enforcement
     n = len(content)

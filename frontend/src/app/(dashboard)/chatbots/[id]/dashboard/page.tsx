@@ -177,64 +177,72 @@ export default function ChatbotDashboardPage() {
       {/* Section 1: KPI Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Conversations */}
-        <Card>
-          <CardContent className="py-5">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">
-              Conversations
-            </p>
-            <p className="text-[26px] font-bold text-gray-900 leading-tight">
-              {stats.total_conversations}
-            </p>
-            <p className="text-xs text-gray-400 mt-1">
-              {stats.resolved} resolved &middot; {stats.escalated} escalated
-            </p>
-          </CardContent>
-        </Card>
+        <Link to={`/logs?chatbot_id=${chatbotId}`} className="block">
+          <Card className="hover:shadow-md transition-shadow cursor-pointer">
+            <CardContent className="py-5">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">
+                Conversations
+              </p>
+              <p className="text-[26px] font-bold text-gray-900 leading-tight">
+                {stats.total_conversations}
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                {stats.resolved} resolved &middot; {stats.escalated} escalated
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
 
         {/* Resolution Rate */}
-        <Card>
-          <CardContent className="py-5">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">
-              Resolution Rate
-            </p>
-            <p className="text-[26px] font-bold text-gray-900 leading-tight">
-              {Math.round(dashData.resolution_rate * 100)}%
-            </p>
-            <p className={`text-xs mt-1 ${resolutionDelta.color}`}>
-              {resolutionDelta.text}
-            </p>
-          </CardContent>
-        </Card>
+        <Link to={`/logs?chatbot_id=${chatbotId}`} className="block">
+          <Card className="hover:shadow-md transition-shadow cursor-pointer">
+            <CardContent className="py-5">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">
+                Resolution Rate
+              </p>
+              <p className="text-[26px] font-bold text-gray-900 leading-tight">
+                {Math.round(dashData.resolution_rate * 100)}%
+              </p>
+              <p className={`text-xs mt-1 ${resolutionDelta.color}`}>
+                {resolutionDelta.text}
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
 
         {/* Avg Sentiment */}
-        <Card>
-          <CardContent className="py-5">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">
-              Avg Sentiment
-            </p>
-            <p className="text-[26px] font-bold text-gray-900 leading-tight">
-              {sentiment.avg_sentiment.toFixed(1)}
-            </p>
-            <p className={`text-xs mt-1 ${sentimentDelta.color}`}>
-              {sentimentDelta.text}
-            </p>
-          </CardContent>
-        </Card>
+        <Link to="/intelligence/sentiment" className="block">
+          <Card className="hover:shadow-md transition-shadow cursor-pointer">
+            <CardContent className="py-5">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">
+                Avg Sentiment
+              </p>
+              <p className="text-[26px] font-bold text-gray-900 leading-tight">
+                {sentiment.avg_sentiment.toFixed(1)}
+              </p>
+              <p className={`text-xs mt-1 ${sentimentDelta.color}`}>
+                {sentimentDelta.text}
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
 
         {/* Positive Feedback */}
-        <Card>
-          <CardContent className="py-5">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">
-              Positive Feedback
-            </p>
-            <p className="text-[26px] font-bold text-gray-900 leading-tight">
-              {positivePct}%
-            </p>
-            <p className="text-xs text-gray-400 mt-1">
-              {feedback.thumbs_up} {"👍"} &middot; {feedback.thumbs_down} {"👎"}
-            </p>
-          </CardContent>
-        </Card>
+        <Link to="/intelligence/sentiment" className="block">
+          <Card className="hover:shadow-md transition-shadow cursor-pointer">
+            <CardContent className="py-5">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">
+                Positive Feedback
+              </p>
+              <p className="text-[26px] font-bold text-gray-900 leading-tight">
+                {positivePct}%
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                {feedback.thumbs_up} {"👍"} &middot; {feedback.thumbs_down} {"👎"}
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
 
       {/* Section 2: Confidence & Resolution */}
@@ -304,9 +312,15 @@ export default function ChatbotDashboardPage() {
         {/* Top Topics */}
         <Card>
           <CardContent className="py-5">
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">
-              Top Topics
-            </h3>
+            <Link
+              to={`/logs?chatbot_id=${chatbotId}`}
+              className="text-sm font-semibold text-gray-700 mb-3 flex items-center justify-between group"
+            >
+              <span>Top Topics</span>
+              <span className="text-xs text-primary-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                View logs &rarr;
+              </span>
+            </Link>
             {top_topics.length === 0 ? (
               <p className="text-sm text-gray-400">No topics yet</p>
             ) : (
@@ -334,9 +348,15 @@ export default function ChatbotDashboardPage() {
         {/* Knowledge Gaps */}
         <Card>
           <CardContent className="py-5">
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">
-              Knowledge Gaps
-            </h3>
+            <Link
+              to="/intelligence/gaps"
+              className="text-sm font-semibold text-gray-700 mb-3 flex items-center justify-between group"
+            >
+              <span>Knowledge Gaps</span>
+              <span className="text-xs text-primary-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                View all &rarr;
+              </span>
+            </Link>
             {gaps.length === 0 ? (
               <p className="text-sm text-gray-400">
                 No knowledge gaps detected
@@ -345,16 +365,18 @@ export default function ChatbotDashboardPage() {
               <>
                 <ul className="space-y-2">
                   {gaps.slice(0, 5).map((g) => (
-                    <li
-                      key={g.id}
-                      className="flex items-center justify-between text-sm"
-                    >
-                      <span className="text-gray-700 truncate mr-2">
-                        {g.representative_query}
-                      </span>
-                      <span className="text-xs text-gray-400 shrink-0">
-                        &times;{g.gap_count}
-                      </span>
+                    <li key={g.id}>
+                      <Link
+                        to={`/intelligence/gaps/${g.id}`}
+                        className="flex items-center justify-between text-sm hover:bg-gray-50 -mx-2 px-2 py-1 rounded-lg transition-colors"
+                      >
+                        <span className="text-gray-700 truncate mr-2">
+                          {g.representative_query}
+                        </span>
+                        <span className="text-xs text-gray-400 shrink-0">
+                          &times;{g.gap_count}
+                        </span>
+                      </Link>
                     </li>
                   ))}
                 </ul>
@@ -373,9 +395,15 @@ export default function ChatbotDashboardPage() {
       {/* Section 4: Recent Conversations */}
       <Card>
         <CardContent className="py-5">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">
-            Recent Conversations
-          </h3>
+          <Link
+            to={`/logs?chatbot_id=${chatbotId}`}
+            className="text-sm font-semibold text-gray-700 mb-3 flex items-center justify-between group"
+          >
+            <span>Recent Conversations</span>
+            <span className="text-xs text-primary-500 opacity-0 group-hover:opacity-100 transition-opacity">
+              View all &rarr;
+            </span>
+          </Link>
           {conversations.length === 0 ? (
             <p className="text-sm text-gray-400">No conversations yet</p>
           ) : (
@@ -393,25 +421,27 @@ export default function ChatbotDashboardPage() {
                   }
 
                   return (
-                    <li
-                      key={c.id}
-                      className="flex items-center justify-between py-2.5 gap-4"
-                    >
-                      <p className="text-sm text-gray-700 truncate flex-1">
-                        {c.last_message_preview || "No messages"}
-                      </p>
-                      <div className="flex items-center gap-3 shrink-0">
-                        <Badge variant={badgeVariant}>{badgeLabel}</Badge>
-                        <span className="text-xs text-gray-400 w-16 text-right">
-                          {formatRelativeTime(c.created_at)}
-                        </span>
-                      </div>
+                    <li key={c.id}>
+                      <Link
+                        to={`/conversations/${c.id}`}
+                        className="flex items-center justify-between py-2.5 gap-4 hover:bg-gray-50 -mx-2 px-2 rounded-lg transition-colors"
+                      >
+                        <p className="text-sm text-gray-700 truncate flex-1">
+                          {c.last_message_preview || "No messages"}
+                        </p>
+                        <div className="flex items-center gap-3 shrink-0">
+                          <Badge variant={badgeVariant}>{badgeLabel}</Badge>
+                          <span className="text-xs text-gray-400 w-16 text-right">
+                            {formatRelativeTime(c.created_at)}
+                          </span>
+                        </div>
+                      </Link>
                     </li>
                   );
                 })}
               </ul>
               <Link
-                to="/conversations"
+                to={`/logs?chatbot_id=${chatbotId}`}
                 className="inline-block mt-3 text-xs text-primary-500 hover:text-primary-600 font-medium"
               >
                 View all &rarr;
@@ -426,11 +456,25 @@ export default function ChatbotDashboardPage() {
         {/* Knowledge Sources */}
         <Card>
           <CardContent className="py-5">
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">
-              Knowledge Sources
-            </h3>
+            <Link
+              to={`/chatbots/${chatbotId}/sources`}
+              className="text-sm font-semibold text-gray-700 mb-3 flex items-center justify-between group"
+            >
+              <span>Knowledge Sources</span>
+              <span className="text-xs text-primary-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                View &rarr;
+              </span>
+            </Link>
             {knowledgeBases.length === 0 ? (
-              <p className="text-sm text-gray-400">No knowledge base yet</p>
+              <p className="text-sm text-gray-400">
+                No knowledge base yet.{" "}
+                <Link
+                  to={`/chatbots/${chatbotId}/sources`}
+                  className="text-primary-500 hover:text-primary-600 font-medium"
+                >
+                  Add one &rarr;
+                </Link>
+              </p>
             ) : (
               <>
                 <p className="text-sm text-gray-500 mb-2">
@@ -447,6 +491,12 @@ export default function ChatbotDashboardPage() {
                     </li>
                   ))}
                 </ul>
+                <Link
+                  to={`/chatbots/${chatbotId}/sources`}
+                  className="inline-block mt-3 text-xs text-primary-500 hover:text-primary-600 font-medium"
+                >
+                  Manage sources &rarr;
+                </Link>
               </>
             )}
           </CardContent>
@@ -492,13 +542,22 @@ export default function ChatbotDashboardPage() {
       {/* Section 6: Configuration */}
       <Card>
         <CardContent className="py-5">
-          <h3 className="text-sm font-semibold text-gray-700 mb-4">
-            Configuration
-          </h3>
+          <Link
+            to={`/chatbots/${chatbotId}/settings`}
+            className="text-sm font-semibold text-gray-700 mb-4 flex items-center justify-between group"
+          >
+            <span>Configuration</span>
+            <span className="text-xs text-primary-500 opacity-0 group-hover:opacity-100 transition-opacity">
+              Edit &rarr;
+            </span>
+          </Link>
 
           {/* Model row */}
           {chatbot && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 text-sm">
+            <Link
+              to={`/chatbots/${chatbotId}/settings`}
+              className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 text-sm hover:bg-gray-50 -mx-2 px-2 py-2 rounded-lg transition-colors"
+            >
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">
                   Model
@@ -528,14 +587,20 @@ export default function ChatbotDashboardPage() {
                 </p>
                 <p className="text-gray-700 capitalize">{chatbot.tone}</p>
               </div>
-            </div>
+            </Link>
           )}
 
           {/* Actions */}
           <div className="mb-4">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-2">
-              Actions
-            </p>
+            <Link
+              to={`/chatbots/${chatbotId}/actions`}
+              className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-2 flex items-center justify-between group"
+            >
+              <span>Actions</span>
+              <span className="text-xs text-primary-500 opacity-0 group-hover:opacity-100 transition-opacity normal-case tracking-normal">
+                Manage &rarr;
+              </span>
+            </Link>
             {actions.length === 0 ? (
               <p className="text-sm text-gray-400">
                 No actions linked.{" "}
@@ -583,17 +648,34 @@ export default function ChatbotDashboardPage() {
 
           {/* Knowledge sources */}
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-2">
-              Knowledge Sources
-            </p>
+            <Link
+              to={`/chatbots/${chatbotId}/sources`}
+              className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-2 flex items-center justify-between group"
+            >
+              <span>Knowledge Sources</span>
+              <span className="text-xs text-primary-500 opacity-0 group-hover:opacity-100 transition-opacity normal-case tracking-normal">
+                Manage &rarr;
+              </span>
+            </Link>
             {knowledgeBases.length === 0 ? (
-              <p className="text-sm text-gray-400">No knowledge base yet</p>
+              <p className="text-sm text-gray-400">
+                No knowledge base yet.{" "}
+                <Link
+                  to={`/chatbots/${chatbotId}/sources`}
+                  className="text-primary-500 hover:text-primary-600 font-medium"
+                >
+                  Add one &rarr;
+                </Link>
+              </p>
             ) : (
-              <div className="flex flex-wrap gap-2">
+              <Link
+                to={`/chatbots/${chatbotId}/sources`}
+                className="flex flex-wrap gap-2 hover:opacity-80 transition-opacity"
+              >
                 {knowledgeBases.map((kb) => (
                   <Badge key={kb.id}>{kb.name}</Badge>
                 ))}
-              </div>
+              </Link>
             )}
           </div>
         </CardContent>

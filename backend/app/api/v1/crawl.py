@@ -8,8 +8,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies import get_workspace
 from app.models.knowledge import CrawlJob, Document
-from app.schemas.crawl import CrawlJobStatusResponse, CrawlJobSummary, CrawlRequest, CrawlResponse
+from app.schemas.crawl import (
+    CrawlJobStatusResponse,
+    CrawlJobSummary,
+    CrawlPreviewRequest,
+    CrawlPreviewResponse,
+    CrawlRequest,
+    CrawlResponse,
+)
 from app.services.crawl_service import prepare_crawl
+from app.services.crawler import discover_urls
 from app.workers.tasks.crawl_website import crawl_website
 
 router = APIRouter(prefix="/workspaces/{workspace_id}", tags=["crawl"])
@@ -42,6 +50,29 @@ async def crawl_website_endpoint(
         pages_discovered=0,
         pages_queued=0,
     )
+
+
+@router.post("/crawl/preview", response_model=CrawlPreviewResponse)
+async def crawl_preview_endpoint(
+    body: CrawlPreviewRequest,
+    workspace_id: uuid.UUID = Depends(get_workspace),
+):
+    """Discover URLs on a website (via sitemap or BFS) without starting a crawl."""
+    try:
+        discovered = await discover_urls(body.url)
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    urls = [d.url for d in discovered]
+
+    # Determine source: if sitemap found URLs, discover_urls uses sitemap first
+    # We can detect this by checking if any DiscoveredUrl has prefetched_text=None
+    # (sitemap URLs don't get prefetched; BFS ones do)
+    source = "bfs"
+    if discovered and all(d.prefetched_text is None for d in discovered):
+        source = "sitemap"
+
+    return CrawlPreviewResponse(urls=urls, source=source)
 
 
 @router.get("/crawl", response_model=CrawlJobStatusResponse | None)

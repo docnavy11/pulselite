@@ -93,8 +93,8 @@ export default function DashboardPage() {
     setLoading(true);
     Promise.all([
       getDashboardData(workspace.id, "30d", selectedChatbotId ?? undefined),
-      getSentimentTrends(workspace.id, "30d"),
-      getGapClusters(workspace.id, { status: "open" }),
+      getSentimentTrends(workspace.id, "30d", selectedChatbotId ?? undefined),
+      getGapClusters(workspace.id, { status: "open", chatbot_id: selectedChatbotId ?? undefined }),
     ])
       .then(([dash, sent, gaps]) => {
         setData(dash);

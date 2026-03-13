@@ -78,6 +78,25 @@ class CrawlJobStatusResponse(BaseModel):
     error_message: Optional[str] = None
 
 
+class CrawlPreviewRequest(BaseModel):
+    url: str
+
+    @field_validator("url")
+    @classmethod
+    def url_must_be_http(cls, v: str) -> str:
+        parsed = urlparse(v)
+        if parsed.scheme not in ("http", "https"):
+            raise ValueError("URL must be http or https")
+        if not parsed.netloc:
+            raise ValueError("URL must include a valid host")
+        return v
+
+
+class CrawlPreviewResponse(BaseModel):
+    urls: list[str]
+    source: str  # "sitemap" or "bfs"
+
+
 class WorkspaceUsageResponse(BaseModel):
     chars_indexed: int
     chars_limit: Optional[int]       # None = unlimited (enterprise)
