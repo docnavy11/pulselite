@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies import get_workspace
 from app.models.conversations import Conversation
-from app.models.knowledge import Chatbot as ChatbotModel
+from app.models.knowledge import Chatbot as ChatbotModel, CrawlJob
 from app.schemas.chatbots import AutoConfigRequest, AutoConfigResponse, ChatbotCreate, ChatbotResponse, ChatbotUpdate, CrawlProgressResponse
 from app.schemas.widget import LLMConfigUpdate, PersonaUpdate, WidgetConfig
 from app.services import chatbot_service
@@ -35,7 +35,6 @@ async def list_chatbots(
     chatbots = await chatbot_service.list_chatbots(db, workspace_id)
 
     # Batch-fetch CrawlJob data for bots with active_crawl_job_id (no N+1)
-    from app.models.knowledge import CrawlJob
     crawl_job_ids = [c.active_crawl_job_id for c in chatbots if c.active_crawl_job_id]
     crawl_jobs: dict[uuid.UUID, CrawlJob] = {}
     if crawl_job_ids:
@@ -97,7 +96,21 @@ async def get_chatbot(
     workspace_id: uuid.UUID = Depends(get_workspace),
     db: AsyncSession = Depends(get_db),
 ):
-    return await chatbot_service.get_chatbot(db, workspace_id, chatbot_id)
+    chatbot = await chatbot_service.get_chatbot(db, workspace_id, chatbot_id)
+    r = ChatbotResponse.model_validate(chatbot)
+    if chatbot.active_crawl_job_id:
+        job_result = await db.execute(select(CrawlJob).where(CrawlJob.id == chatbot.active_crawl_job_id))
+        job = job_result.scalar_one_or_none()
+        if job:
+            r = r.model_copy(update={
+                "crawl_progress": CrawlProgressResponse(
+                    pages_queued=job.pages_queued,
+                    pages_discovered=job.pages_discovered,
+                    status=job.status,
+                    error_message=job.error_message,
+                )
+            })
+    return r
 
 
 @router.put("/{chatbot_id}", response_model=ChatbotResponse)
