@@ -16,7 +16,6 @@ depends_on = None
 
 def upgrade() -> None:
     op.add_column("chatbots", sa.Column("setup_status", sa.Text(), nullable=True))
-    op.alter_column("chatbots", "setup_status", type_=sa.Text())
     op.add_column(
         "chatbots",
         sa.Column(
