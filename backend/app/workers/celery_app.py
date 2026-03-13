@@ -40,6 +40,7 @@ celery_app.conf.update(
 
 celery_app.conf.include = [
     "app.workers.tasks.ingest_document",
+    "app.workers.tasks.run_autoconfig",
     "app.workers.tasks.analyze_conversation",
     "app.workers.tasks.auto_recharge",
     "app.workers.tasks.cluster_gaps",
