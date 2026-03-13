@@ -133,6 +133,8 @@ export default function NewBotWizardPage() {
   const [reviewColor, setReviewColor] = useState("");
   const [reviewTone, setReviewTone] = useState("professional");
   const [reviewLanguage, setReviewLanguage] = useState("en");
+  const [reviewSystemPrompt, setReviewSystemPrompt] = useState("");
+  const [reviewFallback, setReviewFallback] = useState("");
 
   // back-navigation state
   const [editingStep1, setEditingStep1] = useState(false);
@@ -244,6 +246,8 @@ export default function NewBotWizardPage() {
               setReviewColor(result.brand_color ?? "#ff6b35");
               setReviewTone(result.tone ?? "professional");
               setReviewLanguage(result.language ?? "en");
+              setReviewSystemPrompt(result.system_prompt ?? "");
+              setReviewFallback(result.fallback_message ?? "");
               setStep("review");
             } catch (acErr: unknown) {
               const msg = acErr instanceof Error ? acErr.message : "AI configuration failed.";
@@ -270,6 +274,8 @@ export default function NewBotWizardPage() {
       await updateChatbot(workspace.id, chatbotId, {
         name: reviewName,
         welcome_message: reviewWelcome,
+        system_prompt: reviewSystemPrompt,
+        fallback_message: reviewFallback,
         brand_color: reviewColor,
         tone: reviewTone,
         language: reviewLanguage,
@@ -298,6 +304,8 @@ export default function NewBotWizardPage() {
     setReviewColor("");
     setReviewTone("professional");
     setReviewLanguage("en");
+    setReviewSystemPrompt("");
+    setReviewFallback("");
     setEditingStep1(false);
     setEditingStep3(false);
     setStep("url");
@@ -609,6 +617,8 @@ export default function NewBotWizardPage() {
                                 setReviewColor(result.brand_color ?? "#ff6b35");
                                 setReviewTone(result.tone ?? "professional");
                                 setReviewLanguage(result.language ?? "en");
+                                setReviewSystemPrompt(result.system_prompt ?? "");
+                                setReviewFallback(result.fallback_message ?? "");
                                 setStep("review");
                               } catch (acErr: unknown) {
                                 const msg = acErr instanceof Error ? acErr.message : "AI configuration failed.";
@@ -718,6 +728,25 @@ export default function NewBotWizardPage() {
                       rows={2}
                       value={reviewWelcome}
                       onChange={(e) => setReviewWelcome(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">System prompt</label>
+                    <textarea
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+                      rows={5}
+                      value={reviewSystemPrompt}
+                      onChange={(e) => setReviewSystemPrompt(e.target.value)}
+                    />
+                    <p className="text-[11px] text-gray-400 mt-1">Behavioral guidance for the bot — persona, tone, scope. No specific facts.</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Fallback message</label>
+                    <textarea
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+                      rows={2}
+                      value={reviewFallback}
+                      onChange={(e) => setReviewFallback(e.target.value)}
                     />
                   </div>
                   <div>
