@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import get_current_user, get_workspace
-from app.models.conversations import Conversation, MessageFeedback
+from app.models.conversations import Conversation, Message, MessageFeedback
 from app.models.intelligence import (
     ConversationAnalysis,
     GapCluster,
@@ -24,10 +24,11 @@ async def get_dashboard(
     db: AsyncSession = Depends(get_db),
     current_user: Agent = Depends(get_current_user),
     chatbot_id: uuid.UUID | None = Query(None),
+    days: int = Query(30, ge=1, le=90),
 ):
     now = datetime.now(timezone.utc)
-    week_start = now - timedelta(days=7)
-    prev_week_start = now - timedelta(days=14)
+    period_start = now - timedelta(days=days)
+    prev_period_start = period_start - timedelta(days=days)
 
     conv_base = [Conversation.workspace_id == workspace_id]
     if chatbot_id:
@@ -40,7 +41,7 @@ async def get_dashboard(
             func.count().filter(Conversation.escalation_reason.isnot(None)).label("escalated"),
         )
         .select_from(Conversation)
-        .where(*conv_base, Conversation.created_at >= week_start)
+        .where(*conv_base, Conversation.created_at >= period_start)
     )
     current = current_result.one()
 
@@ -52,8 +53,8 @@ async def get_dashboard(
         .select_from(Conversation)
         .where(
             *conv_base,
-            Conversation.created_at >= prev_week_start,
-            Conversation.created_at < week_start,
+            Conversation.created_at >= prev_period_start,
+            Conversation.created_at < period_start,
         )
     )
     prev = prev_result.one()
@@ -66,7 +67,7 @@ async def get_dashboard(
         select(Conversation.escalation_reason, func.count())
         .where(
             *conv_base,
-            Conversation.created_at >= week_start,
+            Conversation.created_at >= period_start,
             Conversation.escalation_reason.isnot(None),
         )
         .group_by(Conversation.escalation_reason)
@@ -110,7 +111,7 @@ async def get_dashboard(
     articles_result = await db.execute(
         select(func.count())
         .select_from(Article)
-        .where(Article.workspace_id == workspace_id, Article.created_at >= week_start, Article.state == "published")
+        .where(Article.workspace_id == workspace_id, Article.created_at >= period_start, Article.state == "published")
     )
     new_articles = articles_result.scalar() or 0
 
@@ -122,24 +123,22 @@ async def get_dashboard(
     )
     open_gaps = open_gaps_result.scalar() or 0
 
-    thirty_days_ago = now - timedelta(days=30)
     feedback_stmt = (
         select(MessageFeedback.rating, func.count().label("n"))
         .where(
             MessageFeedback.workspace_id == workspace_id,
-            MessageFeedback.created_at >= thirty_days_ago,
+            MessageFeedback.created_at >= period_start,
         )
         .group_by(MessageFeedback.rating)
     )
     if chatbot_id:
-        from app.models.conversations import Message
         feedback_stmt = (
             select(MessageFeedback.rating, func.count().label("n"))
             .join(Message, MessageFeedback.message_id == Message.id)
             .join(Conversation, Message.conversation_id == Conversation.id)
             .where(
                 MessageFeedback.workspace_id == workspace_id,
-                MessageFeedback.created_at >= thirty_days_ago,
+                MessageFeedback.created_at >= period_start,
                 Conversation.chatbot_id == chatbot_id,
             )
             .group_by(MessageFeedback.rating)
@@ -147,28 +146,72 @@ async def get_dashboard(
     feedback_result = await db.execute(feedback_stmt)
     feedback_counts: dict[str, int] = {row.rating: row.n for row in feedback_result.all()}
 
-    top_topics_params: dict = {"ws": str(workspace_id), "cutoff": thirty_days_ago}
+    # Top topics: count both total and resolved per topic
+    top_topics_params: dict = {"ws": str(workspace_id), "cutoff": period_start}
     chatbot_filter = ""
     if chatbot_id:
         chatbot_filter = "AND c.chatbot_id = :chatbot_id"
         top_topics_params["chatbot_id"] = str(chatbot_id)
     top_topics_result = await db.execute(
         text(f"""
-            SELECT topic, count(*) AS n
+            SELECT topic,
+                   count(*) AS total_count,
+                   count(*) FILTER (WHERE c.autonomous_resolved = TRUE) AS resolved_count
             FROM conversation_analysis ca
             JOIN conversations c ON c.id = ca.conversation_id
             CROSS JOIN LATERAL unnest(ca.topics) AS topic
             WHERE ca.workspace_id = :ws
-              AND c.autonomous_resolved = TRUE
               AND ca.created_at >= :cutoff
               {chatbot_filter}
             GROUP BY topic
-            ORDER BY n DESC
+            ORDER BY total_count DESC
             LIMIT 5
         """),
         top_topics_params,
     )
-    top_topics = [{"topic": row[0], "count": row[1]} for row in top_topics_result.all()]
+    top_topics = []
+    for row in top_topics_result.all():
+        total_count = row[1]
+        resolved_count = row[2]
+        top_topics.append({
+            "topic": row[0],
+            "total_count": total_count,
+            "resolved_count": resolved_count,
+            "resolution_rate": round(resolved_count / total_count, 4) if total_count > 0 else 0.0,
+        })
+
+    # Recent negative feedback with comments
+    neg_feedback_stmt = (
+        select(
+            MessageFeedback.id,
+            MessageFeedback.comment,
+            MessageFeedback.created_at,
+            Message.content.label("message_content"),
+        )
+        .join(Message, MessageFeedback.message_id == Message.id)
+        .join(Conversation, Message.conversation_id == Conversation.id)
+        .where(
+            MessageFeedback.workspace_id == workspace_id,
+            MessageFeedback.rating == "thumbs_down",
+            MessageFeedback.comment.isnot(None),
+            MessageFeedback.comment != "",
+            MessageFeedback.created_at >= period_start,
+        )
+        .order_by(MessageFeedback.created_at.desc())
+        .limit(3)
+    )
+    if chatbot_id:
+        neg_feedback_stmt = neg_feedback_stmt.where(Conversation.chatbot_id == chatbot_id)
+    neg_feedback_result = await db.execute(neg_feedback_stmt)
+    recent_negative_feedback = [
+        {
+            "id": str(row.id),
+            "comment": row.comment,
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+            "message_content": row.message_content,
+        }
+        for row in neg_feedback_result.all()
+    ]
 
     return {
         "resolution_rate": round(resolution_rate, 4),
@@ -189,6 +232,7 @@ async def get_dashboard(
             "thumbs_down": feedback_counts.get("thumbs_down", 0),
         },
         "top_topics": top_topics,
+        "recent_negative_feedback": recent_negative_feedback,
     }
 
 
@@ -196,6 +240,7 @@ async def get_dashboard(
 async def get_sentiment_trends(
     workspace_id: uuid.UUID = Depends(get_workspace),
     days: int = Query(30, ge=1, le=90),
+    chatbot_id: uuid.UUID | None = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: Agent = Depends(get_current_user),
 ):
@@ -203,20 +248,27 @@ async def get_sentiment_trends(
     cutoff = now - timedelta(days=days)
 
     day_col = func.date(ConversationAnalysis.created_at).label("day")
-    stmt = (
-        select(
-            day_col,
-            func.avg(ConversationAnalysis.sentiment_score).label("avg_sentiment"),
-            func.count(ConversationAnalysis.id).label("count"),
-        )
-        .where(
-            ConversationAnalysis.workspace_id == workspace_id,
-            ConversationAnalysis.sentiment_score.isnot(None),
-            ConversationAnalysis.created_at >= cutoff,
-        )
-        .group_by(day_col)
-        .order_by(day_col.desc())
+    filters = [
+        ConversationAnalysis.workspace_id == workspace_id,
+        ConversationAnalysis.sentiment_score.isnot(None),
+        ConversationAnalysis.created_at >= cutoff,
+    ]
+
+    stmt = select(
+        day_col,
+        func.avg(ConversationAnalysis.sentiment_score).label("avg_sentiment"),
+        func.count(ConversationAnalysis.id).label("count"),
     )
+
+    if chatbot_id:
+        stmt = stmt.join(
+            Conversation,
+            ConversationAnalysis.conversation_id == Conversation.id,
+        )
+        filters.append(Conversation.chatbot_id == chatbot_id)
+
+    stmt = stmt.where(*filters).group_by(day_col).order_by(day_col.desc())
+
     rows = (await db.execute(stmt)).all()
     data = [
         {
@@ -227,5 +279,3 @@ async def get_sentiment_trends(
         for row in rows
     ]
     return {"data": data}
-
-
