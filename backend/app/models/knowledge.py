@@ -38,9 +38,14 @@ class Chatbot(UUIDPrimaryKeyMixin, TimestampUpdateMixin, Base):
     brand_color: Mapped[str | None] = mapped_column(String(7), nullable=True)
     welcome_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     suggested_questions: Mapped[list | None] = mapped_column(JSONB, nullable=True)
-    setup_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    setup_status: Mapped[str | None] = mapped_column(Text, nullable=True)
     active_crawl_job_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("crawl_jobs.id", ondelete="SET NULL"), nullable=True
+    )
+    active_crawl_job: Mapped["CrawlJob | None"] = relationship(
+        "CrawlJob",
+        foreign_keys=[active_crawl_job_id],
+        lazy="select",
     )
 
     knowledge_bases: Mapped[list["KnowledgeBase"]] = relationship(back_populates="chatbot")
