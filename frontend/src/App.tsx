@@ -17,6 +17,7 @@ import WorkspacesPage from './app/(dashboard)/workspaces/page'
 // Chatbot pages
 import ChatbotsPage from './app/(dashboard)/chatbots/page'
 import NewChatbotPage from './app/(dashboard)/chatbots/new/page'
+import ChatbotSetupPage from './app/(dashboard)/chatbots/[id]/setup/page'
 import ChatbotLayout from './app/(dashboard)/chatbots/[id]/layout'
 import KnowledgePage from './app/(dashboard)/chatbots/[id]/page'
 import ChatbotSettingsPage from './app/(dashboard)/chatbots/[id]/settings/page'
@@ -77,6 +78,7 @@ export default function App() {
 
           <Route path="/chatbots" element={<ChatbotsPage />} />
           <Route path="/chatbots/new" element={<NewChatbotPage />} />
+          <Route path="/chatbots/:id/setup" element={<ChatbotSetupPage />} />
           <Route path="/chatbots/:id" element={<ChatbotLayout />}>
             <Route index element={<KnowledgePage />} />
             <Route path="settings" element={<ChatbotSettingsPage />} />
