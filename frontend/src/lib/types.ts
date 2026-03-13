@@ -286,7 +286,8 @@ export interface DashboardData {
     thumbs_up: number;
     thumbs_down: number;
   };
-  top_topics: { topic: string; count: number }[];
+  top_topics: { topic: string; total_count: number; resolved_count: number; resolution_rate: number }[];
+  recent_negative_feedback: { id: string; comment: string; created_at: string; message_content: string }[];
 }
 
 export interface SentimentDataPoint {

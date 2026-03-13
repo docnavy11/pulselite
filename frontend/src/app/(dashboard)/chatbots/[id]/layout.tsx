@@ -8,6 +8,7 @@ import { getChatbot, duplicateChatbot, updateChatbot } from "@/lib/api-functions
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useChatbotStore } from "@/stores/chatbot-store";
 import { useCopilot } from "@/components/copilot/CopilotProvider";
+import { LayoutDashboard } from "lucide-react";
 import {
   IconKnowledge,
   IconConfigure,
@@ -17,8 +18,11 @@ import {
   IconPublish,
 } from "@/components/icons/NavIcons";
 
+const IconDashboard = LayoutDashboard;
+
 const TABS = [
-  { label: "Knowledge",  segment: null,        Icon: IconKnowledge },
+  { label: "Dashboard",  segment: null,        Icon: IconDashboard },
+  { label: "Knowledge",  segment: "sources",   Icon: IconKnowledge },
   { label: "Configure",  segment: "settings",  Icon: IconConfigure },
   { label: "Actions",    segment: "actions",   Icon: IconActions },
   { label: "Appearance", segment: "customize", Icon: IconAppearance },

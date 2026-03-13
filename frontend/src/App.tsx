@@ -19,6 +19,7 @@ import ChatbotsPage from './app/(dashboard)/chatbots/page'
 import NewChatbotPage from './app/(dashboard)/chatbots/new/page'
 import ChatbotSetupPage from './app/(dashboard)/chatbots/[id]/setup/page'
 import ChatbotLayout from './app/(dashboard)/chatbots/[id]/layout'
+import ChatbotDashboardPage from './app/(dashboard)/chatbots/[id]/dashboard/page'
 import KnowledgePage from './app/(dashboard)/chatbots/[id]/page'
 import ChatbotSettingsPage from './app/(dashboard)/chatbots/[id]/settings/page'
 import ActionsPage from './app/(dashboard)/chatbots/[id]/actions/page'
@@ -26,7 +27,7 @@ import CustomizePage from './app/(dashboard)/chatbots/[id]/customize/page'
 import ChatPage from './app/(dashboard)/chatbots/[id]/chat/page'
 import DeployPage from './app/(dashboard)/chatbots/[id]/deploy/page'
 import ArticlesPage from './app/(dashboard)/chatbots/[id]/articles/page'
-import SourcesPage from './app/(dashboard)/chatbots/[id]/sources/page'
+
 
 // Conversation pages
 import ConversationsPage from './app/(dashboard)/conversations/page'
@@ -80,14 +81,14 @@ export default function App() {
           <Route path="/chatbots/new" element={<NewChatbotPage />} />
           <Route path="/chatbots/:id/setup" element={<ChatbotSetupPage />} />
           <Route path="/chatbots/:id" element={<ChatbotLayout />}>
-            <Route index element={<KnowledgePage />} />
+            <Route index element={<ChatbotDashboardPage />} />
+            <Route path="sources" element={<KnowledgePage />} />
             <Route path="settings" element={<ChatbotSettingsPage />} />
             <Route path="actions" element={<ActionsPage />} />
             <Route path="customize" element={<CustomizePage />} />
             <Route path="chat" element={<ChatPage />} />
             <Route path="deploy" element={<DeployPage />} />
             <Route path="articles" element={<ArticlesPage />} />
-            <Route path="sources" element={<SourcesPage />} />
           </Route>
 
           <Route path="/conversations" element={<ConversationsPage />} />

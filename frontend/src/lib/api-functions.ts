@@ -261,13 +261,14 @@ export function publishArticle(workspaceId: string, articleId: string) {
 // Conversations
 export function getConversations(
   workspaceId: string,
-  filters?: { status?: string; chatbot_id?: string; date_from?: string; date_to?: string },
+  filters?: { status?: string; chatbot_id?: string; date_from?: string; date_to?: string; limit?: number },
 ) {
   const params = new URLSearchParams();
   if (filters?.status) params.set("status", filters.status);
   if (filters?.chatbot_id) params.set("chatbot_id", filters.chatbot_id);
   if (filters?.date_from) params.set("date_from", filters.date_from);
   if (filters?.date_to) params.set("date_to", filters.date_to);
+  if (filters?.limit) params.set("limit", String(filters.limit));
   const qs = params.toString();
   return api.get<Conversation[]>(
     `/api/v1/workspaces/${workspaceId}/conversations${qs ? `?${qs}` : ""}`,
@@ -318,10 +319,11 @@ export function getPublicWidgetConfig(chatbotId: string) {
 // Gap Clusters
 export function getGapClusters(
   workspaceId: string,
-  filters?: { status?: string },
+  filters?: { status?: string; chatbot_id?: string },
 ) {
   const params = new URLSearchParams();
   if (filters?.status) params.set("status", filters.status);
+  if (filters?.chatbot_id) params.set("chatbot_id", filters.chatbot_id);
   const qs = params.toString();
   return api.get<GapCluster[]>(
     `/api/v1/workspaces/${workspaceId}/gap-clusters${qs ? `?${qs}` : ""}`,
@@ -360,11 +362,13 @@ export function getDashboardData(
 }
 
 // Sentiment
-export function getSentimentTrends(workspaceId: string, range: string) {
+export function getSentimentTrends(workspaceId: string, range: string, chatbotId?: string) {
   const days = range === "7d" ? 7 : range === "90d" ? 90 : 30;
+  const params = new URLSearchParams({ days: String(days) });
+  if (chatbotId) params.set("chatbot_id", chatbotId);
   return api
     .get<{ data: { date: string; avg_sentiment: number | null; count: number }[] }>(
-      `/api/v1/workspaces/${workspaceId}/sentiment-trends?days=${days}`,
+      `/api/v1/workspaces/${workspaceId}/sentiment-trends?${params}`,
     )
     .then((r) => {
       const points = r.data.filter((d) => d.avg_sentiment !== null);

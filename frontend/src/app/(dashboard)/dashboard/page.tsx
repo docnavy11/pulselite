@@ -376,7 +376,7 @@ export default function DashboardPage() {
                     <li key={t.topic} className="flex items-center justify-between gap-3">
                       <span className="text-[13px] text-gray-800 truncate">{t.topic}</span>
                       <span className="shrink-0 text-[11px] font-semibold bg-green-50 text-green-700 px-2 py-0.5 rounded-full">
-                        {t.count}×
+                        {t.total_count}×
                       </span>
                     </li>
                   ))}
