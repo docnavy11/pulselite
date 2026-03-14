@@ -11,6 +11,7 @@ from app.config import settings
 from app.database import async_session_factory, engine
 from app.models.organizational import Workspace
 from app.services import credits as credits_service
+from app.services.realtime import emit_task_event
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -19,12 +20,12 @@ logger = logging.getLogger(__name__)
 @celery_app.task(bind=True, max_retries=3, default_retry_delay=60)
 def trigger_auto_recharge(self, workspace_id: str) -> dict:
     try:
-        return asyncio.run(_recharge(uuid.UUID(workspace_id)))
+        return asyncio.run(_recharge(uuid.UUID(workspace_id), self.request.id))
     except Exception as exc:
         raise self.retry(exc=exc)
 
 
-async def _recharge(workspace_id: uuid.UUID) -> dict:
+async def _recharge(workspace_id: uuid.UUID, task_id: str) -> dict:
     await engine.dispose()
     async with async_session_factory() as session:
         try:
@@ -45,6 +46,7 @@ async def _recharge(workspace_id: uuid.UUID) -> dict:
                 return {"status": "skipped", "detail": "Balance already above threshold"}
 
             amount = workspace.auto_recharge_amount
+            await emit_task_event(workspace_id, "started", "auto_recharge", task_id)
 
             try:
                 stripe.api_key = settings.STRIPE_SECRET_KEY
@@ -78,9 +80,11 @@ async def _recharge(workspace_id: uuid.UUID) -> dict:
             await session.commit()
 
             logger.info(f"Auto-recharged {amount} credits for workspace {workspace_id}. New balance: {new_balance}")
+            await emit_task_event(workspace_id, "completed", "auto_recharge", task_id, detail=f"Added {amount} credits")
             return {"status": "success", "credits_added": amount, "new_balance": new_balance}
 
         except Exception as e:
             await session.rollback()
             logger.error(f"Auto-recharge error: {e}")
+            await emit_task_event(workspace_id, "completed", "auto_recharge", task_id, error=str(e))
             return {"status": "error", "detail": str(e)}
