@@ -12,6 +12,7 @@ from app.database import async_session_factory, engine
 from app.models.contacts import Contact
 from app.models.conversations import Conversation
 from app.models.organizational import Workspace
+from app.services.realtime import emit_task_event
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -22,12 +23,12 @@ EXPORT_DIR = "/app/data/exports"
 @celery_app.task(bind=True, max_retries=3, default_retry_delay=30)
 def export_workspace_data(self, workspace_id: str, export_id: str) -> dict:
     try:
-        return asyncio.run(_export(uuid.UUID(workspace_id), export_id))
+        return asyncio.run(_export(uuid.UUID(workspace_id), export_id, self.request.id))
     except Exception as exc:
         raise self.retry(exc=exc)
 
 
-async def _export(workspace_id: uuid.UUID, export_id: str) -> dict:
+async def _export(workspace_id: uuid.UUID, export_id: str, task_id: str) -> dict:
     await engine.dispose()
     os.makedirs(EXPORT_DIR, mode=0o700, exist_ok=True)
     export_path = os.path.join(EXPORT_DIR, f"{export_id}.json")
@@ -38,6 +39,8 @@ async def _export(workspace_id: uuid.UUID, export_id: str) -> dict:
             workspace = ws_result.scalar_one_or_none()
             if not workspace:
                 return {"status": "error", "detail": "Workspace not found"}
+
+            await emit_task_event(workspace_id, "started", "export_data", task_id)
 
             contacts_result = await session.execute(
                 select(Contact).where(Contact.workspace_id == workspace_id).options(selectinload(Contact.events))
@@ -90,7 +93,9 @@ async def _export(workspace_id: uuid.UUID, export_id: str) -> dict:
             with open(export_path, "w") as f:
                 json.dump(export_data, f, indent=2)
 
+            await emit_task_event(workspace_id, "completed", "export_data", task_id, detail=f"Exported {len(contacts)} contacts, {len(conversations)} conversations")
             return {"status": "success", "export_id": export_id, "path": export_path}
-        except Exception:
+        except Exception as exc:
             await session.rollback()
+            await emit_task_event(workspace_id, "completed", "export_data", task_id, error=str(exc))
             raise
