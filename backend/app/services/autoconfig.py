@@ -9,7 +9,7 @@ from app.services.llm.openrouter_client import OpenRouterLLMClient
 
 logger = logging.getLogger(__name__)
 
-_HAIKU_MODEL = "anthropic/claude-haiku-4-5"
+_HAIKU_MODEL = "claude-haiku-4-5-20251001"
 
 _llm_client = OpenRouterLLMClient()
 
@@ -105,7 +105,7 @@ def _parse_llm_response(raw: str) -> dict:
     return json.loads(text.strip())
 
 
-async def generate(chunks: list[str], homepage_html: str, language: str | None = None) -> AutoConfigResult:
+async def generate(chunks: list[str], homepage_html: str, language: str | None = None, model: str | None = None) -> AutoConfigResult:
     """Generate chatbot config from content chunks using Claude Haiku.
 
     - Sample strategy: first 5 chunks + random sample up to 20 total
@@ -134,7 +134,7 @@ async def generate(chunks: list[str], homepage_html: str, language: str | None =
 
     raw = await _llm_client.generate(
         messages=[{"role": "user", "content": prompt_text}],
-        model=_HAIKU_MODEL,
+        model=model or _HAIKU_MODEL,
         temperature=0.3,
         max_tokens=1000,
     )
@@ -145,7 +145,7 @@ async def generate(chunks: list[str], homepage_html: str, language: str | None =
         logger.warning("autoconfig: first LLM response was not valid JSON, retrying with stricter prompt")
         raw_retry = await _llm_client.generate(
             messages=[{"role": "user", "content": prompt_text + _STRICT_SUFFIX}],
-            model=_HAIKU_MODEL,
+            model=model or _HAIKU_MODEL,
             temperature=0.3,
             max_tokens=1000,
         )

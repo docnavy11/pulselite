@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.knowledge import Chatbot, Chunk, Document
 from app.services.autoconfig import generate
 from app.services.fetcher import fetch
+from app.services.llm import get_internal_model
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +73,8 @@ async def run(
             detected_lang = m.group(1).lower()
 
     # 5. Generate config (pass detected language so all text is in the right language)
-    config = await generate(chunk_texts, homepage_html, language=detected_lang)
+    internal_model = await get_internal_model(db, workspace_id)
+    config = await generate(chunk_texts, homepage_html, language=detected_lang, model=internal_model)
 
     # 6. Update chatbot fields
     chatbot.name = config.name
