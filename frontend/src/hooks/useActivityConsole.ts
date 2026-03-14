@@ -79,7 +79,7 @@ export function useActivityConsole() {
 
   useSocketEvent<TaskEvent>("task:completed", (data) => {
     const isError = data.error != null;
-    const status = isError ? "error" : "done";
+    const status: ActivityEntry["status"] = isError ? "error" : "done";
 
     setEntries((prev) => {
       const existing = prev.find((e) => e.id === data.task_id);

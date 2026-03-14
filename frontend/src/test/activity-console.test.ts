@@ -247,8 +247,6 @@ describe("useActivityConsole – hook", () => {
     const { useActivityConsole } = await import("@/hooks/useActivityConsole");
     useActivityConsole();
 
-    const initialSetEntriesCallCount = mockSetEntries.mock.calls.length;
-
     const handler = getHandler("task:completed");
     handler({ task_id: "t4", task_name: "export_data", error: "failed" });
 
