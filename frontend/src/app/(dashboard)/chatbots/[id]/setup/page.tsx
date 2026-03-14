@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { CheckCircle, AlertTriangle } from "lucide-react";
+import { Check, CheckCircle, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
-import { getChatbot, updateChatbot } from "@/lib/api-functions";
+import { getChatbot, getCrawlStatus, updateChatbot } from "@/lib/api-functions";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useSocketEvent, getSocket } from "@/lib/socket";
-import type { Chatbot, CrawlProgressEvent, CrawlCompletedEvent, ChatbotStatusEvent } from "@/lib/types";
+import type { Chatbot, CrawlStatusResponse, CrawlProgressEvent, CrawlCompletedEvent, ChatbotStatusEvent } from "@/lib/types";
 
 // Maps setup_status to a wizard step
 function getSetupStep(
@@ -20,13 +20,58 @@ function getSetupStep(
   return "done";
 }
 
+function StepRow({ stepNum, label, done, active, error, isLast, nextDone, children }: {
+  stepNum: number;
+  label: string;
+  done: boolean;
+  active: boolean;
+  error: boolean;
+  isLast: boolean;
+  nextDone: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex gap-3.5">
+      <div className="flex flex-col items-center" style={{ width: 26 }}>
+        <div className={`w-[26px] h-[26px] rounded-full flex items-center justify-center flex-shrink-0 ${
+          error ? "bg-amber-500" :
+          done ? "bg-primary-500" :
+          active ? "bg-primary-500" :
+          "border-2 border-gray-300"
+        }`}>
+          {error ? (
+            <AlertTriangle className="h-3.5 w-3.5 text-white" />
+          ) : done ? (
+            <Check className="h-3.5 w-3.5 text-white" />
+          ) : (
+            <span className={`text-xs font-semibold ${active ? "text-white" : "text-gray-400"}`}>{stepNum}</span>
+          )}
+        </div>
+        {!isLast && (
+          <div className={`w-0.5 flex-1 min-h-[16px] ${done && nextDone ? "bg-primary-500" : "bg-gray-200"}`} />
+        )}
+      </div>
+      <div className="flex-1 pb-6">
+        <div className="pt-0.5 mb-1">
+          <span className={`text-sm font-medium ${
+            done ? "text-gray-700" :
+            active ? "text-gray-900" :
+            "text-gray-400"
+          }`}>{label}</span>
+        </div>
+        {(done || active) && children}
+      </div>
+    </div>
+  );
+}
+
 export default function ChatbotSetupPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);
 
   const [chatbot, setChatbot] = useState<Chatbot | null>(null);
-  const [crawlProgress, setCrawlProgress] = useState<{ pages_discovered: number; pages_queued: number; pages_failed: number; error_message?: string | null; status?: string } | null>(null);
+  const [crawlStatus, setCrawlStatus] = useState<CrawlStatusResponse | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   // Review form state (step "ready")
@@ -39,8 +84,16 @@ export default function ChatbotSetupPage() {
   const [reviewLanguage, setReviewLanguage] = useState("en");
   const [saving, setSaving] = useState(false);
 
-  const configuringStartRef = useRef<number | null>(null);
+  const [step4Active, setStep4Active] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  // Ref so Socket.IO handlers always see the latest value
+  const step4ActiveRef = useRef(false);
+  step4ActiveRef.current = step4Active;
+
   const CONFIGURING_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+  const [configuringTimedOut, setConfiguringTimedOut] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Load chatbot on mount
   useEffect(() => {
@@ -56,12 +109,25 @@ export default function ChatbotSetupPage() {
         if (step === "review") {
           populateReviewForm(bot);
         }
-        if (step === "configuring") {
-          configuringStartRef.current = Date.now();
+        if (step === "crawling" && bot.active_crawl_job_id) {
+          // Fetch initial crawl status so the UI isn't blank until the first event
+          getCrawlStatus(workspace.id, bot.active_crawl_job_id)
+            .then(setCrawlStatus)
+            .catch(() => {});
         }
       })
       .catch(() => setLoadError("Failed to load chatbot"));
   }, [workspace, id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Timer-based configuring timeout — triggers re-render after 5 minutes
+  useEffect(() => {
+    if (getSetupStep(chatbot?.setup_status) !== "configuring") {
+      setConfiguringTimedOut(false);
+      return;
+    }
+    const timer = setTimeout(() => setConfiguringTimedOut(true), CONFIGURING_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [chatbot?.setup_status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function populateReviewForm(bot: Chatbot) {
     setReviewName(bot.name ?? "");
@@ -70,30 +136,33 @@ export default function ChatbotSetupPage() {
     setReviewFallback(bot.fallback_message ?? "");
     setReviewColor(bot.brand_color ?? "#ff6b35");
     setReviewTone(bot.tone ?? "professional");
-    setReviewLanguage((bot as Chatbot & { language?: string }).language ?? "en");
+    setReviewLanguage(bot.language ?? "en");
   }
 
-  // Real-time crawl progress
+  // Real-time crawl progress — updates the crawlStatus with live numbers
   useSocketEvent<CrawlProgressEvent>("crawl:progress", (data) => {
     if (data.chatbot_id !== id) return;
-    setCrawlProgress({
+    setCrawlStatus((prev) => ({
+      ...(prev ?? { job_id: data.job_id, error_message: null, docs_indexed: 0, docs_total: 0, docs_failed: 0, docs_skipped: 0, stalled: false, phase: null }),
       pages_discovered: data.pages_discovered,
       pages_queued: data.pages_queued,
       pages_failed: data.pages_failed,
+      phase: data.phase,
       status: "running",
-    });
+    }));
   });
 
   // Real-time crawl completed
   useSocketEvent<CrawlCompletedEvent>("crawl:completed", (data) => {
     if (data.chatbot_id !== id) return;
-    setCrawlProgress((prev) => ({
-      pages_discovered: prev?.pages_discovered ?? 0,
+    setCrawlStatus((prev) => prev ? {
+      ...prev,
       pages_queued: data.pages_queued,
       pages_failed: data.pages_failed,
-      error_message: data.error_message,
+      error_message: data.error_message ?? null,
       status: data.status,
-    }));
+      phase: null,
+    } : prev);
   });
 
   // Real-time chatbot status transitions (crawling → configuring → ready/failed)
@@ -101,14 +170,11 @@ export default function ChatbotSetupPage() {
     if (data.chatbot_id !== id) return;
     setChatbot((prev) => prev ? { ...prev, setup_status: data.setup_status } : prev);
     const step = getSetupStep(data.setup_status);
-    if (step === "configuring") {
-      configuringStartRef.current = Date.now();
-    }
     if (step === "review" && workspace) {
       // Refetch full chatbot to populate review form with autoconfig results
       getChatbot(workspace.id, data.chatbot_id).then(populateReviewForm).catch(() => {});
     }
-    if (step === "done") {
+    if (step === "done" && !step4ActiveRef.current) {
       navigate(`/chatbots/${id}`, { replace: true });
     }
   });
@@ -121,9 +187,13 @@ export default function ChatbotSetupPage() {
       getChatbot(workspace.id, id).then((bot) => {
         setChatbot(bot);
         const step = getSetupStep(bot.setup_status);
-        if (step === "done") navigate(`/chatbots/${id}`, { replace: true });
+        if (step === "done" && !step4ActiveRef.current) navigate(`/chatbots/${id}`, { replace: true });
         if (step === "review") populateReviewForm(bot);
-        if (step === "configuring") configuringStartRef.current = Date.now();
+        if (step === "crawling" && bot.active_crawl_job_id) {
+          getCrawlStatus(workspace.id, bot.active_crawl_job_id)
+            .then(setCrawlStatus)
+            .catch(() => {});
+        }
       }).catch(() => {});
     };
     s.on("connect", onReconnect);
@@ -133,6 +203,7 @@ export default function ChatbotSetupPage() {
   async function handleSave() {
     if (!workspace || !id) return;
     setSaving(true);
+    setSaveError(null);
     try {
       await updateChatbot(workspace.id, id, {
         name: reviewName,
@@ -143,7 +214,9 @@ export default function ChatbotSetupPage() {
         tone: reviewTone,
         setup_status: "done",
       } as Parameters<typeof updateChatbot>[2]);
-      navigate(`/chatbots/${id}`);
+      setStep4Active(true);
+    } catch {
+      setSaveError("Failed to save. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -166,127 +239,18 @@ export default function ChatbotSetupPage() {
     );
   }
 
-  const step = getSetupStep(chatbot.setup_status);
-  const isConfiguringTimedOut =
-    step === "configuring" &&
-    configuringStartRef.current !== null &&
-    Date.now() - configuringStartRef.current > CONFIGURING_TIMEOUT_MS;
+  // Derived state — computed after chatbot is available
+  const wizardStep = getSetupStep(chatbot.setup_status);
+  const activeStepNum = step4Active ? 4
+    : wizardStep === "crawling" || wizardStep === "configuring" || wizardStep === "failed" ? 2
+    : wizardStep === "review" ? 3
+    : 1; // "done" — redirect fires in useEffect, use inert value to avoid flashing step 4
 
-  // ── Step: crawling ──────────────────────────────────────────────────────────
-  if (step === "crawling") {
-    const pagesQueued = crawlProgress?.pages_queued ?? chatbot.crawl_progress?.pages_queued ?? 0;
-    const pagesDiscovered = crawlProgress?.pages_discovered ?? chatbot.crawl_progress?.pages_discovered ?? 0;
-    const isFailed = crawlProgress?.status === "failed";
+  const step1Done = true;
+  const step2Done = activeStepNum >= 3;
+  const step3Done = activeStepNum >= 4;
+  const step2Error = wizardStep === "failed" || (wizardStep === "crawling" && crawlStatus?.status === "failed");
 
-    return (
-      <div className="max-w-lg mx-auto py-16 px-4">
-        <div className="text-center mb-8">
-          <h2 className="text-xl font-bold text-gray-900 mb-1">
-            {isFailed ? "Crawl failed" : "Crawling website…"}
-          </h2>
-          <p className="text-sm text-gray-400 truncate">{chatbot.name}</p>
-        </div>
-
-        {isFailed ? (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-5 text-sm text-red-700 space-y-3">
-            <div className="flex items-start gap-2">
-              <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-              <span>{crawlProgress?.error_message || "The crawl could not complete."}</span>
-            </div>
-            <p className="text-xs text-red-500">
-              Your bot was created but has no knowledge base content. You can delete it and start over, or configure it manually.
-            </p>
-            <div className="flex gap-2 pt-1">
-              <Button variant="secondary" onClick={() => navigate("/chatbots/new")}>Start over</Button>
-              <Button variant="secondary" onClick={() => navigate(`/chatbots/${id}`)}>Go to settings</Button>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {/* Discovering */}
-            <div className="flex items-center gap-3">
-              {pagesDiscovered > 0 ? (
-                <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0" />
-              ) : (
-                <Spinner className="h-5 w-5 text-primary-500 flex-shrink-0" />
-              )}
-              <div className="flex-1">
-                <div className="text-sm font-medium text-gray-700">Discovering pages</div>
-                {pagesDiscovered > 0 && (
-                  <div className="text-xs text-gray-400">{pagesDiscovered} pages found</div>
-                )}
-              </div>
-            </div>
-
-            {/* Fetching */}
-            {pagesDiscovered > 0 && (
-              <div className="flex items-center gap-3">
-                {pagesQueued >= pagesDiscovered ? (
-                  <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0" />
-                ) : (
-                  <Spinner className="h-5 w-5 text-primary-500 flex-shrink-0" />
-                )}
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-medium text-gray-700">Fetching pages</span>
-                    <span className="text-xs text-gray-400">{pagesQueued} / {pagesDiscovered}</span>
-                  </div>
-                  <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-primary-400 rounded-full transition-all duration-500"
-                      style={{ width: pagesDiscovered > 0 ? `${(pagesQueued / pagesDiscovered) * 100}%` : "0%" }}
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // ── Step: configuring ───────────────────────────────────────────────────────
-  if (step === "configuring") {
-    return (
-      <div className="max-w-lg mx-auto py-16 px-4 text-center">
-        <div className="mb-8">
-          <h2 className="text-xl font-bold text-gray-900 mb-1">AI is configuring your bot…</h2>
-          <p className="text-sm text-gray-400 truncate">{chatbot.name}</p>
-        </div>
-        {isConfiguringTimedOut ? (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-sm text-amber-700">
-            Configuration is taking longer than expected. You can keep waiting or{" "}
-            <button
-              onClick={() => navigate(`/chatbots/${id}`)}
-              className="underline font-medium"
-            >
-              configure manually in settings
-            </button>.
-          </div>
-        ) : (
-          <Spinner className="h-8 w-8 text-primary-500 mx-auto" />
-        )}
-      </div>
-    );
-  }
-
-  // ── Step: setup_failed ──────────────────────────────────────────────────────
-  if (step === "failed") {
-    return (
-      <div className="max-w-lg mx-auto py-16 px-4 text-center">
-        <AlertTriangle className="h-10 w-10 text-red-400 mx-auto mb-4" />
-        <h2 className="text-xl font-bold text-gray-900 mb-2">Autoconfig failed</h2>
-        <p className="text-sm text-gray-500 mb-6">
-          Your bot was created but couldn't be auto-configured. You can set it up manually in settings.
-        </p>
-        <Button onClick={() => navigate(`/chatbots/${id}`)}>Go to settings →</Button>
-      </div>
-    );
-  }
-
-  // ── Step: review ────────────────────────────────────────────────────────────
   const toneOptions = ["professional", "friendly", "casual", "formal"];
   const languageOptions = [
     { value: "en", label: "English" },
@@ -295,123 +259,305 @@ export default function ChatbotSetupPage() {
     { value: "de", label: "German" },
     { value: "es", label: "Spanish" },
   ];
+  const languageLabel = languageOptions.find((l) => l.value === reviewLanguage)?.label ?? reviewLanguage;
+
 
   return (
-    <div className="max-w-lg mx-auto py-16 px-4">
-      <div className="text-center mb-8">
-        <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-green-100 mb-4">
-          <CheckCircle className="h-6 w-6 text-green-500" />
-        </div>
-        <h2 className="text-xl font-bold text-gray-900">Review your bot</h2>
-        <p className="text-sm text-gray-400 mt-1">Edit anything before saving.</p>
-      </div>
+    <div className="max-w-2xl mx-auto py-10 px-4">
+      <h1 className="text-xl font-bold text-gray-900 mb-8">Setting up your bot</h1>
 
-      <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-5">
-        {/* Bot name */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Bot name</label>
-          <input
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            value={reviewName}
-            onChange={(e) => setReviewName(e.target.value)}
-          />
-        </div>
-
-        {/* Welcome message */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Welcome message</label>
-          <textarea
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
-            rows={3}
-            value={reviewWelcome}
-            onChange={(e) => setReviewWelcome(e.target.value)}
-          />
-        </div>
-
-        {/* System prompt */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">System prompt</label>
-          <textarea
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
-            rows={5}
-            value={reviewSystemPrompt}
-            onChange={(e) => setReviewSystemPrompt(e.target.value)}
-          />
-          <p className="text-[11px] text-gray-400 mt-1">
-            Behavioral guidance only — persona, tone, scope. No specific facts.
-          </p>
-        </div>
-
-        {/* Fallback message */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Fallback message</label>
-          <textarea
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
-            rows={2}
-            value={reviewFallback}
-            onChange={(e) => setReviewFallback(e.target.value)}
-          />
-          <p className="text-[11px] text-gray-400 mt-1">
-            Shown when the bot cannot find a confident answer.
-          </p>
-        </div>
-
-        {/* Tone */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Tone</label>
-          <div className="flex flex-wrap gap-2">
-            {toneOptions.map((t) => (
-              <button
-                key={t}
-                onClick={() => setReviewTone(t)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                  reviewTone === t
-                    ? "bg-primary-50 border-primary-300 text-primary-700"
-                    : "bg-white border-gray-200 text-gray-500 hover:border-gray-300"
-                }`}
-              >
-                {t.charAt(0).toUpperCase() + t.slice(1)}
-              </button>
-            ))}
+      <div className="space-y-0">
+        {/* Step 1: Your website — always completed chip */}
+        <StepRow stepNum={1} label="Your website" done={step1Done} active={false} error={false} isLast={false} nextDone={step2Done}>
+          <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+            <span className="text-sm text-green-700">{chatbot.name}</span>
           </div>
-        </div>
+        </StepRow>
 
-        {/* Language */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Language</label>
-          <select
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            value={reviewLanguage}
-            onChange={(e) => setReviewLanguage(e.target.value)}
-          >
-            {languageOptions.map((l) => (
-              <option key={l.value} value={l.value}>{l.label}</option>
-            ))}
-          </select>
-        </div>
+        {/* Step 2: Crawl & analyse */}
+        <StepRow stepNum={2} label="Crawl & analyse" done={step2Done} active={activeStepNum === 2} error={step2Error} isLast={false} nextDone={step3Done}>
+          {step2Done ? (
+            <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+              <span className="text-sm text-green-700">
+                {crawlStatus?.pages_queued ?? chatbot.crawl_progress?.pages_queued ?? 0} pages crawled · AI config ready
+              </span>
+            </div>
+          ) : (
+            /* Active crawl/configuring/error content — inline the existing UI */
+            <div className="space-y-4">
+              {wizardStep === "crawling" && (() => {
+                const pagesQueued = crawlStatus?.pages_queued ?? chatbot.crawl_progress?.pages_queued ?? 0;
+                const pagesDiscovered = crawlStatus?.pages_discovered ?? chatbot.crawl_progress?.pages_discovered ?? 0;
+                const docsIndexed = crawlStatus?.docs_indexed ?? 0;
+                const docsTotal = crawlStatus?.docs_total ?? 0;
+                const isFailed = crawlStatus?.status === "failed";
+                const isIndexing = crawlStatus?.status === "completed" && docsTotal > 0;
 
-        {/* Brand color */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Brand color</label>
-          <div className="flex items-center gap-3">
-            <input
-              type="color"
-              className="h-9 w-14 rounded border border-gray-300 p-0.5 cursor-pointer"
-              value={reviewColor}
-              onChange={(e) => setReviewColor(e.target.value)}
-            />
-            <span className="text-sm text-gray-500 font-mono">{reviewColor}</span>
-          </div>
-        </div>
-      </div>
+                if (isFailed) {
+                  return (
+                    <div className="bg-red-50 border border-red-200 rounded-xl p-5 text-sm text-red-700 space-y-3">
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                        <span>{crawlStatus?.error_message || "The crawl could not complete."}</span>
+                      </div>
+                      <p className="text-xs text-red-500">
+                        Your bot was created but has no knowledge base content. You can delete it and start over, or configure it manually.
+                      </p>
+                      <div className="flex gap-2 pt-1">
+                        <Button variant="secondary" onClick={() => navigate("/chatbots/new")}>Start over</Button>
+                        <Button variant="secondary" onClick={() => navigate(`/chatbots/${id}`)}>Go to settings</Button>
+                      </div>
+                    </div>
+                  );
+                }
 
-      <div className="flex justify-end gap-3 mt-6">
-        <Button variant="secondary" onClick={() => navigate(`/chatbots/${id}`)}>
-          Skip
-        </Button>
-        <Button onClick={handleSave} disabled={saving}>
-          {saving ? "Saving…" : "Save & finish"}
-        </Button>
+                return (
+                  <>
+                    {/* Discovering */}
+                    <div className="flex items-center gap-3">
+                      {pagesDiscovered > 0 ? (
+                        <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0" />
+                      ) : (
+                        <Spinner className="h-5 w-5 text-primary-500 flex-shrink-0" />
+                      )}
+                      <div className="flex-1">
+                        <div className="text-sm font-medium text-gray-700">Discovering pages</div>
+                        {pagesDiscovered > 0 && (
+                          <div className="text-xs text-gray-400">{pagesDiscovered} pages found</div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Fetching */}
+                    {pagesDiscovered > 0 && (
+                      <div className="flex items-center gap-3">
+                        {pagesQueued >= pagesDiscovered ? (
+                          <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0" />
+                        ) : (
+                          <Spinner className="h-5 w-5 text-primary-500 flex-shrink-0" />
+                        )}
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-sm font-medium text-gray-700">Fetching pages</span>
+                            <span className="text-xs text-gray-400">{pagesQueued} / {pagesDiscovered}</span>
+                          </div>
+                          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-primary-400 rounded-full transition-all duration-500"
+                              style={{ width: pagesDiscovered > 0 ? `${(pagesQueued / pagesDiscovered) * 100}%` : "0%" }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Indexing */}
+                    {isIndexing && (
+                      <div className="flex items-center gap-3">
+                        {docsIndexed >= docsTotal ? (
+                          <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0" />
+                        ) : (
+                          <Spinner className="h-5 w-5 text-primary-500 flex-shrink-0" />
+                        )}
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-sm font-medium text-gray-700">Indexing content</span>
+                            <span className="text-xs text-gray-400">{docsIndexed} / {docsTotal}</span>
+                          </div>
+                          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-primary-400 rounded-full transition-all duration-500"
+                              style={{ width: docsTotal > 0 ? `${(docsIndexed / docsTotal) * 100}%` : "0%" }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+
+              {wizardStep === "configuring" && (
+                configuringTimedOut ? (
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-sm text-amber-700">
+                    Configuration is taking longer than expected. You can keep waiting or{" "}
+                    <button onClick={() => navigate(`/chatbots/${id}`)} className="underline font-medium">
+                      configure manually in settings
+                    </button>.
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <Spinner className="h-5 w-5 text-primary-500 flex-shrink-0" />
+                    <span className="text-sm text-gray-600">AI is configuring your bot…</span>
+                  </div>
+                )
+              )}
+
+              {wizardStep === "failed" && (
+                <div className="text-center py-4">
+                  <AlertTriangle className="h-10 w-10 text-amber-400 mx-auto mb-4" />
+                  <h2 className="text-lg font-bold text-gray-900 mb-2">Autoconfig failed</h2>
+                  <p className="text-sm text-gray-500 mb-6">
+                    Your bot was created but couldn't be auto-configured. You can set it up manually in settings.
+                  </p>
+                  <Button onClick={() => navigate(`/chatbots/${id}`)}>Go to settings →</Button>
+                </div>
+              )}
+            </div>
+          )}
+        </StepRow>
+
+        {/* Step 3: Review config */}
+        <StepRow stepNum={3} label="Review config" done={step3Done} active={activeStepNum === 3} error={false} isLast={false} nextDone={false}>
+          {step3Done ? (
+            <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+              <span className="text-sm text-green-700">{reviewName} · {reviewTone} · {languageLabel}</span>
+            </div>
+          ) : activeStepNum === 3 ? (
+            <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-5">
+              {/* Bot name */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Bot name</label>
+                <input
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  value={reviewName}
+                  onChange={(e) => setReviewName(e.target.value)}
+                />
+              </div>
+
+              {/* Welcome message */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Welcome message</label>
+                <textarea
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+                  rows={3}
+                  value={reviewWelcome}
+                  onChange={(e) => setReviewWelcome(e.target.value)}
+                />
+              </div>
+
+              {/* System prompt */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">System prompt</label>
+                <textarea
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+                  rows={5}
+                  value={reviewSystemPrompt}
+                  onChange={(e) => setReviewSystemPrompt(e.target.value)}
+                />
+                <p className="text-[11px] text-gray-400 mt-1">
+                  Behavioral guidance only — persona, tone, scope. No specific facts.
+                </p>
+              </div>
+
+              {/* Fallback message */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Fallback message</label>
+                <textarea
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+                  rows={2}
+                  value={reviewFallback}
+                  onChange={(e) => setReviewFallback(e.target.value)}
+                />
+                <p className="text-[11px] text-gray-400 mt-1">
+                  Shown when the bot cannot find a confident answer.
+                </p>
+              </div>
+
+              {/* Tone */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Tone</label>
+                <div className="flex flex-wrap gap-2">
+                  {toneOptions.map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setReviewTone(t)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                        reviewTone === t
+                          ? "bg-primary-50 border-primary-300 text-primary-700"
+                          : "bg-white border-gray-200 text-gray-500 hover:border-gray-300"
+                      }`}
+                    >
+                      {t.charAt(0).toUpperCase() + t.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Language */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Language</label>
+                <select
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  value={reviewLanguage}
+                  onChange={(e) => setReviewLanguage(e.target.value)}
+                >
+                  {languageOptions.map((l) => (
+                    <option key={l.value} value={l.value}>{l.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Brand color */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Brand color</label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="color"
+                    className="h-9 w-14 rounded border border-gray-300 p-0.5 cursor-pointer"
+                    value={reviewColor}
+                    onChange={(e) => setReviewColor(e.target.value)}
+                  />
+                  <span className="text-sm text-gray-500 font-mono">{reviewColor}</span>
+                </div>
+              </div>
+
+              {/* Buttons */}
+              {saveError && (
+                <p className="text-sm text-red-600">{saveError}</p>
+              )}
+              <div className="flex justify-end gap-3 pt-2">
+                <Button variant="secondary" onClick={() => navigate(`/chatbots/${id}`)}>
+                  Skip
+                </Button>
+                <Button onClick={handleSave} disabled={saving}>
+                  {saving ? "Saving…" : "Save & finish"}
+                </Button>
+              </div>
+            </div>
+          ) : null}
+        </StepRow>
+
+        {/* Step 4: Go live */}
+        <StepRow stepNum={4} label="Go live" done={false} active={activeStepNum === 4} error={false} isLast={true} nextDone={false}>
+          {activeStepNum === 4 ? (
+            <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-4">
+              <div>
+                <h3 className="text-sm font-medium text-gray-700 mb-2">Embed on your website</h3>
+                <div className="relative">
+                  <pre className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-700 overflow-x-auto">
+                    {`<script src="${window.location.origin}/widget/${chatbot.id}.js"></script>`}
+                  </pre>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(`<script src="${window.location.origin}/widget/${chatbot.id}.js"></script>`);
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 2000);
+                    }}
+                    className="absolute top-2 right-2 px-2 py-1 text-xs font-medium rounded bg-white border border-gray-200 text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors"
+                  >
+                    {copied ? "Copied!" : "Copy"}
+                  </button>
+                </div>
+              </div>
+              <div className="flex justify-end">
+                <Button onClick={() => navigate(`/chatbots/${id}`)}>
+                  Go to dashboard →
+                </Button>
+              </div>
+            </div>
+          ) : null}
+        </StepRow>
       </div>
     </div>
   );
