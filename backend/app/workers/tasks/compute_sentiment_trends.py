@@ -8,6 +8,7 @@ from sqlalchemy import func, select
 from app.database import async_session_factory, engine
 from app.models.intelligence import ConversationAnalysis
 from app.models.organizational import Workspace
+from app.services.realtime import emit_task_event
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -15,23 +16,28 @@ logger = logging.getLogger(__name__)
 ALERT_THRESHOLD = -0.3
 
 
-@celery_app.task
-def compute_sentiment_trends() -> dict:
-    return asyncio.run(_compute())
+@celery_app.task(bind=True)
+def compute_sentiment_trends(self) -> dict:
+    return asyncio.run(_compute(self.request.id))
 
 
-async def _compute() -> dict:
+async def _compute(task_id: str) -> dict:
     await engine.dispose()
     async with async_session_factory() as session:
         try:
-            result = await session.execute(select(Workspace.id))
-            workspace_ids = [row[0] for row in result.all()]
+            result = await session.execute(select(Workspace.id, Workspace.intelligence_config))
+            workspace_ids = [
+                row[0] for row in result.all()
+                if (row[1] or {}).get("sentiment_trends", True)
+            ]
 
             alerts = []
             for ws_id in workspace_ids:
+                await emit_task_event(ws_id, "started", "compute_sentiment", task_id)
                 alert = await _compute_workspace(session, ws_id)
                 if alert:
                     alerts.append(str(ws_id))
+                await emit_task_event(ws_id, "completed", "compute_sentiment", task_id)
 
             await session.commit()
             return {"status": "success", "alerts": alerts}
