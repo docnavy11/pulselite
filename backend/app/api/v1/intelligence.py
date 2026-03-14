@@ -5,8 +5,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from pydantic import BaseModel
+
 from app.database import get_db
-from app.dependencies import get_current_user, get_workspace
+from app.dependencies import get_current_user, get_workspace, get_workspace_admin
 from app.models.contacts import Contact
 from app.models.conversations import Conversation
 from app.models.intelligence import (
@@ -15,14 +17,17 @@ from app.models.intelligence import (
     RetrievalLog,
 )
 from app.models.knowledge import Chatbot
-from app.models.organizational import Agent
+from app.models.organizational import Agent, Workspace
 from app.schemas.intelligence import (
     ConversationAnalysisResponse,
     GapEventResponse,
     RetrievalLogResponse,
 )
 from app.services import conversation_service
+from app.services.realtime import emit_task_event
 from app.workers.tasks.analyze_conversation import analyze_conversation
+from app.workers.tasks.compute_sentiment_trends import compute_sentiment_trends
+from app.workers.tasks.cluster_gaps import cluster_gaps
 
 router = APIRouter(prefix="/workspaces/{workspace_id}", tags=["intelligence"])
 
@@ -160,3 +165,100 @@ async def get_sentiment_by_segment(
     return {"data": data}
 
 
+@router.post("/intelligence/trigger/analyze-all")
+async def trigger_analyze_all_conversations(
+    workspace_id: uuid.UUID = Depends(get_workspace),
+    db: AsyncSession = Depends(get_db),
+):
+    """Manually trigger analysis for all unanalyzed conversations in this workspace."""
+    # Find conversations that don't have an analysis yet
+    analyzed_subq = select(ConversationAnalysis.conversation_id).where(
+        ConversationAnalysis.workspace_id == workspace_id
+    )
+    result = await db.execute(
+        select(Conversation.id).where(
+            Conversation.workspace_id == workspace_id,
+            Conversation.id.notin_(analyzed_subq),
+        )
+    )
+    conversation_ids = [row[0] for row in result.all()]
+
+    task_id = str(uuid.uuid4())
+    await emit_task_event(
+        workspace_id, "started", "analyze_all", task_id,
+        detail=f"Queued {len(conversation_ids)} conversations",
+    )
+
+    for cid in conversation_ids:
+        analyze_conversation.delay(str(cid), str(workspace_id))  # type: ignore[attr-defined]
+
+    await emit_task_event(
+        workspace_id, "completed", "analyze_all", task_id,
+        detail=f"Dispatched {len(conversation_ids)} analysis tasks",
+    )
+
+    return {"status": "dispatched", "conversations_queued": len(conversation_ids)}
+
+
+@router.post("/intelligence/trigger/sentiment-trends")
+async def trigger_sentiment_trends(
+    workspace_id: uuid.UUID = Depends(get_workspace),
+):
+    """Manually trigger sentiment trends computation."""
+    compute_sentiment_trends.delay()  # type: ignore[attr-defined]
+    return {"status": "dispatched"}
+
+
+@router.post("/intelligence/trigger/cluster-gaps")
+async def trigger_cluster_gaps(
+    workspace_id: uuid.UUID = Depends(get_workspace),
+):
+    """Manually trigger gap event clustering."""
+    cluster_gaps.delay()  # type: ignore[attr-defined]
+    return {"status": "dispatched"}
+
+
+# ── Intelligence Config (admin-only) ─────────────────────────────────────────
+
+
+class IntelligenceConfigUpdate(BaseModel):
+    auto_analyze: bool | None = None
+    sentiment_trends: bool | None = None
+    gap_clustering: bool | None = None
+
+
+@router.get("/intelligence/config")
+async def get_intelligence_config(
+    workspace_id: uuid.UUID = Depends(get_workspace),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get intelligence pipeline configuration for this workspace."""
+    result = await db.execute(select(Workspace).where(Workspace.id == workspace_id))
+    ws = result.scalar_one()
+    config = ws.intelligence_config or {}
+    return {
+        "auto_analyze": config.get("auto_analyze", True),
+        "sentiment_trends": config.get("sentiment_trends", True),
+        "gap_clustering": config.get("gap_clustering", True),
+    }
+
+
+@router.put("/intelligence/config")
+async def update_intelligence_config(
+    body: IntelligenceConfigUpdate,
+    workspace_id: uuid.UUID = Depends(get_workspace_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update intelligence pipeline configuration (admin only)."""
+    result = await db.execute(select(Workspace).where(Workspace.id == workspace_id))
+    ws = result.scalar_one()
+    config = dict(ws.intelligence_config or {})
+    if body.auto_analyze is not None:
+        config["auto_analyze"] = body.auto_analyze
+    if body.sentiment_trends is not None:
+        config["sentiment_trends"] = body.sentiment_trends
+    if body.gap_clustering is not None:
+        config["gap_clustering"] = body.gap_clustering
+    ws.intelligence_config = config
+    await db.flush()
+    return config
