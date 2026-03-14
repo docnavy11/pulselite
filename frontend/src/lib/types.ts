@@ -38,6 +38,7 @@ export interface Chatbot {
   avatar_url?: string;
   system_prompt?: string;
   tone: string;
+  language: string;
   llm_provider: string;
   llm_model: string;
   temperature: number;
@@ -140,6 +141,27 @@ export interface DocumentLogItem {
 }
 export interface DocumentLogResponse {
   items: DocumentLogItem[];
+  total: number;
+}
+
+export interface AnalysisRunLogItem {
+  id: string;
+  conversation_id: string;
+  chatbot_id: string | null;
+  chatbot_name: string | null;
+  contact_name: string | null;
+  sentiment_score: number | null;
+  sentiment_label: string | null;
+  intent_primary: string | null;
+  outcome_category: string | null;
+  topics: string[] | null;
+  summary: string | null;
+  llm_model: string;
+  processing_ms: number | null;
+  created_at: string;
+}
+export interface AnalysisRunLogResponse {
+  items: AnalysisRunLogItem[];
   total: number;
 }
 
@@ -278,7 +300,7 @@ export interface Contact {
 export interface GapCluster {
   id: string;
   topic_label: string;
-  keywords: string[];
+  topic_keywords: string[];
   gap_count: number;
   representative_query: string;
   status: string;
@@ -286,13 +308,11 @@ export interface GapCluster {
 
 export interface GapClusterDetail extends GapCluster {
   example_queries: string[];
-  draft_article?: Article;
 }
 
 export interface DashboardData {
   resolution_rate: number;
   resolution_rate_trend: number;
-  knowledge_velocity: number;
   stats: {
     total_conversations: number;
     resolved: number;
@@ -303,8 +323,6 @@ export interface DashboardData {
   resolution_trend: { week_start: string; total: number; resolved: number; rate: number }[];
   intelligence: {
     open_gaps: number;
-    hot_leads: number;
-    topic_anomalies: number;
   };
   feedback: {
     thumbs_up: number;
@@ -325,7 +343,6 @@ export interface SentimentData {
   positive_pct: number;
   negative_pct: number;
   trend: number;
-  alerts: { id: string; message: string; triggered_at: string }[];
 }
 
 export interface IntegrationConfig {
@@ -401,6 +418,9 @@ export interface Webhook {
 
 export interface LLMSettings {
   openrouter_api_key_set: boolean;
+  openrouter_base_url: string | null;
+  effective_base_url: string | null;
+  effective_api_key_set: boolean;
   allowed_models: string[];
 }
 
@@ -498,4 +518,35 @@ export interface WorkspaceUsageEvent {
   chars_indexed: number;
   chars_limit: number | null;
   plan: string;
+}
+
+export interface TaskEvent {
+  task_name: string;
+  task_id: string;
+  detail?: string | null;
+  current?: number | null;
+  total?: number | null;
+  error?: string | null;
+}
+
+export interface QAPair {
+  id: string;
+  chatbot_id: string;
+  question: string;
+  answer: string | null;
+  suggested_answer: string | null;
+  status: "pending" | "testing" | "completed" | "failed";
+  confidence_score: number | null;
+  escalated: boolean;
+  sources: Array<{ chunk_id?: string; title?: string }> | null;
+  is_edited: boolean;
+  kb_document_id: string | null;
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface QAPairListResponse {
+  items: QAPair[];
+  total: number;
 }
