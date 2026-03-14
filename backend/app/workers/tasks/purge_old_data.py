@@ -9,17 +9,18 @@ from sqlalchemy import delete, select
 from app.database import async_session_factory, engine
 from app.models.organizational import Workspace
 from app.models.conversations import Conversation
+from app.services.realtime import emit_task_event
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
 
-@celery_app.task
-def purge_old_data() -> dict:
-    return asyncio.run(_purge())
+@celery_app.task(bind=True)
+def purge_old_data(self) -> dict:
+    return asyncio.run(_purge(self.request.id))
 
 
-async def _purge() -> dict:
+async def _purge(task_id: str) -> dict:
     await engine.dispose()          # REQUIRED — clear stale pool from previous event loop
     async with async_session_factory() as session:
         try:
@@ -46,6 +47,9 @@ async def _purge() -> dict:
                 if not conv_ids:
                     continue
 
+                await emit_task_event(str(ws_id), "started", "purge_data", task_id,
+                                      detail=f"Purging {len(conv_ids)} conversations")
+
                 # Delete child rows first to avoid FK violations
                 from app.models.conversations import (
                     Message,
@@ -65,6 +69,9 @@ async def _purge() -> dict:
                 total_deleted += deleted
                 if deleted:
                     logger.info(f"Workspace {ws_id}: purged {deleted} conversations older than {retention_days} days")
+
+                await emit_task_event(str(ws_id), "completed", "purge_data", task_id,
+                                      detail=f"Purged {deleted} conversations")
 
             await session.commit()
             return {"status": "success", "total_deleted": total_deleted}
