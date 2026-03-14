@@ -5,6 +5,7 @@ import { TopBar } from "@/components/layout/TopBar";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { CommandPalette } from "@/components/CommandPalette";
 import { ToastProvider } from "@/components/ui/Toast";
+import { ActivityConsole } from "@/components/ActivityConsole";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useRealtimeNotifications } from "@/hooks/useRealtimeNotifications";
 import { CopilotProvider } from "@/components/copilot/CopilotProvider";
@@ -58,6 +59,7 @@ function DashboardShell() {
       </div>
       <CommandPalette />
       <ToastProvider />
+      <ActivityConsole />
     </ProtectedRoute>
   );
 }
