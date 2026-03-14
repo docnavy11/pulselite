@@ -285,15 +285,26 @@ export default function ChatbotSetupPage() {
           ) : (
             /* Active crawl/configuring/error content — inline the existing UI */
             <div className="space-y-4">
-              {wizardStep === "crawling" && (() => {
+              {wizardStep === "failed" ? (
+                <div className="text-center py-4">
+                  <AlertTriangle className="h-10 w-10 text-amber-400 mx-auto mb-4" />
+                  <h2 className="text-lg font-bold text-gray-900 mb-2">Autoconfig failed</h2>
+                  <p className="text-sm text-gray-500 mb-6">
+                    Your bot was created but couldn't be auto-configured. You can set it up manually in settings.
+                  </p>
+                  <Button onClick={() => navigate(`/chatbots/${id}`)}>Go to settings →</Button>
+                </div>
+              ) : (() => {
                 const pagesQueued = crawlStatus?.pages_queued ?? chatbot.crawl_progress?.pages_queued ?? 0;
                 const pagesDiscovered = crawlStatus?.pages_discovered ?? chatbot.crawl_progress?.pages_discovered ?? 0;
                 const docsIndexed = crawlStatus?.docs_indexed ?? 0;
                 const docsTotal = crawlStatus?.docs_total ?? 0;
-                const isFailed = crawlStatus?.status === "failed";
+                const isCrawlFailed = crawlStatus?.status === "failed";
                 const isIndexing = crawlStatus?.status === "completed" && docsTotal > 0;
+                // During configuring, crawl sub-steps are all complete
+                const crawlDone = wizardStep === "configuring";
 
-                if (isFailed) {
+                if (isCrawlFailed) {
                   return (
                     <div className="bg-red-50 border border-red-200 rounded-xl p-5 text-sm text-red-700 space-y-3">
                       <div className="flex items-start gap-2">
@@ -315,23 +326,23 @@ export default function ChatbotSetupPage() {
                   <>
                     {/* Discovering */}
                     <div className="flex items-center gap-3">
-                      {pagesDiscovered > 0 ? (
+                      {crawlDone || pagesDiscovered > 0 ? (
                         <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0" />
                       ) : (
                         <Spinner className="h-5 w-5 text-primary-500 flex-shrink-0" />
                       )}
                       <div className="flex-1">
                         <div className="text-sm font-medium text-gray-700">Discovering pages</div>
-                        {pagesDiscovered > 0 && (
+                        {(crawlDone || pagesDiscovered > 0) && (
                           <div className="text-xs text-gray-400">{pagesDiscovered} pages found</div>
                         )}
                       </div>
                     </div>
 
                     {/* Fetching */}
-                    {pagesDiscovered > 0 && (
+                    {(crawlDone || pagesDiscovered > 0) && (
                       <div className="flex items-center gap-3">
-                        {pagesQueued >= pagesDiscovered ? (
+                        {crawlDone || pagesQueued >= pagesDiscovered ? (
                           <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0" />
                         ) : (
                           <Spinner className="h-5 w-5 text-primary-500 flex-shrink-0" />
@@ -339,22 +350,24 @@ export default function ChatbotSetupPage() {
                         <div className="flex-1">
                           <div className="flex items-center justify-between mb-1">
                             <span className="text-sm font-medium text-gray-700">Fetching pages</span>
-                            <span className="text-xs text-gray-400">{pagesQueued} / {pagesDiscovered}</span>
+                            <span className="text-xs text-gray-400">{pagesQueued} / {pagesDiscovered || pagesQueued}</span>
                           </div>
-                          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-primary-400 rounded-full transition-all duration-500"
-                              style={{ width: pagesDiscovered > 0 ? `${(pagesQueued / pagesDiscovered) * 100}%` : "0%" }}
-                            />
-                          </div>
+                          {!crawlDone && (
+                            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-primary-400 rounded-full transition-all duration-500"
+                                style={{ width: pagesDiscovered > 0 ? `${(pagesQueued / pagesDiscovered) * 100}%` : "0%" }}
+                              />
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
 
                     {/* Indexing */}
-                    {isIndexing && (
+                    {(crawlDone || isIndexing) && (
                       <div className="flex items-center gap-3">
-                        {docsIndexed >= docsTotal ? (
+                        {crawlDone || docsIndexed >= docsTotal ? (
                           <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0" />
                         ) : (
                           <Spinner className="h-5 w-5 text-primary-500 flex-shrink-0" />
@@ -362,47 +375,41 @@ export default function ChatbotSetupPage() {
                         <div className="flex-1">
                           <div className="flex items-center justify-between mb-1">
                             <span className="text-sm font-medium text-gray-700">Indexing content</span>
-                            <span className="text-xs text-gray-400">{docsIndexed} / {docsTotal}</span>
+                            {!crawlDone && (
+                              <span className="text-xs text-gray-400">{docsIndexed} / {docsTotal}</span>
+                            )}
                           </div>
-                          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-primary-400 rounded-full transition-all duration-500"
-                              style={{ width: docsTotal > 0 ? `${(docsIndexed / docsTotal) * 100}%` : "0%" }}
-                            />
-                          </div>
+                          {!crawlDone && (
+                            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-primary-400 rounded-full transition-all duration-500"
+                                style={{ width: docsTotal > 0 ? `${(docsIndexed / docsTotal) * 100}%` : "0%" }}
+                              />
+                            </div>
+                          )}
                         </div>
                       </div>
+                    )}
+
+                    {/* Configuring — shown as a sub-step after crawl completes */}
+                    {wizardStep === "configuring" && (
+                      configuringTimedOut ? (
+                        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-sm text-amber-700">
+                          Configuration is taking longer than expected. You can keep waiting or{" "}
+                          <button onClick={() => navigate(`/chatbots/${id}`)} className="underline font-medium">
+                            configure manually in settings
+                          </button>.
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-3">
+                          <Spinner className="h-5 w-5 text-primary-500 flex-shrink-0" />
+                          <span className="text-sm text-gray-600">AI is configuring your bot…</span>
+                        </div>
+                      )
                     )}
                   </>
                 );
               })()}
-
-              {wizardStep === "configuring" && (
-                configuringTimedOut ? (
-                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-sm text-amber-700">
-                    Configuration is taking longer than expected. You can keep waiting or{" "}
-                    <button onClick={() => navigate(`/chatbots/${id}`)} className="underline font-medium">
-                      configure manually in settings
-                    </button>.
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-3">
-                    <Spinner className="h-5 w-5 text-primary-500 flex-shrink-0" />
-                    <span className="text-sm text-gray-600">AI is configuring your bot…</span>
-                  </div>
-                )
-              )}
-
-              {wizardStep === "failed" && (
-                <div className="text-center py-4">
-                  <AlertTriangle className="h-10 w-10 text-amber-400 mx-auto mb-4" />
-                  <h2 className="text-lg font-bold text-gray-900 mb-2">Autoconfig failed</h2>
-                  <p className="text-sm text-gray-500 mb-6">
-                    Your bot was created but couldn't be auto-configured. You can set it up manually in settings.
-                  </p>
-                  <Button onClick={() => navigate(`/chatbots/${id}`)}>Go to settings →</Button>
-                </div>
-              )}
             </div>
           )}
         </StepRow>
