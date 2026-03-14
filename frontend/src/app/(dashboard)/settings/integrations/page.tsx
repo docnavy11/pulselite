@@ -24,8 +24,8 @@ const integrationMeta: Record<
     icon: "#",
   },
   email: {
-    name: "Email (Resend)",
-    description: "Send escalation notifications via email.",
+    name: "Email",
+    description: "Send escalation notifications and reports via email (Resend or SMTP).",
     icon: "@",
   },
   hubspot: {
@@ -972,8 +972,26 @@ function EmailConfig({
   onSave: (c: Record<string, unknown>) => void;
   saving: boolean;
 }) {
+  const [provider, setProvider] = useState(
+    (integration.config.provider as string) || "resend",
+  );
   const [apiKey, setApiKey] = useState(
     (integration.config.api_key as string) || "",
+  );
+  const [host, setHost] = useState(
+    (integration.config.host as string) || "",
+  );
+  const [port, setPort] = useState(
+    (integration.config.port as number) || 587,
+  );
+  const [username, setUsername] = useState(
+    (integration.config.username as string) || "",
+  );
+  const [password, setPassword] = useState(
+    (integration.config.password as string) || "",
+  );
+  const [tls, setTls] = useState(
+    integration.config.tls !== false,
   );
   const [toEmail, setToEmail] = useState(
     (integration.config.to_email as string) || "",
@@ -981,21 +999,113 @@ function EmailConfig({
   const [fromEmail, setFromEmail] = useState(
     (integration.config.from_email as string) || "Pulse <notifications@pulse.app>",
   );
+  const [appUrl, setAppUrl] = useState(
+    (integration.config.app_url as string) || "",
+  );
   const [alertMinConf, setAlertMinConf] = useState<number | undefined>(
     (integration.config.alert_max_confidence ?? integration.config.alert_min_confidence) != null
       ? ((integration.config.alert_max_confidence ?? integration.config.alert_min_confidence) as number)
       : undefined,
   );
 
+  function handleSave() {
+    const base: Record<string, unknown> = {
+      provider,
+      to_email: toEmail,
+      from_email: fromEmail,
+      ...(appUrl && { app_url: appUrl }),
+      ...(alertMinConf !== undefined && { alert_max_confidence: alertMinConf }),
+    };
+    if (provider === "resend") {
+      base.api_key = apiKey;
+    } else {
+      base.host = host;
+      base.port = port;
+      base.username = username;
+      base.password = password;
+      base.tls = tls;
+    }
+    onSave(base);
+  }
+
   return (
     <>
-      <Input
-        label="Resend API Key"
-        value={apiKey}
-        onChange={(e) => setApiKey(e.target.value)}
-        placeholder="re_..."
-        type="password"
-      />
+      {/* Provider selector */}
+      <div>
+        <label className="block text-xs font-medium text-gray-500 mb-1">Provider</label>
+        <div className="flex gap-2">
+          {(["resend", "smtp"] as const).map((p) => (
+            <button
+              key={p}
+              onClick={() => setProvider(p)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                provider === p
+                  ? "bg-primary-50 border-primary-300 text-primary-700"
+                  : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"
+              }`}
+            >
+              {p === "resend" ? "Resend" : "SMTP"}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Provider-specific fields */}
+      {provider === "resend" ? (
+        <Input
+          label="Resend API Key"
+          value={apiKey}
+          onChange={(e) => setApiKey(e.target.value)}
+          placeholder="re_..."
+          type="password"
+        />
+      ) : (
+        <>
+          <Input
+            label="SMTP Host"
+            value={host}
+            onChange={(e) => setHost(e.target.value)}
+            placeholder="smtp.example.com"
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Port</label>
+              <input
+                type="number"
+                value={port}
+                onChange={(e) => setPort(parseInt(e.target.value) || 587)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+            </div>
+            <div className="flex items-end pb-1">
+              <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={tls}
+                  onChange={(e) => setTls(e.target.checked)}
+                  className="rounded border-gray-300"
+                />
+                TLS
+              </label>
+            </div>
+          </div>
+          <Input
+            label="Username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="user@example.com"
+          />
+          <Input
+            label="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            type="password"
+            placeholder="••••••••"
+          />
+        </>
+      )}
+
+      {/* Common fields */}
       <Input
         label="Send Alerts To"
         value={toEmail}
@@ -1008,9 +1118,15 @@ function EmailConfig({
         onChange={(e) => setFromEmail(e.target.value)}
         placeholder="Pulse <notifications@pulse.app>"
       />
+      <Input
+        label="App URL (for links in emails)"
+        value={appUrl}
+        onChange={(e) => setAppUrl(e.target.value)}
+        placeholder="https://app.pulse.dev"
+      />
       <div>
         <label className="block text-xs font-medium text-gray-500 mb-1">
-          Alert only when confidence below (0–1, leave blank to always alert)
+          Alert only when confidence below (0-1, leave blank to always alert)
         </label>
         <input
           type="number"
@@ -1030,18 +1146,7 @@ function EmailConfig({
           Leave blank to alert on every escalation.
         </p>
       </div>
-      <Button
-        size="sm"
-        onClick={() =>
-          onSave({
-            api_key: apiKey,
-            to_email: toEmail,
-            from_email: fromEmail,
-            ...(alertMinConf !== undefined && { alert_max_confidence: alertMinConf }),
-          })
-        }
-        loading={saving}
-      >
+      <Button size="sm" onClick={handleSave} loading={saving}>
         Save
       </Button>
     </>

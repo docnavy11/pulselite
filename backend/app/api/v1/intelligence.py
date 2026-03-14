@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime, timedelta, timezone
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
@@ -92,7 +93,7 @@ async def end_conversation(
 ):
     await conversation_service.update_conversation_status(db, conversation_id, "resolved")
 
-    analyze_conversation.delay(str(conversation_id), str(workspace_id))  # type: ignore[attr-defined]
+    analyze_conversation.delay(str(conversation_id), str(workspace_id), force=True)  # type: ignore[attr-defined]
 
     return {"status": "resolved", "conversation_id": str(conversation_id)}
 
@@ -183,6 +184,9 @@ async def trigger_analyze_all_conversations(
     )
     conversation_ids = [row[0] for row in result.all()]
 
+    if not conversation_ids:
+        return {"status": "ok", "conversations_queued": 0, "message": "All conversations are already analyzed"}
+
     task_id = str(uuid.uuid4())
     await emit_task_event(
         workspace_id, "started", "analyze_all", task_id,
@@ -225,6 +229,19 @@ class IntelligenceConfigUpdate(BaseModel):
     auto_analyze: bool | None = None
     sentiment_trends: bool | None = None
     gap_clustering: bool | None = None
+    report_frequency: Literal["off", "daily", "weekly", "monthly"] | None = None
+    report_recipients: list[str] | None = None
+    report_sections: dict[str, bool] | None = None
+
+
+DEFAULT_REPORT_SECTIONS = {
+    "conversations": True,
+    "confidence": True,
+    "sentiment": True,
+    "gaps": True,
+    "top_topics": True,
+    "qa_performance": True,
+}
 
 
 @router.get("/intelligence/config")
@@ -240,6 +257,9 @@ async def get_intelligence_config(
         "auto_analyze": config.get("auto_analyze", True),
         "sentiment_trends": config.get("sentiment_trends", True),
         "gap_clustering": config.get("gap_clustering", True),
+        "report_frequency": config.get("report_frequency", "off"),
+        "report_recipients": config.get("report_recipients", []),
+        "report_sections": {**DEFAULT_REPORT_SECTIONS, **config.get("report_sections", {})},
     }
 
 
@@ -259,6 +279,19 @@ async def update_intelligence_config(
         config["sentiment_trends"] = body.sentiment_trends
     if body.gap_clustering is not None:
         config["gap_clustering"] = body.gap_clustering
+    if body.report_frequency is not None:
+        config["report_frequency"] = body.report_frequency
+    if body.report_recipients is not None:
+        config["report_recipients"] = body.report_recipients
+    if body.report_sections is not None:
+        config["report_sections"] = body.report_sections
     ws.intelligence_config = config
     await db.flush()
-    return config
+    return {
+        "auto_analyze": config.get("auto_analyze", True),
+        "sentiment_trends": config.get("sentiment_trends", True),
+        "gap_clustering": config.get("gap_clustering", True),
+        "report_frequency": config.get("report_frequency", "off"),
+        "report_recipients": config.get("report_recipients", []),
+        "report_sections": {**DEFAULT_REPORT_SECTIONS, **config.get("report_sections", {})},
+    }

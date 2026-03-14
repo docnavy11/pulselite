@@ -10,7 +10,7 @@ from cryptography.fernet import Fernet
 from app.config import settings
 from app.services.encryption import decrypt_api_key
 from app.database import get_db
-from app.dependencies import get_current_user, get_workspace
+from app.dependencies import get_current_user, get_workspace, get_workspace_admin
 from app.models.integrations import IntegrationConfig
 from app.models.organizational import Agent
 
@@ -73,7 +73,7 @@ async def list_integrations(
 async def update_integration(
     integration_type: str,
     body: IntegrationConfigUpdate,
-    workspace_id: uuid.UUID = Depends(get_workspace),
+    workspace_id: uuid.UUID = Depends(get_workspace_admin),
     db: AsyncSession = Depends(get_db),
     current_user: Agent = Depends(get_current_user),
 ):
@@ -166,8 +166,29 @@ async def test_integration(
             detail = str(e)
 
     elif integration_type == "email":
-        success = bool(config.config.get("api_key"))
-        detail = "API key configured" if success else "Missing api_key"
+        provider = config.config.get("provider", "resend")
+        if provider == "smtp":
+            host = config.config.get("host")
+            if not host:
+                detail = "Missing SMTP host"
+            else:
+                try:
+                    import smtplib
+                    port = config.config.get("port", 587)
+                    with smtplib.SMTP(host, port, timeout=10) as server:
+                        if config.config.get("tls", True):
+                            server.starttls()
+                        username = config.config.get("username")
+                        password = config.config.get("password")
+                        if username and password:
+                            server.login(username, password)
+                        success = True
+                        detail = "SMTP connection successful"
+                except Exception as e:
+                    detail = f"SMTP connection failed: {e}"
+        else:
+            success = bool(config.config.get("api_key"))
+            detail = "API key configured" if success else "Missing api_key"
 
     elif integration_type in ("jira", "linear"):
         required = {"jira": ["server", "email", "api_token", "project_key"], "linear": ["api_key", "team_id"]}
@@ -181,7 +202,7 @@ async def test_integration(
 @router.delete("/{integration_type}")
 async def delete_integration(
     integration_type: str,
-    workspace_id: uuid.UUID = Depends(get_workspace),
+    workspace_id: uuid.UUID = Depends(get_workspace_admin),
     db: AsyncSession = Depends(get_db),
     current_user: Agent = Depends(get_current_user),
 ):

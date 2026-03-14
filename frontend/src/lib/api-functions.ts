@@ -33,8 +33,13 @@ import {
   LLMSettings,
   OpenRouterModel,
   WorkspaceUsage,
+  type AnalysisRunLogResponse,
   type CrawlRunLogResponse,
   type DocumentLogResponse,
+  type QAPair,
+  type QAPairListResponse,
+  type RealtimeState,
+  type BackgroundTaskLogResponse,
 } from "./types";
 
 // Chatbot CRUD
@@ -147,6 +152,16 @@ export async function getDocumentLogs(
 ): Promise<DocumentLogResponse> {
   return api.get<DocumentLogResponse>(
     `/api/v1/workspaces/${workspaceId}/logs/documents?limit=${limit}&offset=${offset}`,
+  );
+}
+
+export async function getAnalysisRunLogs(
+  workspaceId: string,
+  limit = 50,
+  offset = 0,
+): Promise<AnalysisRunLogResponse> {
+  return api.get<AnalysisRunLogResponse>(
+    `/api/v1/workspaces/${workspaceId}/logs/analysis-runs?limit=${limit}&offset=${offset}`,
   );
 }
 
@@ -282,7 +297,7 @@ export function publishArticle(workspaceId: string, articleId: string) {
 // Conversations
 export function getConversations(
   workspaceId: string,
-  filters?: { status?: string; chatbot_id?: string; date_from?: string; date_to?: string; limit?: number },
+  filters?: { status?: string; chatbot_id?: string; date_from?: string; date_to?: string; limit?: number; topic?: string },
 ) {
   const params = new URLSearchParams();
   if (filters?.status) params.set("status", filters.status);
@@ -290,6 +305,7 @@ export function getConversations(
   if (filters?.date_from) params.set("date_from", filters.date_from);
   if (filters?.date_to) params.set("date_to", filters.date_to);
   if (filters?.limit) params.set("limit", String(filters.limit));
+  if (filters?.topic) params.set("topic", filters.topic);
   const qs = params.toString();
   return api.get<Conversation[]>(
     `/api/v1/workspaces/${workspaceId}/conversations${qs ? `?${qs}` : ""}`,
@@ -609,7 +625,7 @@ export async function getLLMSettings(workspaceId: string): Promise<LLMSettings> 
 
 export async function updateLLMSettings(
   workspaceId: string,
-  data: { openrouter_api_key?: string; allowed_models: string[] },
+  data: { openrouter_api_key?: string; openrouter_base_url?: string | null; allowed_models?: string[]; internal_model?: string | null },
 ): Promise<LLMSettings> {
   const result = await api.put(`/api/v1/workspaces/${workspaceId}/llm-settings`, data);
   return result as LLMSettings;
@@ -635,4 +651,153 @@ export function updateAction(workspaceId: string, chatbotId: string, actionId: s
 
 export function deleteAction(workspaceId: string, chatbotId: string, actionId: string) {
   return api.delete<void>(`/api/v1/workspaces/${workspaceId}/chatbots/${chatbotId}/actions/${actionId}`);
+}
+
+// Intelligence triggers (manual/dev)
+export function triggerAnalyzeAll(workspaceId: string) {
+  return api.post<{ status: string; conversations_queued: number }>(
+    `/api/v1/workspaces/${workspaceId}/intelligence/trigger/analyze-all`
+  );
+}
+
+export function triggerSentimentTrends(workspaceId: string) {
+  return api.post<{ status: string }>(
+    `/api/v1/workspaces/${workspaceId}/intelligence/trigger/sentiment-trends`
+  );
+}
+
+export function triggerClusterGaps(workspaceId: string) {
+  return api.post<{ status: string }>(
+    `/api/v1/workspaces/${workspaceId}/intelligence/trigger/cluster-gaps`
+  );
+}
+
+// Intelligence config (admin)
+export interface IntelligenceConfig {
+  auto_analyze: boolean;
+  sentiment_trends: boolean;
+  gap_clustering: boolean;
+  report_frequency: string;
+  report_recipients: string[];
+  report_sections: Record<string, boolean>;
+}
+
+export function getIntelligenceConfig(workspaceId: string) {
+  return api.get<IntelligenceConfig>(
+    `/api/v1/workspaces/${workspaceId}/intelligence/config`
+  );
+}
+
+export function updateIntelligenceConfig(workspaceId: string, config: Partial<IntelligenceConfig>) {
+  return api.put<IntelligenceConfig>(
+    `/api/v1/workspaces/${workspaceId}/intelligence/config`,
+    config
+  );
+}
+
+// ── Q&A Pairs ──────────────────────────────────────────────────
+
+export async function getQAPairs(
+  workspaceId: string,
+  chatbotId: string,
+  params?: { page?: number; page_size?: number; status_filter?: string },
+): Promise<QAPairListResponse> {
+  const query = new URLSearchParams();
+  if (params?.page) query.set("page", String(params.page));
+  if (params?.page_size) query.set("page_size", String(params.page_size));
+  if (params?.status_filter) query.set("status_filter", params.status_filter);
+  const qs = query.toString();
+  return api.get<QAPairListResponse>(`/api/v1/workspaces/${workspaceId}/chatbots/${chatbotId}/qa${qs ? `?${qs}` : ""}`);
+}
+
+export async function createQAPair(
+  workspaceId: string,
+  chatbotId: string,
+  question: string,
+): Promise<QAPair> {
+  return api.post<QAPair>(`/api/v1/workspaces/${workspaceId}/chatbots/${chatbotId}/qa`, { question });
+}
+
+export async function generateQAPairs(
+  workspaceId: string,
+  chatbotId: string,
+  count: number = 10,
+): Promise<{ status: string; count: number }> {
+  return api.post(`/api/v1/workspaces/${workspaceId}/chatbots/${chatbotId}/qa/generate`, { count });
+}
+
+export async function runQATests(
+  workspaceId: string,
+  chatbotId: string,
+): Promise<{ status: string; count: number }> {
+  return api.post(`/api/v1/workspaces/${workspaceId}/chatbots/${chatbotId}/qa/run-tests`);
+}
+
+export async function retestAllQAPairs(
+  workspaceId: string,
+  chatbotId: string,
+): Promise<{ status: string; count: number }> {
+  return api.post(`/api/v1/workspaces/${workspaceId}/chatbots/${chatbotId}/qa/retest-all`);
+}
+
+export async function updateQAPair(
+  workspaceId: string,
+  chatbotId: string,
+  pairId: string,
+  data: { question?: string; answer?: string },
+): Promise<QAPair> {
+  return api.put<QAPair>(`/api/v1/workspaces/${workspaceId}/chatbots/${chatbotId}/qa/${pairId}`, data);
+}
+
+export async function deleteQAPair(
+  workspaceId: string,
+  chatbotId: string,
+  pairId: string,
+): Promise<void> {
+  return api.delete(`/api/v1/workspaces/${workspaceId}/chatbots/${chatbotId}/qa/${pairId}`);
+}
+
+export async function suggestQAAnswer(
+  workspaceId: string,
+  chatbotId: string,
+  pairId: string,
+): Promise<{ status: string }> {
+  return api.post(`/api/v1/workspaces/${workspaceId}/chatbots/${chatbotId}/qa/${pairId}/suggest`);
+}
+
+export async function retestQAPair(
+  workspaceId: string,
+  chatbotId: string,
+  pairId: string,
+): Promise<{ status: string }> {
+  return api.post(`/api/v1/workspaces/${workspaceId}/chatbots/${chatbotId}/qa/${pairId}/retest`);
+}
+
+export async function addQAPairToKB(
+  workspaceId: string,
+  chatbotId: string,
+  pairId: string,
+): Promise<{ status: string; document_id: string }> {
+  return api.post(`/api/v1/workspaces/${workspaceId}/chatbots/${chatbotId}/qa/${pairId}/add-to-kb`);
+}
+
+// Realtime state
+export function getRealtimeState(workspaceId: string) {
+  return api.get<RealtimeState>(`/api/v1/workspaces/${workspaceId}/realtime/state`);
+}
+
+// Background task logs
+export function getBackgroundTaskLogs(
+  workspaceId: string,
+  limit = 50,
+  offset = 0,
+  taskName?: string,
+  status?: string,
+) {
+  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  if (taskName) params.set("task_name", taskName);
+  if (status) params.set("status", status);
+  return api.get<BackgroundTaskLogResponse>(
+    `/api/v1/workspaces/${workspaceId}/realtime/logs?${params}`,
+  );
 }

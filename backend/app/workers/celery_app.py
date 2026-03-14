@@ -27,13 +27,21 @@ celery_app.conf.update(
             "task": "app.workers.tasks.cluster_gaps.cluster_gaps",
             "schedule": crontab(hour=3, minute=0),
         },
-        "weekly-digest": {
-            "task": "app.workers.tasks.weekly_digest.send_weekly_digest_task",
-            "schedule": crontab(hour=9, minute=0, day_of_week=1),
+        "compute-sentiment-trends": {
+            "task": "app.workers.tasks.compute_sentiment_trends.compute_sentiment_trends",
+            "schedule": crontab(hour=4, minute=0),  # daily at 04:00 UTC, after cluster-gaps at 03:00
+        },
+        "send-report": {
+            "task": "app.workers.tasks.send_report.send_report_task",
+            "schedule": 3600.0,  # every hour — checks per-workspace timestamps
         },
         "purge-old-data": {
             "task": "app.workers.tasks.purge_old_data.purge_old_data",
             "schedule": crontab(hour=3, minute=0),
+        },
+        "close-stale-conversations": {
+            "task": "app.workers.tasks.close_stale_conversations.close_stale_conversations",
+            "schedule": 300.0,  # every 5 minutes
         },
     },
 )
@@ -44,11 +52,13 @@ celery_app.conf.include = [
     "app.workers.tasks.analyze_conversation",
     "app.workers.tasks.auto_recharge",
     "app.workers.tasks.cluster_gaps",
+    "app.workers.tasks.close_stale_conversations",
     "app.workers.tasks.compute_sentiment_trends",
     "app.workers.tasks.gdpr_export",
     "app.workers.tasks.purge_old_data",
     "app.workers.tasks.reindex_article",
     "app.workers.tasks.sync_documents",
-    "app.workers.tasks.weekly_digest",
+    "app.workers.tasks.send_report",
     "app.workers.tasks.crawl_website",
+    "app.workers.tasks.generate_qa",
 ]
