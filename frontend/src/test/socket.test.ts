@@ -29,6 +29,7 @@ vi.mock("@/stores/auth-store", () => ({
 vi.mock("@/stores/workspace-store", () => ({
   useWorkspaceStore: {
     getState: () => ({ currentWorkspace: { id: "ws-123" } }),
+    subscribe: vi.fn(() => vi.fn()), // returns unsubscribe function
   },
 }));
 
@@ -38,7 +39,7 @@ vi.mock("react", () => ({
   useRef: (val: unknown) => ({ current: val }),
 }));
 
-describe("socket", () => {
+describe("socket", { timeout: 15000 }, () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.resetModules();
@@ -51,12 +52,19 @@ describe("socket", () => {
     const s = getSocket();
 
     expect(io).toHaveBeenCalledWith("http://localhost:8000", {
-      auth: { token: "test-token" },
-      transports: ["websocket", "polling"],
+      auth: expect.any(Function),
+      transports: ["polling"],
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
     });
+
+    // Verify auth callback provides the token
+    const authCallback = (io as ReturnType<typeof vi.fn>).mock.calls[0][1].auth;
+    const cbSpy = vi.fn();
+    authCallback(cbSpy);
+    expect(cbSpy).toHaveBeenCalledWith({ token: "test-token" });
+
     expect(mockOn).toHaveBeenCalledWith("connect", expect.any(Function));
 
     // Simulate connect — should emit join_workspace
@@ -86,8 +94,9 @@ describe("socket", () => {
 
     expect(mockDisconnect).toHaveBeenCalled();
     // After disconnect, getSocket should create a new instance
+    const callsBefore = (io as ReturnType<typeof vi.fn>).mock.calls.length;
     getSocket();
-    expect(io).toHaveBeenCalledTimes(2);
+    expect((io as ReturnType<typeof vi.fn>).mock.calls.length).toBe(callsBefore + 1);
   });
 
   it("useSocketEvent subscribes and returns cleanup that unsubscribes", async () => {

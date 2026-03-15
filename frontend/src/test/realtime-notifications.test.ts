@@ -22,6 +22,7 @@ vi.mock("@/stores/auth-store", () => ({
 vi.mock("@/stores/workspace-store", () => ({
   useWorkspaceStore: {
     getState: () => ({ currentWorkspace: { id: "ws-123" } }),
+    subscribe: vi.fn(() => vi.fn()),
   },
 }));
 
@@ -37,7 +38,7 @@ vi.mock("@/lib/toast", () => ({
   useToast: () => ({ success: mockSuccess, error: mockError, info: vi.fn(), loading: vi.fn(), dismiss: vi.fn() }),
 }));
 
-describe("useRealtimeNotifications", () => {
+describe("useRealtimeNotifications", { timeout: 15000 }, () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.resetModules();

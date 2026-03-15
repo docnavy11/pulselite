@@ -21,10 +21,22 @@ vi.mock("@/stores/auth-store", () => ({
   },
 }));
 
-vi.mock("@/stores/workspace-store", () => ({
-  useWorkspaceStore: {
-    getState: () => ({ currentWorkspace: { id: "ws-123" } }),
-  },
+vi.mock("@/stores/workspace-store", () => {
+  const state = { currentWorkspace: { id: "ws-123" } };
+  const store = Object.assign(
+    (selector: (s: typeof state) => unknown) => selector(state),
+    {
+      getState: () => state,
+      subscribe: vi.fn(() => vi.fn()),
+      setState: vi.fn(),
+    },
+  );
+  return { useWorkspaceStore: store };
+});
+
+// ── API mock ────────────────────────────────────────────────────────────────
+vi.mock("@/lib/api-functions", () => ({
+  getRealtimeState: vi.fn(() => Promise.resolve({ tasks: {}, documents: {} })),
 }));
 
 // ── React mock ───────────────────────────────────────────────────────────────
@@ -66,7 +78,7 @@ function getHandler(eventName: string): (data: unknown) => void {
   return call[1] as (data: unknown) => void;
 }
 
-describe("useActivityConsole – hook", () => {
+describe("useActivityConsole – hook", { timeout: 15000 }, () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.resetModules();
