@@ -61,4 +61,5 @@ celery_app.conf.include = [
     "app.workers.tasks.send_report",
     "app.workers.tasks.crawl_website",
     "app.workers.tasks.generate_qa",
+    "app.workers.tasks.deliver_webhook",
 ]
