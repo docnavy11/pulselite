@@ -48,7 +48,7 @@ async def _emit_via_http(event: str, data: dict, room: str) -> None:
     """Emit via the internal HTTP endpoint (Celery workers)."""
     import httpx
 
-    url = "http://backend:8000/api/internal/emit"
+    url = f"{settings.INTERNAL_API_URL}/api/internal/emit"
     try:
         async with httpx.AsyncClient(timeout=5) as client:
             resp = await client.post(
