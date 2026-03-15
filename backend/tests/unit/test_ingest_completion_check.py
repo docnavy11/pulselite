@@ -14,8 +14,9 @@ class TestCheckAndTriggerAutoconfig:
         doc_id = uuid.uuid4()
         kb_id = uuid.uuid4()
         chatbot_id = uuid.uuid4()
+        workspace_id = uuid.uuid4()
 
-        # Simulate: doc lookup → kb lookup → pending count = 0 → update returns chatbot_id
+        # Simulate: doc lookup → kb lookup → pending count = 0 → update returns chatbot_id → workspace lookup
         session = AsyncMock()
 
         doc_row = MagicMock()
@@ -24,12 +25,16 @@ class TestCheckAndTriggerAutoconfig:
         kb_row = MagicMock()
         kb_row.chatbot_id = chatbot_id
 
-        # sequence of execute() calls: doc, kb, count, update
+        workspace_row = MagicMock()
+        workspace_row.workspace_id = workspace_id
+
+        # sequence of execute() calls: doc, kb, count, update, workspace
         execute_results = [
             MagicMock(one_or_none=MagicMock(return_value=doc_row)),   # doc lookup
             MagicMock(one_or_none=MagicMock(return_value=kb_row)),    # kb lookup
             MagicMock(scalar_one=MagicMock(return_value=0)),           # pending count = 0
             MagicMock(scalar_one_or_none=MagicMock(return_value=chatbot_id)),  # update wins
+            MagicMock(one_or_none=MagicMock(return_value=workspace_row)),  # workspace lookup
         ]
         session.execute = AsyncMock(side_effect=execute_results)
         session.commit = AsyncMock()
@@ -40,7 +45,9 @@ class TestCheckAndTriggerAutoconfig:
 
         with patch("app.workers.tasks.ingest_document.async_session_factory", return_value=mock_session_ctx), \
              patch("app.workers.tasks.ingest_document.engine") as mock_engine, \
-             patch("app.workers.tasks.ingest_document.run_autoconfig_for_chatbot") as mock_task:
+             patch("app.workers.tasks.ingest_document.run_autoconfig_for_chatbot") as mock_task, \
+             patch("app.workers.tasks.ingest_document.write_chatbot_setup_state", new_callable=AsyncMock), \
+             patch("app.workers.tasks.ingest_document.emit_to_workspace", new_callable=AsyncMock):
             mock_engine.dispose = AsyncMock()
             await _check_and_trigger_autoconfig(doc_id)
 
