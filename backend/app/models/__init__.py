@@ -11,6 +11,9 @@ from app.models.intelligence import (
     GapEvent,
     RetrievalLog,
 )
+from app.models.qa import QAPair  # noqa: F401
+from app.models.task_log import BackgroundTaskLog  # noqa: F401
+from app.models.webhook_delivery import WebhookDelivery  # noqa: F401
 
 __all__ = [
     "ActionEvent",
@@ -40,4 +43,7 @@ __all__ = [
     "Workspace",
     "WorkspaceMembership",
     "WorkspaceInvite",
+    "QAPair",
+    "BackgroundTaskLog",
+    "WebhookDelivery",
 ]
