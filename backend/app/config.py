@@ -87,6 +87,10 @@ class Settings(BaseSettings):
     # Deployment mode
     CLOUD_MODE: bool = False
 
+    # Light (single-container) mode
+    serve_frontend: bool = False
+    INTERNAL_API_URL: str = "http://backend:8000"
+
     # CORS
     BACKEND_CORS_ORIGINS: list[str] = ["http://localhost:3000"]
 
