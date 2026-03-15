@@ -10,6 +10,7 @@ from app.api.v1 import (
     billing,
     chat,
     chatbots,
+    config as config_router,
     copilot,
     crawl,
     dashboard,
@@ -141,6 +142,7 @@ def create_app() -> FastAPI:
     application.include_router(realtime_api.router, prefix="/api/v1")
 
     # Public routes (no auth required)
+    application.include_router(config_router.router, prefix="/api/v1")
     application.include_router(widget_config.router, prefix="/api/v1")
     application.include_router(public_chat.router, prefix="/api/v1")
     application.include_router(oauth.router, prefix="/api/v1")
