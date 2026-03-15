@@ -514,7 +514,7 @@ async def run_ingestion(db: AsyncSession, document_id: uuid.UUID) -> None:
     # Character budget enforcement
     n = len(content)
     if n > 0:
-        from app.config import PLAN_CHAR_LIMITS
+        from app.services.plan_service import get_plan_limits
         from app.models.organizational import Workspace
 
         t0 = datetime.now(timezone.utc)
@@ -522,7 +522,8 @@ async def run_ingestion(db: AsyncSession, document_id: uuid.UUID) -> None:
             select(Workspace).where(Workspace.id == document.workspace_id)
         )
         workspace = ws_result.scalar_one()
-        limit = PLAN_CHAR_LIMITS.get(workspace.plan)
+        _limits = get_plan_limits(workspace.plan)
+        limit = _limits["chars_indexed"] if _limits["chars_indexed"] != -1 else None
 
         # COALESCE(CAST(:limit AS BIGINT), max-bigint) handles the unlimited-plan
         # case (limit=None) without a NULL IS NULL check, which asyncpg cannot
@@ -567,7 +568,7 @@ async def run_ingestion(db: AsyncSession, document_id: uuid.UUID) -> None:
         ws_row = ws_refresh.one()
         await emit_to_workspace(str(document.workspace_id), "workspace:usage_updated", {
             "chars_indexed": ws_row.chars_indexed,
-            "chars_limit": PLAN_CHAR_LIMITS.get(ws_row.plan, 0),
+            "chars_limit": get_plan_limits(ws_row.plan)["chars_indexed"],
             "plan": ws_row.plan,
         })
 

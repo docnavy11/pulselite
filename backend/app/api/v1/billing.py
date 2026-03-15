@@ -32,52 +32,30 @@ def _validate_return_url(url: str | None) -> None:
     if url and not url.startswith(settings.FRONTEND_URL):
         raise HTTPException(status_code=400, detail="Invalid return URL")
 
-BILLING_PLANS = [
-    {
-        "id": "free",
-        "name": "Free",
-        "price": 0,
-        "interval": "month",
-        "features": ["1 chatbot", "500 conversations/mo", "1 knowledge base", "Basic analytics"],
-        "is_popular": False,
-    },
-    {
-        "id": "starter",
-        "name": "Starter",
-        "price": 49,
-        "interval": "month",
-        "features": ["3 chatbots", "5,000 conversations/mo", "5 knowledge bases", "Full analytics", "Email support"],
-        "is_popular": False,
-    },
-    {
-        "id": "growth",
-        "name": "Growth",
-        "price": 149,
-        "interval": "month",
-        "features": [
-            "10 chatbots",
-            "25,000 conversations/mo",
-            "Unlimited knowledge bases",
-            "Intelligence suite",
-            "Priority support",
-        ],
-        "is_popular": True,
-    },
-    {
-        "id": "enterprise",
-        "name": "Enterprise",
-        "price": 499,
-        "interval": "month",
-        "features": [
-            "Unlimited chatbots",
-            "Unlimited conversations",
-            "Custom integrations",
-            "Dedicated support",
-            "SLA guarantee",
-        ],
-        "is_popular": False,
-    },
-]
+def _build_billing_plans() -> list[dict]:
+    """Build billing plans response from cached plan tiers."""
+    from app.services.plan_service import get_all_tiers
+
+    display_order = ["free", "starter", "growth", "agency", "enterprise"]
+    all_tiers = {t.slug: t for t in get_all_tiers()}
+    plans = []
+    for slug in display_order:
+        tier = all_tiers.get(slug)
+        if tier is None:
+            continue
+        plans.append({
+            "id": tier.slug,
+            "name": tier.name,
+            "price": tier.price_monthly_cents / 100,
+            "features": tier.features,
+            "limits": {
+                "chatbots": tier.max_chatbots,
+                "conversations": tier.max_conversations_monthly,
+                "knowledge_bases": tier.max_knowledge_bases,
+                "chars_indexed": tier.max_chars_indexed,
+            },
+        })
+    return plans
 
 
 @router.get("/workspaces/{workspace_id}/billing/usage")
@@ -174,7 +152,7 @@ async def get_usage_breakdown(
 
 @router.get("/billing/plans")
 async def get_billing_plans():
-    return BILLING_PLANS
+    return _build_billing_plans()
 
 
 class CheckoutRequest(BaseModel):

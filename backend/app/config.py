@@ -107,10 +107,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-
-PLAN_CHAR_LIMITS: dict[str, int | None] = {
-    "free":         500_000,
-    "starter":    2_000_000,
-    "growth":    10_000_000,
-    "enterprise": None,         # unlimited
-}

@@ -6,7 +6,8 @@ from pydantic import BaseModel, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import PLAN_CHAR_LIMITS, settings as app_settings
+from app.config import settings as app_settings
+from app.services.plan_service import get_plan_limits
 from app.database import get_db
 from app.dependencies import get_current_user, get_workspace
 from app.models.organizational import Agent, Workspace
@@ -242,7 +243,8 @@ async def get_workspace_usage(
     if workspace is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found")
 
-    limit = PLAN_CHAR_LIMITS.get(workspace.plan)
+    _limits = get_plan_limits(workspace.plan)
+    limit = _limits["chars_indexed"] if _limits["chars_indexed"] != -1 else None
     chars_remaining: int | None = None
     if limit is not None:
         chars_remaining = max(0, limit - workspace.chars_indexed)

@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models.organizational import Workspace
+from app.services.plan_service import get_plan_limits as _get_plan_limits
 
 logger = logging.getLogger(__name__)
 
@@ -25,14 +26,6 @@ PLAN_PRICES_ANNUAL = {
     "professional": "price_professional_annual",
     "agency": "price_agency_annual",
     "enterprise": "price_enterprise_annual",
-}
-
-PLAN_LIMITS = {
-    "free": {"conversations": 100, "chatbots": 1, "knowledge_bases": 2},
-    "starter": {"conversations": 1000, "chatbots": 3, "knowledge_bases": 10},
-    "professional": {"conversations": 10000, "chatbots": 10, "knowledge_bases": 50},
-    "agency": {"conversations": 50000, "chatbots": 50, "knowledge_bases": 200},
-    "enterprise": {"conversations": -1, "chatbots": -1, "knowledge_bases": -1},
 }
 
 
@@ -115,7 +108,8 @@ async def handle_webhook_event(db: AsyncSession, event: dict) -> None:
             if workspace:
                 workspace.plan = plan
                 workspace.stripe_subscription_id = subscription_id
-                workspace.plan_conversation_cap = PLAN_LIMITS.get(plan, {}).get("conversations", 100)
+                limits = _get_plan_limits(plan)
+                workspace.plan_conversation_cap = limits["conversations"]
 
     elif event_type == "customer.subscription.updated":
         subscription = event["data"]["object"]
@@ -146,9 +140,7 @@ async def _update_subscription(db: AsyncSession, subscription: dict) -> None:
             for plan, pid in plan_map.items():
                 if pid == price_id:
                     workspace.plan = plan
-                    workspace.plan_conversation_cap = PLAN_LIMITS.get(plan, {}).get("conversations", 100)
+                    limits = _get_plan_limits(plan)
+                    workspace.plan_conversation_cap = limits["conversations"]
                     break
 
-
-def get_plan_limits(plan: str) -> dict:
-    return PLAN_LIMITS.get(plan, PLAN_LIMITS["free"])
