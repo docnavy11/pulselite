@@ -12,6 +12,7 @@ export interface Workspace {
   plan: string;
   timezone?: string;
   white_label_enabled?: boolean;
+  is_byok?: boolean;
 }
 
 export interface AuthTokens {
@@ -655,4 +656,8 @@ export interface WorkerHealth {
     by_task: WorkerHealthTaskPerf[];
   };
   timeseries: WorkerHealthTimeseries[];
+}
+
+export interface DeploymentConfig {
+  cloud_mode: boolean;
 }

@@ -3,6 +3,7 @@ import { getTokens } from "./auth";
 
 const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 import {
+  DeploymentConfig,
   Action,
   ActionCreate,
   ActionUpdate,
@@ -43,6 +44,11 @@ import {
   type BackgroundTaskLogResponse,
   type WorkerHealth,
 } from "./types";
+
+export async function getDeploymentConfig(): Promise<DeploymentConfig> {
+  const response = await fetch(`${BASE_URL}/api/v1/config/deployment`);
+  return response.json();
+}
 
 // Chatbot CRUD
 export function getChatbots(workspaceId: string) {

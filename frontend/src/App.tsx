@@ -1,4 +1,6 @@
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { useDeploymentStore } from './stores/deployment-store'
 
 // Layouts
 import DashboardLayout from './app/(dashboard)/layout'
@@ -64,6 +66,13 @@ import PublicChatPage from './app/chat/[chatbotId]/page'
 import NotFoundPage from './app/not-found'
 
 export default function App() {
+  const loadConfig = useDeploymentStore((s) => s.loadConfig);
+  const isCloud = useDeploymentStore((s) => s.isCloud);
+
+  useEffect(() => {
+    loadConfig();
+  }, [loadConfig]);
+
   return (
     <BrowserRouter>
       <Routes>
@@ -110,7 +119,7 @@ export default function App() {
           <Route path="/articles/:id" element={<ArticleDetailPage />} />
 
           <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/settings/billing" element={<BillingPage />} />
+          {isCloud && <Route path="/settings/billing" element={<BillingPage />} />}
           <Route path="/settings/data-retention" element={<DataRetentionPage />} />
           <Route path="/settings/integrations" element={<IntegrationsPage />} />
           <Route path="/settings/llm" element={<LLMPage />} />
