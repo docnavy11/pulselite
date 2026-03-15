@@ -35,7 +35,7 @@ async def process_query(
     openrouter_key: str | None = None,
     openrouter_base_url: str | None = None,
     actions: list | None = None,
-) -> AsyncGenerator[str | RAGResult, None]:
+) -> AsyncGenerator[str | RAGResult | dict, None]:
     result = await db.execute(select(KnowledgeBase).where(KnowledgeBase.chatbot_id == chatbot.id).limit(1))
     kb = result.scalar_one_or_none()
 
@@ -161,5 +161,5 @@ async def process_query(
                         tool_note = f"Action '{action.name}' triggered successfully."
                         messages.append({"role": "assistant", "content": tool_note})
 
-    async for token in stream_response(messages, chatbot, openrouter_key=openrouter_key, openrouter_base_url=openrouter_base_url):
-        yield token
+    async for item in stream_response(messages, chatbot, openrouter_key=openrouter_key, openrouter_base_url=openrouter_base_url):
+        yield item
