@@ -8,6 +8,7 @@ import {
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useCopilot } from "@/components/copilot/CopilotProvider";
+import { useDeploymentStore } from "@/stores/deployment-store";
 import { createWorkspace } from "@/lib/api-functions";
 import type { Workspace } from "@/lib/types";
 
@@ -49,6 +50,7 @@ export function Sidebar({ isOpen, onClose, pinned, onPinToggle }: SidebarProps) 
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);
   const workspaces = useWorkspaceStore((s) => s.workspaces);
   const setCurrentWorkspace = useWorkspaceStore((s) => s.setCurrentWorkspace);
+  const isCloud = useDeploymentStore((s) => s.isCloud);
   const plan = workspace?.plan ?? "free";
   const isSettingsActive = pathname.startsWith("/settings");
   const [settingsOpen, setSettingsOpen] = useState(isSettingsActive);
@@ -327,7 +329,9 @@ export function Sidebar({ isOpen, onClose, pinned, onPinToggle }: SidebarProps) 
 
         {settingsOpen && (
           <div className="ml-6 mt-0.5 space-y-0.5">
-            {SETTINGS_CHILDREN.map(({ href, label }) => {
+            {SETTINGS_CHILDREN
+              .filter(({ href }) => isCloud || href !== "/settings/billing")
+              .map(({ href, label }) => {
               const active = pathname === href;
               return (
                 <Link
@@ -389,7 +393,7 @@ export function Sidebar({ isOpen, onClose, pinned, onPinToggle }: SidebarProps) 
               {userName || "User"}
             </div>
             <div className="text-[10px] text-gray-400 truncate">
-              {PLAN_LABELS[plan] ?? "Free"} plan
+              {isCloud ? (PLAN_LABELS[plan] ?? "Free") + " plan" : "Self-Hosted"}
             </div>
           </div>
         </div>
