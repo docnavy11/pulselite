@@ -82,7 +82,8 @@ Public exceptions:
 - `GET /api/v1/health`
 - `GET /api/v1/widget/{chatbot_id}/config`
 - `POST /api/v1/public/chat` (rate-limited, SSE)
-- `GET /api/v1/billing/plans`
+- `GET /api/v1/billing/plans` (returns 404 in self-hosted mode)
+- `GET /api/v1/config/deployment`
 
 ### Key files
 - `backend/app/main.py` — all routers registered
@@ -215,3 +216,12 @@ CI uses `cp .env.example .env` — no secrets required for the test suite.
 - SOQL queries in Salesforce action sanitize email input before interpolation
 - Input fields validated against null bytes across all schemas
 - Widget public chat endpoint checks `Origin` against `chatbot.widget_config.allowed_domains`
+
+## Deployment modes
+`CLOUD_MODE` env var (default `false`). When `false` (self-hosted): all features unlocked, billing/credits/plan limits disabled, `require_cloud` dependency returns 404 on billing routes. When `true` (cloud): full SaaS with Stripe billing, credit system, plan tier limits. BYOK workspaces (`is_byok=true`) get 50% credit discount. Plan tiers stored in `plan_tiers` table, cached at startup via `plan_service.load_plan_tiers()`.
+
+Key files:
+- `backend/app/services/deployment.py` — `is_cloud()`, `is_self_hosted()`, `require_cloud` dependency
+- `backend/app/services/plan_service.py` — `get_plan_tier()`, `get_plan_limits()`, `has_feature()`, cached at startup
+- `backend/app/models/plan_tier.py` — `PlanTier` model (slug PK, limits, features JSONB)
+- `frontend/src/stores/deployment-store.ts` — `useDeploymentStore` Zustand store with `isCloud` flag
