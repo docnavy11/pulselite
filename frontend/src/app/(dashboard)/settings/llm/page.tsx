@@ -6,9 +6,15 @@ import { Spinner } from "@/components/ui/Spinner";
 import { getLLMSettings, updateLLMSettings, getOpenRouterModels } from "@/lib/api-functions";
 import type { LLMSettings, OpenRouterModel } from "@/lib/types";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { useDeploymentStore } from "@/stores/deployment-store";
+import { api } from "@/lib/api";
 
 export default function LLMSettingsPage() {
   const workspace = useWorkspaceStore((s) => s.currentWorkspace);
+  const isCloud = useDeploymentStore((s) => s.isCloud);
+
+  const [isByok, setIsByok] = useState(false);
+  const [savingByok, setSavingByok] = useState(false);
 
   const [settings, setSettings] = useState<LLMSettings | null>(null);
   const [keyInput, setKeyInput] = useState("");
@@ -43,6 +49,24 @@ export default function LLMSettingsPage() {
       })
       .finally(() => setPageLoading(false));
   }, [workspace]);
+
+  useEffect(() => {
+    if (workspace) setIsByok((workspace as any).is_byok ?? false);
+  }, [workspace]);
+
+  async function handleToggleByok() {
+    if (!workspace) return;
+    setSavingByok(true);
+    try {
+      const newValue = !isByok;
+      await api.patch(`/api/v1/workspaces/${workspace.id}`, { is_byok: newValue });
+      setIsByok(newValue);
+    } catch {
+      // revert on error
+    } finally {
+      setSavingByok(false);
+    }
+  }
 
   async function handleSaveKey() {
     if (!workspace) return;
@@ -128,6 +152,36 @@ export default function LLMSettingsPage() {
           Configure your OpenRouter API key and select which models chatbots in this workspace can use.
         </p>
       </div>
+
+      {isCloud && (
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-semibold text-gray-900">Bring Your Own Key (BYOK)</h2>
+                <p className="mt-1 text-sm text-gray-500">
+                  {isByok
+                    ? "Using your own API key — 50% discount on credits"
+                    : "Using platform API keys — standard credit pricing"}
+                </p>
+              </div>
+              <button
+                onClick={handleToggleByok}
+                disabled={savingByok}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  isByok ? 'bg-primary-500' : 'bg-gray-300'
+                } ${savingByok ? 'opacity-50' : ''}`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    isByok ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Card 1 — API Key */}
       <Card>

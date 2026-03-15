@@ -70,7 +70,7 @@ make lint                    # ruff check + format check
 make format                  # ruff format (auto-fix)
 ```
 
-Coverage config (workers excluded) is in `backend/pyproject.toml` under `[tool.coverage.run]`.
+Ruff config: Python 3.12 target, 120-char line length (`backend/pyproject.toml`). Coverage config (workers excluded) is in `backend/pyproject.toml` under `[tool.coverage.run]`.
 
 ## Backend architecture
 
@@ -187,8 +187,11 @@ Several backend responses differ from frontend types — transforms happen insid
 
 ## Test infrastructure
 
+### Test database
+Tests use a separate `pulse_test` database (configured in `backend/tests/conftest.py` via `os.environ["POSTGRES_DB"] = "pulse_test"`). **Migrations must be applied to both databases** — `make migrate` only targets `pulse`. To migrate the test DB: `docker compose exec backend bash -c "POSTGRES_DB=pulse_test PYTHONPATH=/app alembic upgrade head"`. PostgreSQL extensions required: `uuid-ossp`, `vector` (pgvector), `pg_trgm` (trigram search) — initialized via `infra/postgres/init.sql`.
+
 ### Backend fixture architecture
-`backend/tests/conftest.py` uses nested transactions (savepoints) for zero-overhead isolation — each test rolls back to its savepoint rather than truncating tables.
+`backend/tests/conftest.py` uses nested transactions (savepoints) for zero-overhead isolation — each test rolls back to its savepoint rather than truncating tables. `asyncio_mode = "auto"` in `pyproject.toml` — async tests don't need `@pytest.mark.asyncio`.
 
 - `db` (function-scoped) — `AsyncSession` with `join_transaction_mode="create_savepoint"`; rolls back after every test
 - `workspace` / `agent` / `auth_client` (function-scoped) — pre-seeded entities with a valid JWT
