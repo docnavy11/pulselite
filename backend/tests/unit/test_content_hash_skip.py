@@ -80,7 +80,7 @@ class TestContentHashSkip:
         doc.content_hash = old_hash
         await db.flush()
 
-        mock_embeddings = [[0.1] * 1536]
+        mock_embeddings = [[0.1] * 384]
         with patch("app.services.ingestion.pipeline.embed_chunks", new_callable=AsyncMock, return_value=mock_embeddings):
             await run_ingestion(db, doc.id)
 
@@ -105,7 +105,7 @@ class TestContentHashSkip:
         )
         assert doc.content_hash is None
 
-        mock_embeddings = [[0.1] * 1536]
+        mock_embeddings = [[0.1] * 384]
         with patch("app.services.ingestion.pipeline.embed_chunks", new_callable=AsyncMock, return_value=mock_embeddings):
             await run_ingestion(db, doc.id)
 
@@ -123,7 +123,7 @@ class TestContentHashSkip:
             source_type="text", raw_content="Some text", status="pending",
         )
 
-        mock_embeddings = [[0.1] * 1536]
+        mock_embeddings = [[0.1] * 384]
         with patch("app.services.ingestion.pipeline.embed_chunks", new_callable=AsyncMock, return_value=mock_embeddings):
             await run_ingestion(db, doc.id)
 
