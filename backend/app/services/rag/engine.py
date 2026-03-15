@@ -12,6 +12,7 @@ from app.services.rag.generator import stream_response
 from app.services.rag.memory import get_conversation_history
 from app.services.rag.prompts import build_context_prompt, build_system_prompt
 from app.services.rag.reranker import rerank
+from app.services.rag.reformulator import reformulate_queries
 from app.services.rag.retriever import hybrid_search
 
 logger = logging.getLogger(__name__)
@@ -25,6 +26,8 @@ class RAGResult:
     retrieved_chunk_ids: list[uuid.UUID]
     query: str
     sources: list[dict] = field(default_factory=list)
+    retried: bool = False
+    original_confidence_low: bool = False
 
 
 async def process_query(
@@ -59,6 +62,28 @@ async def process_query(
 
     confidence_score, confidence_avg = compute_confidence(scored_chunks)
     escalated = should_escalate(confidence_score, chatbot.confidence_threshold)
+    original_confidence_low = escalated
+    retried = False
+
+    # --- Query reformulation retry on low confidence ---
+    if original_confidence_low:
+        retry_queries = await reformulate_queries(query, chatbot, openrouter_key, openrouter_base_url)
+        if retry_queries:
+            retried = True
+            all_chunks = list(candidates)
+            seen_ids = {c.id for c in candidates}
+            for rq in retry_queries:
+                new_candidates = await hybrid_search(db, chatbot.workspace_id, kb.id, rq, top_k=20)
+                for c in new_candidates:
+                    if c.id not in seen_ids:
+                        all_chunks.append(c)
+                        seen_ids.add(c.id)
+
+            # Always rerank on retry — without meaningful scores, confidence can't improve
+            if all_chunks:
+                scored_chunks = rerank(query, all_chunks, top_k=chatbot.retrieval_top_k)
+                confidence_score, confidence_avg = compute_confidence(scored_chunks)
+                escalated = should_escalate(confidence_score, chatbot.confidence_threshold)
 
     retrieved_chunk_ids = [chunk.id for chunk, _ in scored_chunks]
 
@@ -92,6 +117,8 @@ async def process_query(
         retrieved_chunk_ids=retrieved_chunk_ids,
         query=query,
         sources=sources,
+        retried=retried,
+        original_confidence_low=original_confidence_low,
     )
     yield rag_result
 
