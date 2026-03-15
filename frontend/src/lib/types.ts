@@ -10,6 +10,7 @@ export interface Workspace {
   name: string;
   slug: string;
   plan: string;
+  timezone?: string;
   white_label_enabled?: boolean;
 }
 
@@ -47,6 +48,7 @@ export interface Chatbot {
   retrieval_top_k: number;
   use_reranking: boolean;
   use_hybrid_retrieval: boolean;
+  auto_detect_language: boolean;
   is_active: boolean;
   created_at: string;
   brand_color?: string;
@@ -247,6 +249,7 @@ export interface Conversation {
   confidence?: number;
   last_message_preview?: string;
   outcome?: string;
+  topics?: string[];
   created_at: string;
   updated_at: string;
 }
@@ -328,7 +331,7 @@ export interface DashboardData {
     thumbs_up: number;
     thumbs_down: number;
   };
-  top_topics: { topic: string; total_count: number; resolved_count: number; resolution_rate: number }[];
+  top_topics: { topic: string; total_count: number; resolved_count: number; resolution_rate: number; example_query?: string }[];
   recent_negative_feedback: { id: string; comment: string; created_at: string; message_content: string }[];
 }
 
@@ -422,6 +425,7 @@ export interface LLMSettings {
   effective_base_url: string | null;
   effective_api_key_set: boolean;
   allowed_models: string[];
+  internal_model: string | null;
 }
 
 export interface OpenRouterModel {
@@ -527,6 +531,53 @@ export interface TaskEvent {
   current?: number | null;
   total?: number | null;
   error?: string | null;
+}
+
+export interface RealtimeState {
+  active_tasks: Array<{
+    task_id: string;
+    task_name: string;
+    status: string;
+    detail?: string | null;
+    current?: number | null;
+    total?: number | null;
+  }>;
+  active_crawls: Array<{
+    job_id: string;
+    chatbot_id?: string | null;
+    phase: string;
+    pages_discovered: number;
+    pages_queued: number;
+    pages_failed: number;
+    status: string;
+  }>;
+  active_documents: Array<{
+    document_id: string;
+    title: string;
+    knowledge_base_id: string;
+    status: string;
+  }>;
+  chatbot_setup: Array<{
+    chatbot_id: string;
+    setup_status: string;
+  }>;
+}
+
+export interface BackgroundTaskLogItem {
+  id: string;
+  task_name: string;
+  task_id: string;
+  status: string;
+  detail: string | null;
+  error: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  duration_ms: number | null;
+}
+
+export interface BackgroundTaskLogResponse {
+  items: BackgroundTaskLogItem[];
+  total: number;
 }
 
 export interface QAPair {

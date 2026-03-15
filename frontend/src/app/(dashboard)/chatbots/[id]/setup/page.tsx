@@ -1,12 +1,92 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Check, CheckCircle, AlertTriangle } from "lucide-react";
+import { Check, CheckCircle, AlertTriangle, Copy, ChevronDown, ChevronUp } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
+import { Highlight, themes } from "prism-react-renderer";
+import { clsx } from "clsx";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { getChatbot, getCrawlStatus, updateChatbot } from "@/lib/api-functions";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useSocketEvent, getSocket } from "@/lib/socket";
 import type { Chatbot, CrawlStatusResponse, CrawlProgressEvent, CrawlCompletedEvent, ChatbotStatusEvent } from "@/lib/types";
+
+const APP_URL = import.meta.env.VITE_APP_URL || "http://localhost:3001";
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
+const deployTabs = ["Script Tag", "Shareable Link", "REST API"] as const;
+type DeployTab = (typeof deployTabs)[number];
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  async function handleCopy() {
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+  return (
+    <button
+      onClick={handleCopy}
+      className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-gray-500 hover:bg-gray-100 transition-all duration-200"
+    >
+      {copied ? (
+        <><Check className="h-3.5 w-3.5 text-green-500" />Copied</>
+      ) : (
+        <><Copy className="h-3.5 w-3.5" />Copy</>
+      )}
+    </button>
+  );
+}
+
+function CodeBlock({ code, language }: { code: string; language: string }) {
+  return (
+    <div className="relative rounded-lg overflow-hidden border border-gray-200">
+      <div className="absolute top-2 right-2 z-10">
+        <CopyButton text={code} />
+      </div>
+      <Highlight theme={themes.vsLight} code={code.trim()} language={language}>
+        {({ className, style, tokens, getLineProps, getTokenProps }) => (
+          <pre className={clsx(className, "p-4 text-sm overflow-auto")} style={style}>
+            {tokens.map((line, i) => (
+              <div key={i} {...getLineProps({ line })}>
+                {line.map((token, key) => (
+                  <span key={key} {...getTokenProps({ token })} />
+                ))}
+              </div>
+            ))}
+          </pre>
+        )}
+      </Highlight>
+    </div>
+  );
+}
+
+const platformGuides: { name: string; steps: string[] }[] = [
+  {
+    name: "WordPress",
+    steps: [
+      "Go to Appearance > Theme Editor or use a plugin like Insert Headers and Footers",
+      "Paste the script tag before the closing </body> tag",
+      "Save changes",
+    ],
+  },
+  {
+    name: "Shopify",
+    steps: [
+      "Go to Online Store > Themes > Edit Code",
+      "Open theme.liquid",
+      "Paste the script tag before </body>",
+    ],
+  },
+  {
+    name: "Webflow",
+    steps: [
+      "Go to Project Settings > Custom Code",
+      "Paste the script in the Footer Code section",
+      "Publish your site",
+    ],
+  },
+];
 
 // Maps setup_status to a wizard step
 function getSetupStep(
@@ -82,10 +162,13 @@ export default function ChatbotSetupPage() {
   const [reviewColor, setReviewColor] = useState("#ff6b35");
   const [reviewTone, setReviewTone] = useState("professional");
   const [reviewLanguage, setReviewLanguage] = useState("en");
+  const [reviewAutoDetect, setReviewAutoDetect] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const [step4Active, setStep4Active] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [activeDeployTab, setActiveDeployTab] = useState<DeployTab>("Script Tag");
+  const [expandedGuide, setExpandedGuide] = useState<string | null>(null);
+  const qrRef = useRef<HTMLDivElement>(null);
 
   // Ref so Socket.IO handlers always see the latest value
   const step4ActiveRef = useRef(false);
@@ -137,6 +220,7 @@ export default function ChatbotSetupPage() {
     setReviewColor(bot.brand_color ?? "#ff6b35");
     setReviewTone(bot.tone ?? "professional");
     setReviewLanguage(bot.language ?? "en");
+    setReviewAutoDetect(bot.auto_detect_language ?? false);
   }
 
   // Real-time crawl progress — updates the crawlStatus with live numbers
@@ -212,6 +296,8 @@ export default function ChatbotSetupPage() {
         fallback_message: reviewFallback,
         brand_color: reviewColor,
         tone: reviewTone,
+        language: reviewLanguage,
+        auto_detect_language: reviewAutoDetect,
         setup_status: "done",
       } as Parameters<typeof updateChatbot>[2]);
       setStep4Active(true);
@@ -493,7 +579,9 @@ export default function ChatbotSetupPage() {
 
               {/* Language */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Language</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {reviewAutoDetect ? "Fallback language" : "Language"}
+                </label>
                 <select
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   value={reviewLanguage}
@@ -503,6 +591,17 @@ export default function ChatbotSetupPage() {
                     <option key={l.value} value={l.value}>{l.label}</option>
                   ))}
                 </select>
+                <label className="flex items-center gap-2 mt-2">
+                  <input
+                    type="checkbox"
+                    checked={reviewAutoDetect}
+                    onChange={(e) => setReviewAutoDetect(e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  <span className="text-sm text-gray-600">
+                    Auto-detect visitor language
+                  </span>
+                </label>
               </div>
 
               {/* Brand color */}
@@ -537,33 +636,137 @@ export default function ChatbotSetupPage() {
 
         {/* Step 4: Go live */}
         <StepRow stepNum={4} label="Go live" done={false} active={activeStepNum === 4} error={false} isLast={true} nextDone={false}>
-          {activeStepNum === 4 ? (
-            <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-4">
-              <div>
-                <h3 className="text-sm font-medium text-gray-700 mb-2">Embed on your website</h3>
-                <div className="relative">
-                  <pre className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-700 overflow-x-auto">
-                    {`<script src="${window.location.origin}/widget/${chatbot.id}.js"></script>`}
-                  </pre>
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(`<script src="${window.location.origin}/widget/${chatbot.id}.js"></script>`);
-                      setCopied(true);
-                      setTimeout(() => setCopied(false), 2000);
-                    }}
-                    className="absolute top-2 right-2 px-2 py-1 text-xs font-medium rounded bg-white border border-gray-200 text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors"
-                  >
-                    {copied ? "Copied!" : "Copy"}
-                  </button>
+          {activeStepNum === 4 ? (() => {
+            const scriptTag = `<script src="${window.location.origin}/widget/${chatbot.id}.js"></script>`;
+            const chatUrl = `${APP_URL}/chat/${chatbot.id}`;
+            const curlExample = `curl -X POST ${API_URL}/api/v1/public/chat \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "chatbot_id": "${chatbot.id}",
+    "message": "Hello, I need help",
+    "session_id": "unique-session-id"
+  }'`;
+
+            return (
+              <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-5">
+                {/* Tab switcher */}
+                <div className="border-b border-gray-200">
+                  <nav className="flex gap-5">
+                    {deployTabs.map((tab) => (
+                      <button
+                        key={tab}
+                        onClick={() => setActiveDeployTab(tab)}
+                        className={clsx(
+                          "pb-2.5 text-sm font-medium border-b-2 transition-all duration-200",
+                          activeDeployTab === tab
+                            ? "border-primary-500 text-primary-500"
+                            : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300",
+                        )}
+                      >
+                        {tab}
+                      </button>
+                    ))}
+                  </nav>
+                </div>
+
+                {/* Script Tag tab */}
+                {activeDeployTab === "Script Tag" && (
+                  <div className="space-y-4">
+                    <div>
+                      <p className="text-sm text-gray-500 mb-3">
+                        Add this script tag to your website to display the chat widget.
+                      </p>
+                      <CodeBlock code={scriptTag} language="html" />
+                    </div>
+
+                    {/* Platform guides */}
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-700 mb-2">Platform guides</h3>
+                      <div className="space-y-1.5">
+                        {platformGuides.map((guide) => (
+                          <div key={guide.name} className="rounded-lg border border-gray-200">
+                            <button
+                              onClick={() => setExpandedGuide(expandedGuide === guide.name ? null : guide.name)}
+                              className="flex w-full items-center justify-between px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-all duration-200"
+                            >
+                              {guide.name}
+                              {expandedGuide === guide.name ? (
+                                <ChevronUp className="h-4 w-4 text-gray-400" />
+                              ) : (
+                                <ChevronDown className="h-4 w-4 text-gray-400" />
+                              )}
+                            </button>
+                            {expandedGuide === guide.name && (
+                              <div className="px-3 pb-2.5">
+                                <ol className="list-decimal list-inside space-y-1 text-sm text-gray-600">
+                                  {guide.steps.map((step, i) => (
+                                    <li key={i}>{step}</li>
+                                  ))}
+                                </ol>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Shareable Link tab */}
+                {activeDeployTab === "Shareable Link" && (
+                  <div className="space-y-4">
+                    <div>
+                      <p className="text-sm text-gray-500 mb-3">
+                        Share this link to let users chat with your bot in a full-page view.
+                      </p>
+                      <div className="flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2.5">
+                        <code className="flex-1 text-sm text-gray-700 truncate">{chatUrl}</code>
+                        <CopyButton text={chatUrl} />
+                      </div>
+                    </div>
+
+                    <div ref={qrRef} className="flex flex-col items-center pt-2">
+                      <QRCodeSVG value={chatUrl} size={160} level="M" />
+                      <p className="text-xs text-gray-400 mt-3">Scan to open chat</p>
+                      <button
+                        onClick={() => {
+                          const svg = qrRef.current?.querySelector("svg") as SVGSVGElement;
+                          if (!svg) return;
+                          const svgData = new XMLSerializer().serializeToString(svg);
+                          const blob = new Blob([svgData], { type: "image/svg+xml" });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement("a");
+                          a.href = url;
+                          a.download = `chatbot-qr-${chatbot.id}.svg`;
+                          a.click();
+                          URL.revokeObjectURL(url);
+                        }}
+                        className="mt-2 text-sm text-primary-500 hover:text-primary-700 font-medium"
+                      >
+                        Download QR Code
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* REST API tab */}
+                {activeDeployTab === "REST API" && (
+                  <div>
+                    <p className="text-sm text-gray-500 mb-3">
+                      Send chat messages programmatically using the REST API.
+                    </p>
+                    <CodeBlock code={curlExample} language="bash" />
+                  </div>
+                )}
+
+                <div className="flex justify-end pt-1">
+                  <Button onClick={() => navigate(`/chatbots/${id}`)}>
+                    Go to dashboard →
+                  </Button>
                 </div>
               </div>
-              <div className="flex justify-end">
-                <Button onClick={() => navigate(`/chatbots/${id}`)}>
-                  Go to dashboard →
-                </Button>
-              </div>
-            </div>
-          ) : null}
+            );
+          })() : null}
         </StepRow>
       </div>
     </div>
