@@ -16,6 +16,9 @@ from app.services.encryption import decrypt_api_key
 from app.services import conversation_service
 from app.services.rag.engine import RAGResult, process_query
 from app.services.webhooks import fire_event
+from app.services.deployment import is_cloud
+from app.services.credits import estimate_token_cost, debit_credits
+from app.services.conversation_service import check_conversation_cap
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +81,27 @@ async def handle_message(
     conversation_id: uuid.UUID | None = None,
     contact_id: uuid.UUID | None = None,
 ) -> AsyncGenerator[ResolutionEvent, None]:
+    # Load workspace OpenRouter key + base URL if configured
+    openrouter_key: str | None = None
+    openrouter_base_url: str | None = None
+    ws_result = await db.execute(select(Workspace).where(Workspace.id == workspace_id))
+    ws = ws_result.scalar_one_or_none()
+    if ws:
+        openrouter_base_url = ws.openrouter_base_url
+        if ws.openrouter_api_key:
+            try:
+                openrouter_key = decrypt_api_key(ws.openrouter_api_key)
+            except Exception:
+                logger.warning(f"Failed to decrypt workspace OpenRouter key for {workspace_id}")
+
+    # Cloud mode: pre-chat checks
+    if is_cloud() and ws:
+        if ws.credit_balance <= 0:
+            yield ResolutionEvent(type="error", data="Credit balance exhausted")
+            return
+        if conversation_id is None:
+            await check_conversation_cap(ws, db)
+
     if conversation_id is None:
         conversation = await conversation_service.create_conversation(db, workspace_id, chatbot.id, contact_id)
         conversation_id = conversation.id
@@ -100,19 +124,6 @@ async def handle_message(
         message_type="incoming",
     )
 
-    # Load workspace OpenRouter key + base URL if configured
-    openrouter_key: str | None = None
-    openrouter_base_url: str | None = None
-    ws_result = await db.execute(select(Workspace).where(Workspace.id == workspace_id))
-    ws = ws_result.scalar_one_or_none()
-    if ws:
-        openrouter_base_url = ws.openrouter_base_url
-        if ws.openrouter_api_key:
-            try:
-                openrouter_key = decrypt_api_key(ws.openrouter_api_key)
-            except Exception:
-                logger.warning(f"Failed to decrypt workspace OpenRouter key for {workspace_id}")
-
     # Load enabled actions — those with parameters use function calling; others use post-response trigger
     from app.services.action_service import list_enabled_actions
     enabled_actions = await list_enabled_actions(db, workspace_id, chatbot.id)
@@ -121,6 +132,7 @@ async def handle_message(
     rag_result: RAGResult | None = None
     full_response = ""
     inline_action_payloads: list[dict] = []
+    token_usage: dict | None = None
 
     async for item in process_query(
         db, message, chatbot, conversation_id,
@@ -132,8 +144,11 @@ async def handle_message(
             rag_result = item
             continue
         if isinstance(item, dict):
-            # Triggered action payload (client-side) from function calling
-            inline_action_payloads.append(item)
+            if "prompt_tokens" in item:
+                token_usage = item
+            else:
+                # Triggered action payload (client-side) from function calling
+                inline_action_payloads.append(item)
             continue
         full_response += item
         yield ResolutionEvent(type="token", data=item, conversation_id=conversation_id)
@@ -175,6 +190,16 @@ async def handle_message(
     conversation.confidence_avg = confidence_avg
     conversation.ai_participated = True
     await db.flush()
+
+    # Cloud mode: deduct credits based on actual token usage
+    if is_cloud() and ws and token_usage:
+        total_tokens = token_usage.get("prompt_tokens", 0) + token_usage.get("completion_tokens", 0)
+        if total_tokens > 0:
+            cost = estimate_token_cost(chatbot.llm_model, total_tokens, is_byok=ws.is_byok)
+            try:
+                await debit_credits(db, workspace_id, cost, reason=f"chat:{chatbot.llm_model}:{total_tokens}tokens")
+            except ValueError:
+                logger.warning(f"Failed to debit {cost} credits for workspace {workspace_id}")
 
     # Record retrieval log + gap event for intelligence pipeline
     try:
