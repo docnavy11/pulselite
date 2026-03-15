@@ -6,9 +6,12 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from starlette.responses import Response
+
 from app.config import settings
 from app.database import get_db
 from app.dependencies import get_current_user, get_workspace
+from app.services.deployment import require_cloud, is_self_hosted
 from app.models.organizational import Agent, Workspace
 from app.services import billing as billing_service
 from app.services import credits as credits_service
@@ -64,6 +67,7 @@ async def get_usage_breakdown(
     days: int = Query(default=30, ge=1, le=365),
     db: AsyncSession = Depends(get_db),
     current_user: Agent = Depends(get_current_user),
+    _cloud=Depends(require_cloud),
 ):
     """Return token usage and cost breakdown for the workspace over the last N days."""
     since = datetime.now(timezone.utc) - timedelta(days=days)
@@ -151,7 +155,7 @@ async def get_usage_breakdown(
 
 
 @router.get("/billing/plans")
-async def get_billing_plans():
+async def get_billing_plans(_cloud=Depends(require_cloud)):
     return _build_billing_plans()
 
 
@@ -172,6 +176,7 @@ async def create_checkout(
     workspace_id: uuid.UUID = Depends(get_workspace),
     db: AsyncSession = Depends(get_db),
     current_user: Agent = Depends(get_current_user),
+    _cloud=Depends(require_cloud),
 ):
     _validate_return_url(body.success_url)
     _validate_return_url(body.cancel_url)
@@ -190,6 +195,7 @@ async def create_portal(
     workspace_id: uuid.UUID = Depends(get_workspace),
     db: AsyncSession = Depends(get_db),
     current_user: Agent = Depends(get_current_user),
+    _cloud=Depends(require_cloud),
 ):
     _validate_return_url(body.return_url)
     try:
@@ -201,6 +207,9 @@ async def create_portal(
 
 @router.post("/billing/webhook")
 async def stripe_webhook(request: Request, db: AsyncSession = Depends(get_db)):
+    if is_self_hosted():
+        return Response(status_code=200)
+
     import stripe
 
     payload = await request.body()
@@ -220,6 +229,7 @@ async def get_credit_balance(
     workspace_id: uuid.UUID = Depends(get_workspace),
     db: AsyncSession = Depends(get_db),
     current_user: Agent = Depends(get_current_user),
+    _cloud=Depends(require_cloud),
 ):
     from datetime import datetime, timezone
     from sqlalchemy import func as sqlfunc
@@ -248,6 +258,7 @@ async def get_credit_history(
     offset: int = Query(default=0, ge=0, le=100_000_000),
     db: AsyncSession = Depends(get_db),
     current_user: Agent = Depends(get_current_user),
+    _cloud=Depends(require_cloud),
 ):
     entries = await credits_service.get_history(db, workspace_id, limit, offset)
     return [
@@ -274,6 +285,7 @@ async def get_auto_recharge(
     workspace_id: uuid.UUID = Depends(get_workspace),
     db: AsyncSession = Depends(get_db),
     current_user: Agent = Depends(get_current_user),
+    _cloud=Depends(require_cloud),
 ):
     result = await db.execute(
         select(
@@ -296,6 +308,7 @@ async def update_auto_recharge(
     workspace_id: uuid.UUID = Depends(get_workspace),
     db: AsyncSession = Depends(get_db),
     current_user: Agent = Depends(get_current_user),
+    _cloud=Depends(require_cloud),
 ):
     await db.execute(
         update(Workspace)

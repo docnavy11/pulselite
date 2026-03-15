@@ -12,6 +12,7 @@ from app.database import async_session_factory, engine
 from app.models.organizational import Workspace
 from app.services import credits as credits_service
 from app.services.realtime import emit_task_event
+from app.services.deployment import is_self_hosted
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,8 @@ def trigger_auto_recharge(self, workspace_id: str) -> dict:
 
 
 async def _recharge(workspace_id: uuid.UUID, task_id: str) -> dict:
+    if is_self_hosted():
+        return {"status": "skipped", "detail": "Self-hosted mode"}
     await engine.dispose()
     async with async_session_factory() as session:
         try:
