@@ -27,6 +27,7 @@ import CustomizePage from './app/(dashboard)/chatbots/[id]/customize/page'
 import ChatPage from './app/(dashboard)/chatbots/[id]/chat/page'
 import DeployPage from './app/(dashboard)/chatbots/[id]/deploy/page'
 import ArticlesPage from './app/(dashboard)/chatbots/[id]/articles/page'
+import QAPage from './app/(dashboard)/chatbots/[id]/qa/page'
 
 
 // Conversation pages
@@ -51,12 +52,16 @@ import LLMPage from './app/(dashboard)/settings/llm/page'
 import SecurityPage from './app/(dashboard)/settings/security/page'
 import TeamPage from './app/(dashboard)/settings/team/page'
 import WebhooksPage from './app/(dashboard)/settings/webhooks/page'
+import IntelligenceSettingsPage from './app/(dashboard)/settings/intelligence/page'
 
 // Logs page
 import LogsPage from './app/(dashboard)/logs/page'
 
 // Public
 import PublicChatPage from './app/chat/[chatbotId]/page'
+
+// Not Found
+import NotFoundPage from './app/not-found'
 
 export default function App() {
   return (
@@ -89,6 +94,7 @@ export default function App() {
             <Route path="chat" element={<ChatPage />} />
             <Route path="deploy" element={<DeployPage />} />
             <Route path="articles" element={<ArticlesPage />} />
+            <Route path="qa" element={<QAPage />} />
           </Route>
 
           <Route path="/conversations" element={<ConversationsPage />} />
@@ -111,10 +117,14 @@ export default function App() {
           <Route path="/settings/security" element={<SecurityPage />} />
           <Route path="/settings/team" element={<TeamPage />} />
           <Route path="/settings/webhooks" element={<WebhooksPage />} />
+          <Route path="/settings/intelligence" element={<IntelligenceSettingsPage />} />
         </Route>
 
         {/* Public chat widget */}
         <Route path="/chat/:chatbotId" element={<PublicChatPage />} />
+
+        {/* 404 catch-all */}
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </BrowserRouter>
   )

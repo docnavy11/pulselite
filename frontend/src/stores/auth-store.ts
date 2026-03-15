@@ -7,6 +7,7 @@ import {
   getCurrentUser,
   setCurrentUser,
 } from "@/lib/auth";
+import { disconnectSocket } from "@/lib/socket";
 
 interface AuthState {
   user: User | null;
@@ -37,7 +38,11 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   logout: () => {
     clearTokens();
+    disconnectSocket();
     set({ user: null, tokens: null });
+    // Reset other stores asynchronously to avoid circular import issues
+    import("@/stores/workspace-store").then((m) => m.useWorkspaceStore.getState().reset());
+    import("@/stores/chatbot-store").then((m) => m.useChatbotStore.getState().reset());
   },
 
   setUser: (user: User) => {

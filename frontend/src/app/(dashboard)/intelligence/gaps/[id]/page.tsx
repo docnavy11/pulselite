@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Check, X, FileText, MessageSquare } from "lucide-react";
+import { Check, X, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Card, CardContent } from "@/components/ui/Card";
@@ -29,15 +29,12 @@ export default function GapClusterDetailPage() {
   const [loading, setLoading] = useState(true);
   const [approving, setApproving] = useState(false);
   const [dismissing, setDismissing] = useState(false);
-  const [editingDraft, setEditingDraft] = useState(false);
-  const [draftBody, setDraftBody] = useState("");
 
   useEffect(() => {
     if (!workspace) return;
     getGapClusterDetail(workspace.id, clusterId)
       .then((c) => {
         setCluster(c);
-        if (c.draft_article?.body) setDraftBody(c.draft_article.body);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -95,7 +92,7 @@ export default function GapClusterDetailPage() {
       <div className="mb-6">
         <h2 className="text-sm font-semibold text-gray-700 mb-2">Keywords</h2>
         <div className="flex flex-wrap gap-2">
-          {cluster.keywords.map((kw) => (
+          {(cluster.topic_keywords ?? []).map((kw) => (
             <span
               key={kw}
               className="rounded-full bg-gray-100 px-3 py-1 text-sm text-gray-700 border border-gray-200"
@@ -135,91 +132,28 @@ export default function GapClusterDetailPage() {
         </CardContent>
       </Card>
 
-      {/* Draft article */}
-      {(cluster.status === "draft_ready" ||
-        cluster.status === "ai_draft_pending") &&
-      cluster.draft_article ? (
-        <Card className="mb-6">
-          <CardContent className="pt-5 pb-5">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <FileText className="h-4 w-4 text-gray-400" />
-                <h2 className="text-sm font-semibold text-gray-900">
-                  Draft Article
-                </h2>
-              </div>
-              {!editingDraft && (
-                <button
-                  onClick={() => setEditingDraft(true)}
-                  className="text-sm text-primary-500 hover:text-primary-700 font-medium"
-                >
-                  Edit Draft
-                </button>
-              )}
-            </div>
-
-            <h3 className="text-base font-semibold text-gray-900 mb-3">
-              {cluster.draft_article.title}
-            </h3>
-
-            {editingDraft ? (
-              <textarea
-                value={draftBody}
-                onChange={(e) => setDraftBody(e.target.value)}
-                rows={12}
-                className="block w-full rounded-lg border border-gray-300 px-4 py-3 text-sm font-mono leading-relaxed placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 mb-3"
-              />
-            ) : (
-              <div className="rounded-lg bg-gray-50 p-4 text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
-                {cluster.draft_article.body || "No content yet"}
-              </div>
-            )}
-
-            <div className="flex gap-3 mt-4">
-              <Button
-                onClick={handleApprove}
-                loading={approving}
-                size="sm"
-              >
-                <Check className="h-4 w-4 mr-1" />
-                Approve & Publish
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={handleDismiss}
-                loading={dismissing}
-                size="sm"
-              >
-                <X className="h-4 w-4 mr-1" />
-                Dismiss
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      ) : cluster.status === "open" ? (
-        <Card className="mb-6">
-          <CardContent className="flex flex-col items-center justify-center py-10 text-gray-400">
-            <FileText className="h-8 w-8 mb-2" />
-            <p className="text-sm font-medium">No draft article yet</p>
-            {cluster.gap_count >= 3 && (
-              <p className="text-xs mt-1 text-gray-500">
-                A draft will be auto-generated once enough data is collected
-              </p>
-            )}
-            <div className="flex gap-3 mt-4">
-              <Button
-                variant="secondary"
-                onClick={handleDismiss}
-                loading={dismissing}
-                size="sm"
-              >
-                <X className="h-4 w-4 mr-1" />
-                Dismiss
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
+      {/* Actions */}
+      {(cluster.status === "open" || cluster.status === "draft_ready") && (
+        <div className="flex gap-3">
+          <Button
+            onClick={handleApprove}
+            loading={approving}
+            size="sm"
+          >
+            <Check className="h-4 w-4 mr-1" />
+            Approve
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={handleDismiss}
+            loading={dismissing}
+            size="sm"
+          >
+            <X className="h-4 w-4 mr-1" />
+            Dismiss
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

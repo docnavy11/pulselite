@@ -1,4 +1,5 @@
 import logging
+import math
 from functools import lru_cache
 
 from app.models.knowledge import Chunk
@@ -16,6 +17,11 @@ def _get_model():
     return CrossEncoder(MODEL_NAME)
 
 
+def _sigmoid(x: float) -> float:
+    """Convert raw cross-encoder logit to 0-1 probability."""
+    return 1.0 / (1.0 + math.exp(-x))
+
+
 def rerank(query: str, chunks: list[Chunk], top_k: int | None = None) -> list[tuple[Chunk, float]]:
     if not chunks:
         return []
@@ -24,7 +30,7 @@ def rerank(query: str, chunks: list[Chunk], top_k: int | None = None) -> list[tu
     pairs = [(query, chunk.content) for chunk in chunks]
     scores = model.predict(pairs)
 
-    scored = list(zip(chunks, [float(s) for s in scores]))
+    scored = list(zip(chunks, [_sigmoid(float(s)) for s in scores]))
     scored.sort(key=lambda x: x[1], reverse=True)
 
     if top_k:

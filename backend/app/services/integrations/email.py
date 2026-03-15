@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import resend
 
 from app.models.integrations import IntegrationConfig
+from app.services.encryption import decrypt_api_key
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +50,8 @@ def _send_smtp(config: dict, subject: str, html: str, from_email: str, to_email:
     host = config.get("host")
     port = config.get("port", 587)
     username = config.get("username")
-    password = config.get("password")
+    raw_password = config.get("password")
+    password = decrypt_api_key(raw_password) if raw_password else None
 
     if not host:
         return False
@@ -70,10 +72,11 @@ def _send_smtp(config: dict, subject: str, html: str, from_email: str, to_email:
 
 
 def _send_resend(config: dict, subject: str, html: str, from_email: str, to_email: str) -> bool:
-    api_key = config.get("api_key")
-    if not api_key:
+    raw_api_key = config.get("api_key")
+    if not raw_api_key:
         return False
 
+    api_key = decrypt_api_key(raw_api_key)
     resend.api_key = api_key
     resend.Emails.send(
         {

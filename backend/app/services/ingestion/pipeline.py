@@ -20,7 +20,7 @@ from app.services.ingestion.extractors.text_extractor import extract_from_text
 from app.services.ingestion.extractors.sitemap_extractor import extract_urls_from_sitemap
 from app.services.ingestion.extractors.url_extractor import extract_from_url
 from app.services.ingestion.vector_store import delete_by_document, insert_chunks
-from app.services.realtime import emit_to_workspace
+from app.services.realtime import emit_to_workspace, write_document_active, clear_document_active
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +35,10 @@ async def run_ingestion(db: AsyncSession, document_id: uuid.UUID) -> None:
     document.status = "processing"
     await db.flush()
 
+    await write_document_active(
+        str(document.workspace_id), str(document.id),
+        document.title or "", str(document.knowledge_base_id), "processing",
+    )
     await emit_to_workspace(str(document.workspace_id), "document:status_changed", {
         "document_id": str(document.id),
         "knowledge_base_id": str(document.knowledge_base_id),
@@ -481,6 +485,7 @@ async def run_ingestion(db: AsyncSession, document_id: uuid.UUID) -> None:
         document.ingestion_steps = steps
         await db.commit()
 
+        await clear_document_active(str(document.workspace_id), str(document.id))
         await emit_to_workspace(str(document.workspace_id), "document:status_changed", {
             "document_id": str(document.id),
             "knowledge_base_id": str(document.knowledge_base_id),
@@ -541,6 +546,7 @@ async def run_ingestion(db: AsyncSession, document_id: uuid.UUID) -> None:
             document.ingestion_steps = steps
             await db.flush()
 
+            await clear_document_active(str(document.workspace_id), str(document.id))
             await emit_to_workspace(str(document.workspace_id), "document:status_changed", {
                 "document_id": str(document.id),
                 "knowledge_base_id": str(document.knowledge_base_id),
@@ -584,6 +590,7 @@ async def run_ingestion(db: AsyncSession, document_id: uuid.UUID) -> None:
         document.ingestion_steps = steps
         await db.commit()
 
+        await clear_document_active(str(document.workspace_id), str(document.id))
         await emit_to_workspace(str(document.workspace_id), "document:status_changed", {
             "document_id": str(document.id),
             "knowledge_base_id": str(document.knowledge_base_id),
@@ -606,6 +613,7 @@ async def run_ingestion(db: AsyncSession, document_id: uuid.UUID) -> None:
         document.ingestion_steps = steps
         await db.commit()
 
+        await clear_document_active(str(document.workspace_id), str(document.id))
         await emit_to_workspace(str(document.workspace_id), "document:status_changed", {
             "document_id": str(document.id),
             "knowledge_base_id": str(document.knowledge_base_id),
@@ -635,6 +643,7 @@ async def run_ingestion(db: AsyncSession, document_id: uuid.UUID) -> None:
         document.ingestion_steps = steps
         await db.commit()
 
+        await clear_document_active(str(document.workspace_id), str(document.id))
         await emit_to_workspace(str(document.workspace_id), "document:status_changed", {
             "document_id": str(document.id),
             "knowledge_base_id": str(document.knowledge_base_id),
@@ -651,6 +660,7 @@ async def run_ingestion(db: AsyncSession, document_id: uuid.UUID) -> None:
     document.ingestion_steps = steps
     await db.flush()
 
+    await clear_document_active(str(document.workspace_id), str(document.id))
     await emit_to_workspace(str(document.workspace_id), "document:status_changed", {
         "document_id": str(document.id),
         "knowledge_base_id": str(document.knowledge_base_id),

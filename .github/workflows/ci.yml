@@ -14,6 +14,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Create .env
         run: cp .env.example .env
 
@@ -21,6 +24,9 @@ jobs:
         run: |
           docker compose up -d backend
           sleep 15
+        env:
+          DOCKER_BUILDKIT: 1
+          COMPOSE_DOCKER_CLI_BUILD: 1
 
       - name: Ruff lint
         run: docker compose exec -T backend ruff check app/
@@ -49,6 +55,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ hashFiles('backend/pyproject.toml', 'frontend/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
       - name: Create .env
         run: cp .env.example .env
 
@@ -56,6 +73,9 @@ jobs:
         run: |
           docker compose up -d
           sleep 20
+        env:
+          DOCKER_BUILDKIT: 1
+          COMPOSE_DOCKER_CLI_BUILD: 1
 
       - name: Wait for postgres
         run: |
@@ -105,6 +125,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ hashFiles('backend/pyproject.toml', 'frontend/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
       - name: Create .env
         run: cp .env.example .env
 
@@ -112,6 +143,9 @@ jobs:
         run: |
           docker compose up -d
           sleep 25
+        env:
+          DOCKER_BUILDKIT: 1
+          COMPOSE_DOCKER_CLI_BUILD: 1
 
       - name: Wait for postgres
         run: |
@@ -165,6 +199,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ hashFiles('backend/pyproject.toml', 'frontend/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
       - name: Create .env
         run: cp .env.example .env
 
@@ -172,6 +217,9 @@ jobs:
         run: |
           docker compose up -d
           sleep 20
+        env:
+          DOCKER_BUILDKIT: 1
+          COMPOSE_DOCKER_CLI_BUILD: 1
 
       - name: Wait for postgres + migrate + seed
         run: |

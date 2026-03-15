@@ -15,6 +15,7 @@ import {
   IconActions,
   IconAppearance,
   IconTest,
+  IconQA,
   IconPublish,
 } from "@/components/icons/NavIcons";
 
@@ -27,6 +28,7 @@ const TABS = [
   { label: "Actions",    segment: "actions",   Icon: IconActions },
   { label: "Appearance", segment: "customize", Icon: IconAppearance },
   { label: "Test",       segment: "chat",      Icon: IconTest },
+  { label: "Q&A",        segment: "qa",        Icon: IconQA },
   { label: "Publish",    segment: "deploy",    Icon: IconPublish },
 ] as const;
 

@@ -16,7 +16,7 @@ import httpx
 
 from app.models.actions import ActionEvent, ChatbotAction
 from app.services.encryption import decrypt_api_key
-from app.services.llm import get_llm_client
+from app.services.llm import get_internal_model, get_llm_client
 
 logger = logging.getLogger(__name__)
 
@@ -29,8 +29,6 @@ def compute_signature(secret: str, payload: dict) -> str:
     body = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return hmac_lib.new(secret.encode(), body.encode(), hashlib.sha256).hexdigest()
 
-# Fast, cheap model used only for yes/no trigger matching
-_TRIGGER_MODEL = "openai/gpt-4o-mini"
 
 
 def build_client_payload(action: ChatbotAction) -> dict[str, Any]:
@@ -43,7 +41,7 @@ def build_client_payload(action: ChatbotAction) -> dict[str, Any]:
     }
 
 
-async def _ask_llm_trigger(conversation_text: str, trigger_description: str) -> bool:
+async def _ask_llm_trigger(conversation_text: str, trigger_description: str, model: str) -> bool:
     """Ask a fast LLM whether the action should fire. Returns True/False."""
     client = get_llm_client("openrouter")
     prompt = (
@@ -55,7 +53,7 @@ async def _ask_llm_trigger(conversation_text: str, trigger_description: str) -> 
     try:
         answer = await client.generate(
             messages=[{"role": "user", "content": prompt}],
-            model=_TRIGGER_MODEL,
+            model=model,
             temperature=0.0,
             max_tokens=5,
         )
@@ -275,10 +273,11 @@ async def run_actions(
         "response": bot_response,
     }
 
+    internal_model = await get_internal_model(db_session, workspace_id)
     client_payloads: list[dict[str, Any]] = []
 
     for action in actions:
-        triggered = await _ask_llm_trigger(conversation_text, action.trigger_description)
+        triggered = await _ask_llm_trigger(conversation_text, action.trigger_description, model=internal_model)
         if not triggered:
             continue
 

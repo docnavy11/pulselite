@@ -156,6 +156,7 @@ async def list_conversations(
     status: str | None = Query(None),
     chatbot_id: uuid.UUID | None = Query(None),
     outcome: str | None = Query(None),
+    topic: str | None = Query(None),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
     date_from: str | None = Query(None),
@@ -187,6 +188,7 @@ async def list_conversations(
         offset=offset,
         date_from=date_from,
         date_to=date_to,
+        topic=topic,
     )
 
 

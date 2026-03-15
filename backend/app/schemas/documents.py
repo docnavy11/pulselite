@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Literal, Optional
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 
 class DocumentCreate(BaseModel):
@@ -13,10 +13,10 @@ class DocumentCreate(BaseModel):
     title: str | None = None
     sync_frequency: str = "weekly"
 
-    @field_validator("source_type")
+    @field_validator("source_type", "source_url", "raw_content", "title")
     @classmethod
-    def no_null_bytes(cls, v: str) -> str:
-        if "\x00" in v:
+    def no_null_bytes(cls, v: str | None) -> str | None:
+        if v is not None and "\x00" in v:
             raise ValueError("must not contain null bytes")
         return v
 
@@ -32,7 +32,7 @@ class DocumentResponse(BaseModel):
     knowledge_base_id: uuid.UUID
     source_type: str
     source_url: str | None
-    file_path: str | None
+    has_file: bool = False
     title: str | None
     status: str
     chunk_count: int
@@ -45,6 +45,18 @@ class DocumentResponse(BaseModel):
     ingestion_steps: Optional[list] = None
 
     model_config = {"from_attributes": True}
+
+    @model_validator(mode="before")
+    @classmethod
+    def compute_has_file(cls, data):
+        if hasattr(data, "file_path"):
+            # ORM object
+            data_dict = {k: getattr(data, k) for k in cls.model_fields if hasattr(data, k)}
+            data_dict["has_file"] = bool(getattr(data, "file_path", None))
+            return data_dict
+        if isinstance(data, dict) and "file_path" in data:
+            data["has_file"] = bool(data.pop("file_path", None))
+        return data
 
 
 class ChunkResponse(BaseModel):

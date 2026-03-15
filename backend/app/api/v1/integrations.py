@@ -14,7 +14,7 @@ from app.dependencies import get_current_user, get_workspace, get_workspace_admi
 from app.models.integrations import IntegrationConfig
 from app.models.organizational import Agent
 
-SENSITIVE_FIELDS = {"webhook_url", "api_key", "access_token", "api_token", "client_secret", "secret_key"}
+SENSITIVE_FIELDS = {"webhook_url", "api_key", "access_token", "api_token", "client_secret", "secret_key", "password"}
 
 router = APIRouter(prefix="/workspaces/{workspace_id}/integrations", tags=["integrations"])
 
@@ -179,7 +179,8 @@ async def test_integration(
                         if config.config.get("tls", True):
                             server.starttls()
                         username = config.config.get("username")
-                        password = config.config.get("password")
+                        raw_password = config.config.get("password")
+                        password = decrypt_api_key(raw_password) if raw_password else None
                         if username and password:
                             server.login(username, password)
                         success = True

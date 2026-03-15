@@ -6,7 +6,7 @@ from pydantic import BaseModel, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import PLAN_CHAR_LIMITS
+from app.config import PLAN_CHAR_LIMITS, settings as app_settings
 from app.database import get_db
 from app.dependencies import get_current_user, get_workspace
 from app.models.organizational import Agent, Workspace
@@ -35,14 +35,25 @@ class DataRetentionUpdate(BaseModel):
         return v
 
 
+class WorkspaceSettingsUpdate(BaseModel):
+    name: str | None = None
+    timezone: str | None = None
+
+
 class LLMSettingsResponse(BaseModel):
     openrouter_api_key_set: bool
+    openrouter_base_url: str | None = None
+    effective_base_url: str | None = None
+    effective_api_key_set: bool = False
     allowed_models: list[str]
+    internal_model: str | None = None
 
 
 class LLMSettingsUpdate(BaseModel):
     openrouter_api_key: str | None = None
+    openrouter_base_url: str | None = None
     allowed_models: list[str] = []
+    internal_model: str | None = None
 
 
 @router.post("", response_model=WorkspaceResponse)
@@ -76,6 +87,24 @@ async def get_workspace_detail(
     return await workspace_service.get_workspace(db, ws_uuid, current_user.id)
 
 
+@router.patch("/{workspace_id}", response_model=WorkspaceResponse)
+async def update_workspace_settings(
+    body: WorkspaceSettingsUpdate,
+    workspace_id: _uuid.UUID = Depends(get_workspace),
+    db: AsyncSession = Depends(get_db),
+    current_user: Agent = Depends(get_current_user),
+):
+    result = await db.execute(select(Workspace).where(Workspace.id == workspace_id))
+    ws = result.scalar_one()
+    if body.name is not None:
+        ws.name = body.name.strip()
+    if body.timezone is not None:
+        ws.timezone = body.timezone
+    await db.commit()
+    await db.refresh(ws)
+    return await workspace_service.get_workspace(db, workspace_id, current_user.id)
+
+
 @router.get("/{workspace_id}/llm-settings", response_model=LLMSettingsResponse)
 async def get_llm_settings(
     workspace_id: _uuid.UUID = Depends(get_workspace),
@@ -85,10 +114,7 @@ async def get_llm_settings(
     workspace = result.scalar_one_or_none()
     if workspace is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found")
-    return LLMSettingsResponse(
-        openrouter_api_key_set=bool(workspace.openrouter_api_key),
-        allowed_models=workspace.allowed_models or [],
-    )
+    return _build_llm_response(workspace)
 
 
 @router.put("/{workspace_id}/llm-settings", response_model=LLMSettingsResponse)
@@ -107,14 +133,28 @@ async def update_llm_settings(
             workspace.openrouter_api_key = None
         else:
             workspace.openrouter_api_key = encrypt_api_key(body.openrouter_api_key)
+    if body.openrouter_base_url is not None:
+        workspace.openrouter_base_url = body.openrouter_base_url.strip() or None
     if len(body.allowed_models) > 100:
         raise HTTPException(status_code=400, detail="allowed_models may not exceed 100 items")
     workspace.allowed_models = body.allowed_models
+    if body.internal_model is not None:
+        workspace.internal_model = body.internal_model.strip() or None
     await db.commit()
     await db.refresh(workspace)
+    return _build_llm_response(workspace)
+
+
+def _build_llm_response(workspace: Workspace) -> LLMSettingsResponse:
+    effective_base = workspace.openrouter_base_url or app_settings.AI_BASE_URL or None
+    effective_key = bool(workspace.openrouter_api_key or app_settings.AI_API_KEY)
     return LLMSettingsResponse(
         openrouter_api_key_set=bool(workspace.openrouter_api_key),
+        openrouter_base_url=workspace.openrouter_base_url,
+        effective_base_url=effective_base,
+        effective_api_key_set=effective_key,
         allowed_models=workspace.allowed_models or [],
+        internal_model=workspace.internal_model,
     )
 
 
@@ -127,16 +167,23 @@ async def list_openrouter_models(
     workspace = result.scalar_one_or_none()
     if workspace is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found")
-    if not workspace.openrouter_api_key:
-        raise HTTPException(status_code=400, detail="No OpenRouter API key configured for this workspace")
-    try:
-        api_key = decrypt_api_key(workspace.openrouter_api_key)
-    except Exception:
-        raise HTTPException(status_code=500, detail="Failed to decrypt OpenRouter API key")
+    # Resolve API key: workspace override → AI_API_KEY env var
+    api_key: str | None = None
+    if workspace.openrouter_api_key:
+        try:
+            api_key = decrypt_api_key(workspace.openrouter_api_key)
+        except Exception:
+            raise HTTPException(status_code=500, detail="Failed to decrypt API key")
+    else:
+        api_key = app_settings.AI_API_KEY
 
+    if not api_key:
+        raise HTTPException(status_code=400, detail="No API key configured")
+
+    base_url = (workspace.openrouter_base_url or app_settings.AI_BASE_URL).rstrip("/")
     async with httpx.AsyncClient(timeout=15.0) as client:
         resp = await client.get(
-            "https://openrouter.ai/api/v1/models",
+            f"{base_url}/models",
             headers={"Authorization": f"Bearer {api_key}"},
         )
     if resp.status_code != 200:

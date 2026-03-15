@@ -11,10 +11,13 @@ def _count_tokens(text: str, encoding: tiktoken.Encoding) -> int:
     return len(encoding.encode(text))
 
 
+MIN_TOKENS = 64
+
+
 def chunk_markdown(text: str) -> list[dict]:
     encoding = tiktoken.encoding_for_model("text-embedding-3-small")
     sections = _split_by_headings(text)
-    chunks = []
+    raw_chunks = []
 
     for section in sections:
         heading_path = section["heading_path"]
@@ -24,7 +27,7 @@ def chunk_markdown(text: str) -> list[dict]:
 
         token_count = _count_tokens(content, encoding)
         if token_count <= MAX_TOKENS:
-            chunks.append(
+            raw_chunks.append(
                 {
                     "content": content,
                     "heading_path": heading_path,
@@ -34,7 +37,7 @@ def chunk_markdown(text: str) -> list[dict]:
         else:
             sub_chunks = _split_large_section(content, encoding)
             for sc in sub_chunks:
-                chunks.append(
+                raw_chunks.append(
                     {
                         "content": sc["content"],
                         "heading_path": heading_path,
@@ -42,7 +45,67 @@ def chunk_markdown(text: str) -> list[dict]:
                     }
                 )
 
-    return chunks
+    return _merge_small_chunks(raw_chunks, encoding)
+
+
+def _merge_small_chunks(chunks: list[dict], encoding: tiktoken.Encoding) -> list[dict]:
+    """Merge consecutive small chunks until they reach TARGET_TOKENS.
+
+    A chunk is considered small if it's below MIN_TOKENS.  When merging,
+    the heading_path of the first chunk in the group is kept.
+    """
+    if not chunks:
+        return []
+
+    merged = []
+    buf_parts: list[str] = []
+    buf_heading: str | None = None
+    buf_tokens = 0
+
+    for chunk in chunks:
+        is_small = chunk["token_count"] < MIN_TOKENS
+
+        # If current chunk is large enough on its own, flush buffer first
+        if not is_small:
+            if buf_parts:
+                content = "\n\n".join(buf_parts)
+                merged.append({
+                    "content": content,
+                    "heading_path": buf_heading,
+                    "token_count": _count_tokens(content, encoding),
+                })
+                buf_parts = []
+                buf_tokens = 0
+                buf_heading = None
+            merged.append(chunk)
+            continue
+
+        # Small chunk — try to accumulate
+        if buf_tokens + chunk["token_count"] > TARGET_TOKENS and buf_parts:
+            content = "\n\n".join(buf_parts)
+            merged.append({
+                "content": content,
+                "heading_path": buf_heading,
+                "token_count": _count_tokens(content, encoding),
+            })
+            buf_parts = []
+            buf_tokens = 0
+            buf_heading = None
+
+        if not buf_parts:
+            buf_heading = chunk["heading_path"]
+        buf_parts.append(chunk["content"])
+        buf_tokens += chunk["token_count"]
+
+    if buf_parts:
+        content = "\n\n".join(buf_parts)
+        merged.append({
+            "content": content,
+            "heading_path": buf_heading,
+            "token_count": _count_tokens(content, encoding),
+        })
+
+    return merged
 
 
 def _split_by_headings(text: str) -> list[dict]:

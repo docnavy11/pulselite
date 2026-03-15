@@ -3,7 +3,7 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## What this project is
-Dead-simple website chatbot — paste a URL, the system crawls it, auto-configures the chatbot, and returns a `<script>` tag. FastAPI backend + Next.js 15 frontend + Celery workers. Multi-tenant SaaS — every API route is workspace-scoped.
+Dead-simple website chatbot — paste a URL, the system crawls it, auto-configures the chatbot, and returns a `<script>` tag. FastAPI backend + React (Vite + react-router-dom) frontend + Celery workers. Multi-tenant SaaS — every API route is workspace-scoped.
 
 ## Running the project
 ```bash
@@ -19,6 +19,20 @@ make seed        # seed dev data
 - Dev chatbot ID: `a8dfa0e8-b077-4bcc-9d2a-00bdf3e4f108`
 
 After any Python change: `docker compose restart backend`
+
+### Database migrations
+```bash
+make migrate                           # run pending migrations (alembic upgrade head)
+make migrate-create msg="description"  # create new migration (alembic revision --autogenerate)
+make reset-db                          # full reset: destroy volumes, recreate, migrate, seed
+```
+
+### Useful shell access
+```bash
+make shell-backend    # bash into backend container
+make shell-db         # psql into postgres
+make logs             # follow Docker logs
+```
 
 ## Testing
 
@@ -48,6 +62,12 @@ make perf-all                # k6 smoke + auth + widget scenarios
 # Run a single test
 docker compose exec backend pytest tests/unit/test_auth_service.py -v
 docker compose exec backend pytest tests/ -k "test_name" -v
+```
+
+```bash
+# Linting
+make lint                    # ruff check + format check
+make format                  # ruff format (auto-fix)
 ```
 
 Coverage config (workers excluded) is in `backend/pyproject.toml` under `[tool.coverage.run]`.
@@ -109,20 +129,37 @@ Entry point: `backend/app/services/resolution_service.py`
 
 **LLM clients**: always use `get_llm_client()` from `app.services.llm`. The app is configured with `OPENROUTER_API_KEY` — use `OpenRouterLLMClient` for internal services (e.g. autoconfig). Never instantiate `AnthropicLLMClient` or `OpenAILLMClient` directly unless the user supplies their own key.
 
+### Real-time (Socket.IO)
+Backend: `python-socketio` server mounted as combined ASGI app in `main.py`. Redis adapter (`AsyncRedisManager`) enables events from both the API process and Celery workers.
+
+- `backend/app/services/realtime.py` — `emit_to_workspace(workspace_id, event, data)` helper. Write-only Redis manager, lazy-initialized, gracefully handles Redis unavailability.
+- Frontend: `frontend/src/lib/socket.ts` — singleton client with JWT auth, auto-joins workspace room. `useSocketEvent<T>(event, handler)` React hook for subscribing to events.
+- Events: `crawl:progress`, `crawl:completed`, `document:status_changed`, `chatbot:status_changed`, `workspace:usage_updated`
+- Workspace rooms keyed by `workspace:{id}` for multi-tenant isolation.
+
+**Pattern for emitting from workers**: import `emit_to_workspace` from `app.services.realtime` — it creates its own write-only Redis manager, no access to the Socket.IO server process needed.
+
 ### Ingestion
-Celery task `ingest_document` → extractors in `backend/app/services/ingestion/extractors/`. Document status: `pending → processing → indexed` (or `failed`). Crawled pages use `source_type="text"` with `raw_content` pre-populated to skip re-fetching.
+Celery task `ingest_document` → extractors in `backend/app/services/ingestion/extractors/` → chunkers in `backend/app/services/ingestion/chunkers/`. Document status: `pending → processing → indexed` (or `failed`). Crawled pages use `source_type="text"` with `raw_content` pre-populated to skip re-fetching.
+
+**Chunkers**: `markdown_chunker.py` splits by headings and merges small sections (< 64 tokens) up to TARGET_TOKENS (512). `qa_chunker.py` groups Q&A pairs up to TARGET_TOKENS. Both produce `{content, heading_path, token_count}` dicts.
+
+**Autoconfig completion**: when the last document finishes ingesting, `ingest_document` atomically transitions the KB status from `crawling` → `configuring` and fires `run_autoconfig_for_chatbot.delay()`. Only one worker wins the atomic UPDATE — prevents duplicate autoconfig runs.
 
 ### UUIDPrimaryKeyMixin gotcha
 `server_default=text("gen_random_uuid()")` is DB-side only. SQLAlchemy will not populate `obj.id` in Python before the INSERT unless you explicitly pass `id=uuid.uuid4()`. Always pass an explicit `id=uuid.uuid4()` when creating model instances in service code; rely on the DB default only for cases where you immediately flush/commit and then refresh.
 
 ## Frontend architecture
 
+**Important**: despite the `app/(dashboard)/` directory structure (which mimics Next.js conventions), routing is **react-router-dom** via `frontend/src/App.tsx`. This is a Vite-based React SPA, not a Next.js app.
+
 ### API layer
 All API calls live in `frontend/src/lib/api-functions.ts`. Every function takes `workspaceId` as first argument. `ApiClient` in `frontend/src/lib/api.ts` handles auth headers, 401 retry with token refresh.
 
-### State
-- `useWorkspaceStore` (Zustand) — current workspace + workspace list. `ProtectedRoute` populates it on mount by calling `GET /api/v1/workspaces` and setting `currentWorkspace` to the first result. Pages access `useWorkspaceStore(s => s.currentWorkspace)` directly.
-- `useAuthStore` (Zustand) — user + tokens, persisted to localStorage via `frontend/src/lib/auth.ts`.
+### State (Zustand stores in `frontend/src/stores/`)
+- `useWorkspaceStore` — current workspace + workspace list. `ProtectedRoute` populates it on mount by calling `GET /api/v1/workspaces` and setting `currentWorkspace` to the first result. Pages access `useWorkspaceStore(s => s.currentWorkspace)` directly.
+- `useAuthStore` — user + tokens, persisted to localStorage via `frontend/src/lib/auth.ts`.
+- `useChatbotStore` — current chatbot (detail view) + chatbots list. Keeps `currentChatbot` and `chatbots[]` in sync when patching.
 
 ### Response shape transforms
 Several backend responses differ from frontend types — transforms happen inside `api-functions.ts`:
@@ -136,9 +173,10 @@ Several backend responses differ from frontend types — transforms happen insid
 
 ### Adding a new page
 1. `frontend/src/app/(dashboard)/your-route/page.tsx`
-2. Sidebar link: `frontend/src/components/layout/Sidebar.tsx`
-3. API function: `frontend/src/lib/api-functions.ts`
-4. Types: `frontend/src/lib/types.ts`
+2. Route in `frontend/src/App.tsx` (react-router-dom `<Route>`)
+3. Sidebar link: `frontend/src/components/layout/Sidebar.tsx`
+4. API function: `frontend/src/lib/api-functions.ts`
+5. Types: `frontend/src/lib/types.ts`
 
 ### Testing (frontend)
 - Unit tests: `frontend/src/test/` — Vitest + MSW v2 (`msw/node` setupServer)

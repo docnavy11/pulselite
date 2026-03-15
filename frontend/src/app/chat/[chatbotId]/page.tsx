@@ -44,6 +44,7 @@ export default function PublicChatPage() {
   const [leadSubmitted, setLeadSubmitted] = useState(false);
   const [leadFields, setLeadFields] = useState<Record<string, string>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const sessionId = useRef(getSessionId(chatbotId));
 
@@ -138,6 +139,7 @@ export default function PublicChatPage() {
       );
     } finally {
       setStreaming(false);
+      setTimeout(() => inputRef.current?.focus(), 0);
     }
   }
 
@@ -333,6 +335,7 @@ export default function PublicChatPage() {
       <div className="border-t border-gray-200 bg-white px-4 py-3">
         <div className="flex gap-2 max-w-3xl mx-auto">
           <input
+            ref={inputRef}
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -350,6 +353,7 @@ export default function PublicChatPage() {
               } as React.CSSProperties
             }
             disabled={streaming}
+            autoFocus
           />
           <button
             onClick={() => handleSend()}

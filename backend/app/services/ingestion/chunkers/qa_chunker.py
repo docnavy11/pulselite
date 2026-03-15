@@ -2,22 +2,45 @@ import re
 
 import tiktoken
 
+TARGET_TOKENS = 512
+
 
 def chunk_qa(text: str) -> list[dict]:
     encoding = tiktoken.encoding_for_model("text-embedding-3-small")
     pairs = _parse_qa_pairs(text)
+
+    # Group small Q&A pairs into chunks up to TARGET_TOKENS.
+    # Each pair stays atomic — never split across chunks.
     chunks = []
+    current_parts: list[str] = []
+    current_tokens = 0
 
     for pair in pairs:
-        content = f"Q: {pair['question']}\nA: {pair['answer']}"
-        token_count = len(encoding.encode(content))
-        chunks.append(
-            {
+        formatted = f"Q: {pair['question']}\nA: {pair['answer']}"
+        pair_tokens = len(encoding.encode(formatted))
+
+        # If adding this pair would exceed target and we already have content, flush
+        if current_tokens + pair_tokens > TARGET_TOKENS and current_parts:
+            content = "\n\n".join(current_parts)
+            chunks.append({
                 "content": content,
                 "heading_path": None,
-                "token_count": token_count,
-            }
-        )
+                "token_count": len(encoding.encode(content)),
+            })
+            current_parts = []
+            current_tokens = 0
+
+        current_parts.append(formatted)
+        current_tokens += pair_tokens
+
+    # Flush remaining
+    if current_parts:
+        content = "\n\n".join(current_parts)
+        chunks.append({
+            "content": content,
+            "heading_path": None,
+            "token_count": len(encoding.encode(content)),
+        })
 
     return chunks
 

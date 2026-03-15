@@ -13,6 +13,7 @@ interface ChatbotState {
   setChatbots: (chatbots: Chatbot[]) => void;
   patchChatbotInList: (id: string, partial: Partial<Chatbot>) => void;
   removeChatbotFromList: (id: string) => void;
+  reset: () => void;
 }
 
 export const useChatbotStore = create<ChatbotState>((set) => ({
@@ -55,4 +56,6 @@ export const useChatbotStore = create<ChatbotState>((set) => ({
       chatbots: s.chatbots.filter((c) => c.id !== id),
       currentChatbot: s.currentChatbot?.id === id ? null : s.currentChatbot,
     })),
+
+  reset: () => set({ currentChatbot: null, chatbots: [] }),
 }));

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card, CardContent } from "@/components/ui/Card";
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import { requestDataExport, deleteWorkspace } from "@/lib/api-functions";
+import { requestDataExport, deleteWorkspace, updateWorkspace } from "@/lib/api-functions";
 import { useCopilot } from "@/components/copilot/CopilotProvider";
 
 export default function SettingsPage() {
@@ -20,10 +20,26 @@ export default function SettingsPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [workspaceName, setWorkspaceName] = useState(workspace?.name || "");
+  const [timezone, setTimezone] = useState(workspace?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (workspace?.name) setWorkspaceName(workspace.name);
-  }, [workspace?.name]);
+    if (workspace?.timezone) setTimezone(workspace.timezone);
+  }, [workspace?.name, workspace?.timezone]);
+
+  async function handleSaveSettings() {
+    if (!workspace) return;
+    setSaving(true);
+    try {
+      const updated = await updateWorkspace(workspace.id, { name: workspaceName, timezone });
+      useWorkspaceStore.getState().setCurrentWorkspace(updated);
+    } catch {
+      // handle error
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function handleExport() {
     if (!workspace) return;
@@ -67,7 +83,8 @@ export default function SettingsPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Timezone</label>
                 <select
-                  defaultValue={Intl.DateTimeFormat().resolvedOptions().timeZone}
+                  value={timezone}
+                  onChange={(e) => setTimezone(e.target.value)}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                 >
                   {Intl.supportedValuesOf("timeZone").map((tz) => {
@@ -82,7 +99,7 @@ export default function SettingsPage() {
                   })}
                 </select>
               </div>
-              <Button size="sm" onClick={() => {}}>Save</Button>
+              <Button size="sm" onClick={handleSaveSettings} loading={saving}>Save</Button>
             </CardContent>
           </Card>
 

@@ -14,7 +14,15 @@ import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { useCopilot } from "@/components/copilot/CopilotProvider";
 import { SkeletonCard } from "@/components/ui/Skeleton";
-import { getDashboardData, getChatbots, getSentimentTrends, getGapClusters } from "@/lib/api-functions";
+import {
+  getDashboardData,
+  getChatbots,
+  getSentimentTrends,
+  getGapClusters,
+  triggerAnalyzeAll,
+  triggerSentimentTrends,
+  triggerClusterGaps,
+} from "@/lib/api-functions";
 import { DashboardData, Chatbot, SentimentData, GapCluster } from "@/lib/types";
 
 function getGreeting(name: string): string {
@@ -64,6 +72,86 @@ function SentimentLabel({ score }: { score: number }) {
   if (score >= 0.3) return <span className="text-green-600 font-semibold">Positive</span>;
   if (score <= -0.3) return <span className="text-red-500 font-semibold">Negative</span>;
   return <span className="text-gray-500 font-semibold">Neutral</span>;
+}
+
+function DevToolsPanel({ workspaceId }: { workspaceId?: string }) {
+  const [results, setResults] = useState<Record<string, string>>({});
+  const [running, setRunning] = useState<Record<string, boolean>>({});
+
+  if (!workspaceId) return null;
+
+  const actions = [
+    {
+      key: "analyze",
+      label: "Analyze all conversations",
+      description: "Run LLM analysis on all unanalyzed conversations",
+      action: async () => {
+        const res = await triggerAnalyzeAll(workspaceId);
+        return `Queued ${res.conversations_queued} conversations`;
+      },
+    },
+    {
+      key: "sentiment",
+      label: "Compute sentiment trends",
+      description: "Aggregate sentiment scores across all workspaces",
+      action: async () => {
+        await triggerSentimentTrends(workspaceId);
+        return "Dispatched";
+      },
+    },
+    {
+      key: "gaps",
+      label: "Cluster gap events",
+      description: "Run BERTopic clustering on unclustered gap events",
+      action: async () => {
+        await triggerClusterGaps(workspaceId);
+        return "Dispatched";
+      },
+    },
+  ];
+
+  const run = async (key: string, action: () => Promise<string>) => {
+    setRunning((prev) => ({ ...prev, [key]: true }));
+    setResults((prev) => ({ ...prev, [key]: "" }));
+    try {
+      const msg = await action();
+      setResults((prev) => ({ ...prev, [key]: msg }));
+    } catch (e) {
+      setResults((prev) => ({ ...prev, [key]: `Error: ${e instanceof Error ? e.message : "unknown"}` }));
+    } finally {
+      setRunning((prev) => ({ ...prev, [key]: false }));
+    }
+  };
+
+  return (
+    <div className="bg-white border border-dashed border-amber-300 rounded-xl p-5 mb-6">
+      <div className="flex items-center gap-2 mb-4">
+        <div className="w-2 h-2 rounded-full bg-amber-400" />
+        <h2 className="text-[12px] font-semibold text-amber-600 uppercase tracking-wide">
+          Dev Tools — Intelligence Pipeline
+        </h2>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {actions.map(({ key, label, description, action }) => (
+          <div key={key} className="flex flex-col gap-2">
+            <button
+              onClick={() => run(key, action)}
+              disabled={running[key]}
+              className="px-4 py-2.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 rounded-lg text-[13px] font-semibold transition-colors disabled:opacity-50 disabled:cursor-wait"
+            >
+              {running[key] ? "Running..." : label}
+            </button>
+            <p className="text-[11px] text-gray-400 px-1">{description}</p>
+            {results[key] && (
+              <p className={`text-[11px] px-1 font-medium ${results[key].startsWith("Error") ? "text-red-500" : "text-green-600"}`}>
+                {results[key]}
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function DashboardPage() {
@@ -373,8 +461,19 @@ export default function DashboardPage() {
               {data?.top_topics && data.top_topics.length > 0 ? (
                 <ul className="space-y-2">
                   {data.top_topics.map((t) => (
-                    <li key={t.topic} className="flex items-center justify-between gap-3">
-                      <span className="text-[13px] text-gray-800 truncate">{t.topic}</span>
+                    <li
+                      key={t.topic}
+                      className="flex items-center justify-between gap-3 cursor-pointer rounded-lg px-2 py-1.5 -mx-2 hover:bg-gray-50 transition-colors"
+                      onClick={() => navigate(`/conversations?topic=${encodeURIComponent(t.topic)}`)}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <span className="text-[13px] font-medium text-gray-800 truncate block">{t.topic}</span>
+                        {t.example_query && (
+                          <span className="text-[11px] text-gray-400 truncate block">
+                            e.g. &ldquo;{t.example_query}&rdquo;
+                          </span>
+                        )}
+                      </div>
                       <span className="shrink-0 text-[11px] font-semibold bg-green-50 text-green-700 px-2 py-0.5 rounded-full">
                         {t.total_count}×
                       </span>
@@ -480,6 +579,9 @@ export default function DashboardPage() {
             </button>
           </div>
         )}
+
+        {/* Dev Tools — manual intelligence triggers */}
+        {!loading && <DevToolsPanel workspaceId={workspace?.id} />}
       </div>
     </div>
   );

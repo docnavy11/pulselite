@@ -286,7 +286,7 @@ async def update_intelligence_config(
     if body.report_sections is not None:
         config["report_sections"] = body.report_sections
     ws.intelligence_config = config
-    await db.flush()
+    await db.commit()
     return {
         "auto_analyze": config.get("auto_analyze", True),
         "sentiment_trends": config.get("sentiment_trends", True),

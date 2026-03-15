@@ -69,7 +69,7 @@ export default function IntegrationsPage() {
   const [searchParams] = useSearchParams();
 
   useEffect(() => {
-    if (searchParams.get("notion_connected") === "1") {
+    if (searchParams.get("connected") === "notion") {
       setNotionConnectedBanner(true);
       const timer = setTimeout(() => setNotionConnectedBanner(false), 5000);
       return () => clearTimeout(timer);
@@ -124,14 +124,14 @@ export default function IntegrationsPage() {
     if (!workspace) return;
     setSaving(true);
     try {
-      const updated = await updateIntegration(
+      await updateIntegration(
         workspace.id,
-        integration.id,
-        config,
+        integration.service,
+        { config, is_active: true },
       );
-      setIntegrations((prev) =>
-        prev.map((i) => (i.id === integration.id ? updated : i)),
-      );
+      // Re-fetch integrations to get the full updated record
+      const refreshed = await getIntegrations(workspace.id);
+      setIntegrations(refreshed);
     } catch {
       // handle error
     } finally {
@@ -157,15 +157,15 @@ export default function IntegrationsPage() {
     }
   }
 
-  async function handleTest(integrationId: string) {
+  async function handleTest(integrationService: string) {
     if (!workspace) return;
     try {
-      const result = await testIntegration(workspace.id, integrationId);
-      setTestResult({ id: integrationId, ...result });
+      const result = await testIntegration(workspace.id, integrationService);
+      setTestResult({ id: integrationService, ...result });
       setTimeout(() => setTestResult(null), 3000);
     } catch {
       setTestResult({
-        id: integrationId,
+        id: integrationService,
         success: false,
         message: "Test failed",
       });
@@ -578,7 +578,7 @@ export default function IntegrationsPage() {
                     size="sm"
                     onClick={() => {
                       if (workspace) {
-                        window.location.href = `/api/v1/oauth/salesforce/authorize?workspace_id=${workspace.id}`;
+                        window.location.href = `${API_URL}/api/v1/oauth/salesforce/authorize?workspace_id=${workspace.id}`;
                       }
                     }}
                   >
@@ -590,7 +590,7 @@ export default function IntegrationsPage() {
                   size="sm"
                   onClick={() => {
                     if (workspace) {
-                      window.location.href = `/api/v1/oauth/salesforce/authorize?workspace_id=${workspace.id}`;
+                      window.location.href = `${API_URL}/api/v1/oauth/salesforce/authorize?workspace_id=${workspace.id}`;
                     }
                   }}
                 >
@@ -836,10 +836,10 @@ export default function IntegrationsPage() {
                         <SlackConfig
                           integration={integration}
                           onSave={(c) => handleSave(integration, c)}
-                          onTest={() => handleTest(integration.id)}
+                          onTest={() => handleTest(integration.service)}
                           saving={saving}
                           testResult={
-                            testResult?.id === integration.id
+                            testResult?.id === integration.service
                               ? testResult
                               : null
                           }

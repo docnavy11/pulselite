@@ -33,11 +33,12 @@ async def _compute(task_id: str) -> dict:
 
             alerts = []
             for ws_id in workspace_ids:
-                await emit_task_event(ws_id, "started", "compute_sentiment", task_id)
+                ws_task_id = f"{task_id}:{ws_id}"
+                await emit_task_event(ws_id, "started", "compute_sentiment", ws_task_id)
                 alert = await _compute_workspace(session, ws_id)
                 if alert:
                     alerts.append(str(ws_id))
-                await emit_task_event(ws_id, "completed", "compute_sentiment", task_id)
+                await emit_task_event(ws_id, "completed", "compute_sentiment", ws_task_id)
 
             await session.commit()
             return {"status": "success", "alerts": alerts}

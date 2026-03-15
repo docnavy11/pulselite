@@ -32,6 +32,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      target: dev
     ports:
       - "8000:8000"
     env_file:
@@ -52,6 +53,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      target: dev
     env_file:
       - .env
     environment:
@@ -70,6 +72,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      target: dev
     env_file:
       - .env
     environment:

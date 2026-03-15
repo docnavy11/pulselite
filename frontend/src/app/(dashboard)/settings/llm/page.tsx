@@ -12,6 +12,7 @@ export default function LLMSettingsPage() {
 
   const [settings, setSettings] = useState<LLMSettings | null>(null);
   const [keyInput, setKeyInput] = useState("");
+  const [baseUrlInput, setBaseUrlInput] = useState("");
   const [savingKey, setSavingKey] = useState(false);
   const [keyError, setKeyError] = useState<string | null>(null);
   const [keySuccess, setKeySuccess] = useState(false);
@@ -24,6 +25,11 @@ export default function LLMSettingsPage() {
   const [modelError, setModelError] = useState<string | null>(null);
   const [modelSuccess, setModelSuccess] = useState(false);
 
+  const [internalModel, setInternalModel] = useState("");
+  const [savingInternal, setSavingInternal] = useState(false);
+  const [internalSuccess, setInternalSuccess] = useState(false);
+  const [internalError, setInternalError] = useState<string | null>(null);
+
   const [pageLoading, setPageLoading] = useState(true);
 
   useEffect(() => {
@@ -31,7 +37,9 @@ export default function LLMSettingsPage() {
     getLLMSettings(workspace.id)
       .then((data) => {
         setSettings(data);
+        setBaseUrlInput(data.openrouter_base_url || "");
         setSelectedModels(new Set(data.allowed_models));
+        setInternalModel(data.internal_model || "");
       })
       .finally(() => setPageLoading(false));
   }, [workspace]);
@@ -44,6 +52,7 @@ export default function LLMSettingsPage() {
     try {
       const updated = await updateLLMSettings(workspace.id, {
         openrouter_api_key: keyInput || "",
+        openrouter_base_url: baseUrlInput || null,
         allowed_models: [...selectedModels],
       });
       setSettings(updated);
@@ -131,6 +140,11 @@ export default function LLMSettingsPage() {
                 <CheckCircle className="h-3 w-3" /> Key saved
               </span>
             )}
+            {!settings?.openrouter_api_key_set && settings?.effective_api_key_set && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                <CheckCircle className="h-3 w-3" /> Server default
+              </span>
+            )}
           </div>
 
           <div className="flex gap-3 max-w-lg">
@@ -153,6 +167,7 @@ export default function LLMSettingsPage() {
                 try {
                   const updated = await updateLLMSettings(workspace.id, {
                     openrouter_api_key: "",
+                    openrouter_base_url: baseUrlInput || null,
                     allowed_models: [...selectedModels],
                   });
                   setSettings(updated);
@@ -166,8 +181,55 @@ export default function LLMSettingsPage() {
             </button>
           )}
 
+          <div className="mt-6 border-t pt-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Custom Base URL <span className="text-gray-400 font-normal">(optional)</span>
+            </label>
+            <p className="text-xs text-gray-500 mb-2">
+              Override the default API endpoint. Useful for proxies or self-hosted compatible APIs.
+            </p>
+            <div className="flex gap-3 max-w-lg">
+              <input
+                type="text"
+                placeholder={settings?.effective_base_url || "https://openrouter.ai/api/v1"}
+                value={baseUrlInput}
+                onChange={(e) => setBaseUrlInput(e.target.value)}
+                className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+              <Button
+                onClick={async () => {
+                  if (!workspace) return;
+                  setSavingKey(true);
+                  setKeyError(null);
+                  setKeySuccess(false);
+                  try {
+                    const updated = await updateLLMSettings(workspace.id, {
+                      openrouter_base_url: baseUrlInput || null,
+                      allowed_models: [...selectedModels],
+                    });
+                    setSettings(updated);
+                    setKeySuccess(true);
+                  } catch {
+                    setKeyError("Failed to save base URL.");
+                  } finally {
+                    setSavingKey(false);
+                  }
+                }}
+                loading={savingKey}
+                variant="secondary"
+              >
+                Save URL
+              </Button>
+            </div>
+            {!baseUrlInput && settings?.effective_base_url && (
+              <p className="mt-1 text-xs text-gray-400">
+                Using server default: <code className="bg-gray-100 px-1 rounded">{settings.effective_base_url}</code>
+              </p>
+            )}
+          </div>
+
           {keyError && <p className="mt-3 text-sm text-red-600">{keyError}</p>}
-          {keySuccess && <p className="mt-3 text-sm text-green-600">API key saved successfully.</p>}
+          {keySuccess && <p className="mt-3 text-sm text-green-600">Settings saved successfully.</p>}
         </CardContent>
       </Card>
 
@@ -241,13 +303,19 @@ export default function LLMSettingsPage() {
                 <button
                   onClick={() =>
                     setSelectedModels((prev) => {
-                      if (prev.size === filteredModels.length) return new Set();
-                      return new Set(filteredModels.map((m) => m.id));
+                      const allFilteredSelected = filteredModels.every((m) => prev.has(m.id));
+                      const next = new Set(prev);
+                      if (allFilteredSelected) {
+                        for (const m of filteredModels) next.delete(m.id);
+                      } else {
+                        for (const m of filteredModels) next.add(m.id);
+                      }
+                      return next;
                     })
                   }
                   className="text-sm text-primary-500 hover:underline"
                 >
-                  {selectedModels.size === filteredModels.length ? "Deselect all" : "Select all"}
+                  {filteredModels.every((m) => selectedModels.has(m.id)) ? "Deselect all" : "Select all"}
                 </button>
               </div>
             </>
@@ -266,6 +334,59 @@ export default function LLMSettingsPage() {
 
           {modelError && <p className="mt-3 text-sm text-red-600">{modelError}</p>}
           {modelSuccess && <p className="mt-3 text-sm text-green-600">Model selection saved.</p>}
+        </CardContent>
+      </Card>
+
+      {/* Card 3 — Internal / Background Task Model */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex items-center gap-2 mb-2">
+            <Cpu className="h-5 w-5 text-primary-500" />
+            <h2 className="text-base font-semibold text-gray-900">Background Tasks Model</h2>
+          </div>
+          <p className="text-sm text-gray-500 mb-4">
+            Model used for internal background tasks like conversation analysis, Q&A generation, action triggers, and the copilot.
+            {!internalModel && (
+              <span className="ml-1 text-gray-400">
+                Defaults to <code className="bg-gray-100 px-1 rounded text-xs">anthropic/claude-haiku-4-5</code>
+              </span>
+            )}
+          </p>
+
+          <div className="flex gap-3 max-w-lg">
+            <input
+              type="text"
+              placeholder="anthropic/claude-haiku-4-5"
+              value={internalModel}
+              onChange={(e) => setInternalModel(e.target.value)}
+              className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+            />
+            <Button
+              onClick={async () => {
+                if (!workspace) return;
+                setSavingInternal(true);
+                setInternalError(null);
+                setInternalSuccess(false);
+                try {
+                  const updated = await updateLLMSettings(workspace.id, {
+                    internal_model: internalModel.trim() || null,
+                  });
+                  setSettings(updated);
+                  setInternalSuccess(true);
+                } catch {
+                  setInternalError("Failed to save model.");
+                } finally {
+                  setSavingInternal(false);
+                }
+              }}
+              loading={savingInternal}
+            >
+              Save
+            </Button>
+          </div>
+
+          {internalError && <p className="mt-3 text-sm text-red-600">{internalError}</p>}
+          {internalSuccess && <p className="mt-3 text-sm text-green-600">Background task model saved.</p>}
         </CardContent>
       </Card>
     </div>

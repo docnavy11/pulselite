@@ -6,7 +6,11 @@ from celery.exceptions import MaxRetriesExceededError
 
 from app.database import async_session_factory, engine
 from app.services.ingestion.pipeline import run_ingestion
-from app.services.realtime import emit_to_workspace
+from app.services.realtime import (
+    emit_to_workspace,
+    clear_document_active,
+    write_chatbot_setup_state,
+)
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -72,6 +76,7 @@ async def _mark_document_failed(document_id: uuid.UUID, reason: str) -> None:
                 doc.error_message = reason
                 await session.commit()
 
+                await clear_document_active(str(doc.workspace_id), str(document_id))
                 await emit_to_workspace(str(doc.workspace_id), "document:status_changed", {
                     "document_id": str(document_id),
                     "knowledge_base_id": str(doc.knowledge_base_id),
@@ -141,6 +146,7 @@ async def _check_and_trigger_autoconfig(document_id: uuid.UUID) -> None:
             )
             chatbot_row = chatbot_result.one_or_none()
             if chatbot_row:
+                await write_chatbot_setup_state(str(chatbot_row.workspace_id), str(chatbot_id), "configuring")
                 await emit_to_workspace(str(chatbot_row.workspace_id), "chatbot:status_changed", {
                     "chatbot_id": str(chatbot_id),
                     "setup_status": "configuring",

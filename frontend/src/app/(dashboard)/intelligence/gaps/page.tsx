@@ -119,7 +119,7 @@ export default function GapsPage() {
                 </p>
 
                 <div className="flex flex-wrap gap-1">
-                  {cluster.keywords.slice(0, 4).map((kw) => (
+                  {(cluster.topic_keywords ?? []).slice(0, 4).map((kw) => (
                     <span
                       key={kw}
                       className="rounded bg-gray-50 px-1.5 py-0.5 text-[10px] text-gray-500 border border-gray-200"
@@ -127,9 +127,9 @@ export default function GapsPage() {
                       {kw}
                     </span>
                   ))}
-                  {cluster.keywords.length > 4 && (
+                  {(cluster.topic_keywords ?? []).length > 4 && (
                     <span className="text-[10px] text-gray-400">
-                      +{cluster.keywords.length - 4}
+                      +{(cluster.topic_keywords ?? []).length - 4}
                     </span>
                   )}
                 </div>

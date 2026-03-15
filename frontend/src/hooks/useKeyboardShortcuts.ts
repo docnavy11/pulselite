@@ -12,12 +12,6 @@ export function useKeyboardShortcuts() {
       if ((e.target as HTMLElement)?.isContentEditable) return;
 
       switch (e.key) {
-        case "n":
-          navigate("/chatbots/new");
-          break;
-        case "c":
-          navigate("/conversations");
-          break;
         case "/":
           e.preventDefault();
           window.dispatchEvent(new CustomEvent("open-command-palette"));

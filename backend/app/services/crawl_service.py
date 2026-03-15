@@ -11,7 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.knowledge import Chatbot, CrawlJob, Document, KnowledgeBase
 from app.services.crawler import DiscoveredUrl, discover_urls
 from app.services.fetcher import fetch
-from app.services.realtime import emit_to_workspace
+from app.services.realtime import (
+    emit_to_workspace,
+    write_chatbot_setup_state,
+    write_crawl_state,
+    clear_crawl_state,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -86,8 +91,9 @@ async def prepare_crawl(
 
     await db.commit()
 
-    # Emit chatbot status change
+    # Emit chatbot status change + persist state
     if chatbot_id is not None:
+        await write_chatbot_setup_state(str(workspace_id), str(chatbot_id), "crawling")
         await emit_to_workspace(str(workspace_id), "chatbot:status_changed", {
             "chatbot_id": str(chatbot_id),
             "setup_status": "crawling",
@@ -118,14 +124,18 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
     _kb_row = _kb_result.one_or_none()
     _chatbot_id = str(_kb_row.chatbot_id) if _kb_row and _kb_row.chatbot_id else None
 
-    await emit_to_workspace(str(job.workspace_id), "crawl:progress", {
-        "job_id": str(job.id),
+    _crawl_state = {
         "chatbot_id": _chatbot_id,
         "phase": "discovering",
         "pages_discovered": 0,
         "pages_queued": 0,
         "pages_failed": 0,
         "status": "running",
+    }
+    await write_crawl_state(str(job.workspace_id), str(job.id), _crawl_state)
+    await emit_to_workspace(str(job.workspace_id), "crawl:progress", {
+        "job_id": str(job.id),
+        **_crawl_state,
     })
 
     # Phase 1: discover URLs — wrap so any error is stored and surfaced immediately
@@ -142,6 +152,7 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
         job.error_message = f"Could not discover pages: {exc}"
         job.completed_at = datetime.now(timezone.utc)
         await db.commit()
+        await clear_crawl_state(str(job.workspace_id), str(job.id))
         await emit_to_workspace(str(job.workspace_id), "crawl:completed", {
             "job_id": str(job.id),
             "chatbot_id": _chatbot_id,
@@ -161,6 +172,7 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
         )
         job.completed_at = datetime.now(timezone.utc)
         await db.commit()
+        await clear_crawl_state(str(job.workspace_id), str(job.id))
         await emit_to_workspace(str(job.workspace_id), "crawl:completed", {
             "job_id": str(job.id),
             "chatbot_id": _chatbot_id,
@@ -176,14 +188,18 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
     await db.commit()
     await db.refresh(job)
 
-    await emit_to_workspace(str(job.workspace_id), "crawl:progress", {
-        "job_id": str(job.id),
+    _crawl_state = {
         "chatbot_id": _chatbot_id,
         "phase": "fetching",
         "pages_discovered": job.pages_discovered,
         "pages_queued": 0,
         "pages_failed": 0,
         "status": "running",
+    }
+    await write_crawl_state(str(job.workspace_id), str(job.id), _crawl_state)
+    await emit_to_workspace(str(job.workspace_id), "crawl:progress", {
+        "job_id": str(job.id),
+        **_crawl_state,
     })
 
     # Phase 2: fetch pages concurrently (with live DB progress updates).
@@ -274,14 +290,18 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
                 now = _time.monotonic()
                 if now - _last_progress_emit >= 1.0:
                     _last_progress_emit = now
-                    await emit_to_workspace(str(job.workspace_id), "crawl:progress", {
-                        "job_id": str(job.id),
+                    _crawl_state = {
                         "chatbot_id": _chatbot_id,
                         "phase": "fetching",
                         "pages_discovered": job.pages_discovered,
                         "pages_queued": job.pages_queued,
                         "pages_failed": job.pages_failed + 1,
                         "status": "running",
+                    }
+                    await write_crawl_state(str(job.workspace_id), str(job.id), _crawl_state)
+                    await emit_to_workspace(str(job.workspace_id), "crawl:progress", {
+                        "job_id": str(job.id),
+                        **_crawl_state,
                     })
                 continue
 
@@ -308,14 +328,18 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
             now = _time.monotonic()
             if now - _last_progress_emit >= 1.0:
                 _last_progress_emit = now
-                await emit_to_workspace(str(job.workspace_id), "crawl:progress", {
-                    "job_id": str(job.id),
+                _crawl_state = {
                     "chatbot_id": _chatbot_id,
                     "phase": "fetching",
                     "pages_discovered": job.pages_discovered,
                     "pages_queued": job.pages_queued + 1,
                     "pages_failed": job.pages_failed,
                     "status": "running",
+                }
+                await write_crawl_state(str(job.workspace_id), str(job.id), _crawl_state)
+                await emit_to_workspace(str(job.workspace_id), "crawl:progress", {
+                    "job_id": str(job.id),
+                    **_crawl_state,
                 })
     except Exception:
         for task in fetch_tasks:
@@ -332,6 +356,7 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
         )
         job.completed_at = datetime.now(timezone.utc)
         await db.commit()
+        await clear_crawl_state(str(job.workspace_id), str(job.id))
         await emit_to_workspace(str(job.workspace_id), "crawl:completed", {
             "job_id": str(job.id),
             "chatbot_id": _chatbot_id,
@@ -352,6 +377,7 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
     job.completed_at = datetime.now(timezone.utc)
     await db.commit()
 
+    await clear_crawl_state(str(job.workspace_id), str(job.id))
     await emit_to_workspace(str(job.workspace_id), "crawl:completed", {
         "job_id": str(job.id),
         "chatbot_id": _chatbot_id,

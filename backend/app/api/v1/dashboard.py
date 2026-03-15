@@ -169,15 +169,48 @@ async def get_dashboard(
         """),
         top_topics_params,
     )
+    top_topics_rows = top_topics_result.all()
+
+    # For each topic, find a relevant example query by matching the topic keyword
+    # against retrieval log queries from those conversations
     top_topics = []
-    for row in top_topics_result.all():
+    for row in top_topics_rows:
+        topic_name = row[0]
         total_count = row[1]
         resolved_count = row[2]
+
+        # Find a relevant example query, preferring ones that match the topic keyword
+        example_result = await db.execute(
+            text(f"""
+                SELECT rl.query
+                FROM retrieval_logs rl
+                JOIN conversations c ON c.id = rl.conversation_id
+                JOIN conversation_analysis ca ON ca.conversation_id = c.id
+                WHERE ca.workspace_id = :ws
+                  AND ca.created_at >= :cutoff
+                  AND :topic = ANY(ca.topics)
+                  AND length(rl.query) > 10
+                  {chatbot_filter}
+                ORDER BY
+                  (rl.query ILIKE '%' || :topic || '%')::int DESC,
+                  rl.escalated::int ASC,
+                  length(rl.query) DESC
+                LIMIT 1
+            """),
+            {**top_topics_params, "topic": topic_name},
+        )
+        example_query = example_result.scalar_one_or_none()
+
+        # Filter out trivial queries that aren't useful as examples
+        if example_query and len(example_query.strip()) < 15:
+            example_query = None
+
         top_topics.append({
-            "topic": row[0],
+            "topic": topic_name,
             "total_count": total_count,
             "resolved_count": resolved_count,
             "resolution_rate": round(resolved_count / total_count, 4) if total_count > 0 else 0.0,
+            "example_query": example_query,
         })
 
     # Recent negative feedback with comments

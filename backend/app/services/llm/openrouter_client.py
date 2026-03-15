@@ -9,11 +9,12 @@ OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 
 class OpenRouterLLMClient(BaseLLMClient):
-    def __init__(self, api_key: str | None = None) -> None:
-        self._api_key = api_key or settings.OPENROUTER_API_KEY
+    def __init__(self, api_key: str | None = None, base_url: str | None = None) -> None:
+        self._api_key = api_key or settings.AI_API_KEY
+        self._base_url = base_url or settings.AI_BASE_URL
 
     def _get_client(self) -> AsyncOpenAI:
-        return AsyncOpenAI(api_key=self._api_key, base_url=OPENROUTER_BASE_URL)
+        return AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
 
     async def stream_generate(
         self,

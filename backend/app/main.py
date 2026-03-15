@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -25,22 +25,27 @@ from app.api.v1 import (
     oauth,
     onboarding,
     public_chat,
+    qa,
     two_fa,
     webhooks,
     widget_config,
     workspaces,
 )
+from app.api.v1 import realtime as realtime_api
 from app.api.v1.public_chat import limiter
 from app.config import settings
 
 import socketio as socketio_lib
 from app.utils.security import decode_token
+from app.services.realtime import mark_api_process
 
-# Socket.IO server — Redis adapter for multi-process delivery
+mark_api_process()
+
+# Socket.IO server — in-memory manager (single-process deployment).
+# Worker events reach clients via the internal HTTP emit endpoint.
 sio = socketio_lib.AsyncServer(
     async_mode="asgi",
-    cors_allowed_origins=[],  # handled by FastAPI CORS
-    client_manager=socketio_lib.AsyncRedisManager(settings.REDIS_URL),
+    cors_allowed_origins=settings.BACKEND_CORS_ORIGINS,
     logger=False,
     engineio_logger=False,
 )
@@ -132,11 +137,28 @@ def create_app() -> FastAPI:
     application.include_router(invites.router, prefix="/api/v1")
     application.include_router(webhooks.router, prefix="/api/v1")
     application.include_router(copilot.router, prefix="/api/v1")
+    application.include_router(qa.router, prefix="/api/v1")
+    application.include_router(realtime_api.router, prefix="/api/v1")
 
     # Public routes (no auth required)
     application.include_router(widget_config.router, prefix="/api/v1")
     application.include_router(public_chat.router, prefix="/api/v1")
     application.include_router(oauth.router, prefix="/api/v1")
+
+    # Internal endpoint for workers to emit Socket.IO events.
+    # Workers call this via HTTP — the only reliable cross-process path.
+    @application.post("/api/internal/emit")
+    async def internal_emit(request: Request):
+        secret = request.headers.get("X-Internal-Secret")
+        if secret != settings.SECRET_KEY:
+            raise HTTPException(status_code=403, detail="Unauthorized")
+        body = await request.json()
+        await sio.emit(
+            body["event"],
+            body["data"],
+            room=body.get("room"),
+        )
+        return {"ok": True}
 
     return application
 
@@ -144,4 +166,4 @@ def create_app() -> FastAPI:
 app = create_app()
 
 # Combined ASGI app — Socket.IO handles /socket.io, FastAPI handles everything else
-combined_app = socketio_lib.ASGIApp(sio, other_app=app)
+combined_app = socketio_lib.ASGIApp(sio, other_asgi_app=app)

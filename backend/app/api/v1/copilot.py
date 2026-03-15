@@ -17,13 +17,12 @@ from app.services.copilot.tools import (
     get_client_side_tool_definitions,
     get_tool_definitions,
 )
-from app.services.llm import get_llm_client
+from app.services.llm import get_internal_model, get_llm_client
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/workspaces/{workspace_id}", tags=["copilot"])
 
-COPILOT_MODEL = "openai/gpt-4o-mini"
 MAX_TOOL_ROUNDS = 10  # safety cap on tool-calling loop
 
 
@@ -44,6 +43,7 @@ async def copilot_chat(
     messages: list[dict] = [{"role": "system", "content": system_prompt}] + body.messages
     all_tools = get_tool_definitions() + get_client_side_tool_definitions()
     llm = get_llm_client("openrouter")
+    copilot_model = await get_internal_model(db, workspace_id)
 
     async def stream():
         rounds = 0
@@ -52,7 +52,7 @@ async def copilot_chat(
             try:
                 result = await llm.generate_with_tools(
                     messages=messages,
-                    model=COPILOT_MODEL,
+                    model=copilot_model,
                     tools=all_tools,
                     temperature=0.3,
                     max_tokens=2000,

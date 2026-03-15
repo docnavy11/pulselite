@@ -44,3 +44,25 @@ class DocumentLogItem(BaseModel):
 class DocumentLogResponse(BaseModel):
     items: list[DocumentLogItem]
     total: int
+
+
+class AnalysisRunLogItem(BaseModel):
+    id: str
+    conversation_id: str
+    chatbot_id: Optional[str] = None
+    chatbot_name: Optional[str] = None
+    contact_name: Optional[str] = None
+    sentiment_score: Optional[float] = None
+    sentiment_label: Optional[str] = None
+    intent_primary: Optional[str] = None
+    outcome_category: Optional[str] = None
+    topics: Optional[list[str]] = None
+    summary: Optional[str] = None
+    llm_model: str
+    processing_ms: Optional[int] = None
+    created_at: str
+
+
+class AnalysisRunLogResponse(BaseModel):
+    items: list[AnalysisRunLogItem]
+    total: int

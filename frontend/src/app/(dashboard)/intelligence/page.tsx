@@ -20,6 +20,7 @@ const sections = [
       "Identify topics your knowledge base doesn't cover and auto-generate draft articles.",
     icon: FileQuestion,
     color: "text-red-600 bg-red-50",
+    implemented: true,
   },
   {
     href: "/intelligence/leads",
@@ -27,6 +28,7 @@ const sections = [
     description: "Score and tier contacts based on conversation signals.",
     icon: Users,
     color: "text-purple-600 bg-purple-50",
+    implemented: false,
   },
   {
     href: "/intelligence/topics",
@@ -34,6 +36,7 @@ const sections = [
     description: "Discover what customers are asking about most.",
     icon: MessageSquareText,
     color: "text-blue-600 bg-blue-50",
+    implemented: false,
   },
   {
     href: "/intelligence/sentiment",
@@ -41,6 +44,7 @@ const sections = [
     description: "Track customer satisfaction trends over time.",
     icon: TrendingUp,
     color: "text-green-600 bg-green-50",
+    implemented: true,
   },
   {
     href: "/intelligence/features",
@@ -48,6 +52,7 @@ const sections = [
     description: "Extract and cluster feature requests from conversations.",
     icon: Lightbulb,
     color: "text-amber-600 bg-amber-50",
+    implemented: false,
   },
   {
     href: "/intelligence/competitive",
@@ -55,6 +60,7 @@ const sections = [
     description: "Track competitor mentions, churn risk, and expansion signals from conversations.",
     icon: TrendingDown,
     color: "text-orange-600 bg-orange-50",
+    implemented: false,
   },
   {
     href: "/intelligence/geography",
@@ -62,6 +68,7 @@ const sections = [
     description: "See which countries your chat visitors are coming from.",
     icon: Globe,
     color: "text-teal-600 bg-teal-50",
+    implemented: false,
   },
 ];
 
@@ -80,9 +87,9 @@ export default function IntelligencePage() {
       </p>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {sections.map((section) => (
-          <Link key={section.label} to={section.href}>
-            <Card className="cursor-pointer hover:shadow-md transition-all duration-200">
+        {sections.map((section) => {
+          const cardContent = (
+            <Card className={`transition-all duration-200${section.implemented ? " cursor-pointer hover:shadow-md" : " opacity-60"}`}>
               <CardContent className="py-6">
                 <div className="flex items-start gap-4">
                   <div
@@ -91,8 +98,11 @@ export default function IntelligencePage() {
                     <section.icon className="h-5 w-5" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-semibold text-gray-900">
+                    <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
                       {section.label}
+                      {!section.implemented && (
+                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">Coming soon</span>
+                      )}
                     </h3>
                     <p className="mt-1 text-sm text-gray-500">
                       {section.description}
@@ -101,8 +111,18 @@ export default function IntelligencePage() {
                 </div>
               </CardContent>
             </Card>
-          </Link>
-        ))}
+          );
+
+          return section.implemented ? (
+            <Link key={section.label} to={section.href}>
+              {cardContent}
+            </Link>
+          ) : (
+            <div key={section.label}>
+              {cardContent}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

@@ -141,6 +141,21 @@ export function IconTest({ className = "stroke-current", size = 12 }: IconProps)
   );
 }
 
+export function IconQA({ className = "stroke-current", size = 12 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 12 12" fill="none" className={className}>
+      <path
+        d="M2 3 Q2 1.5 3.5 1.5 L8.5 1.5 Q10 1.5 10 3 L10 6 Q10 7.5 8.5 7.5 L7 7.5 L5 10 L5.3 7.5 L3.5 7.5 Q2 7.5 2 6 Z"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M5.2 5.8 L5.2 5.6 Q5.2 4.8 6 4.5 Q6.6 4.2 6.6 3.7 Q6.6 3.2 6 3 Q5.4 3 5.2 3.4" strokeWidth="0.9" strokeLinecap="round" fill="none" />
+      <circle cx="5.3" cy="6.5" r="0.4" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 export function IconPublish({ className = "stroke-current", size = 12 }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 12 12" fill="none" className={className}>

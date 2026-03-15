@@ -14,7 +14,7 @@ import {
   Cell,
   LabelList,
 } from "recharts";
-import { TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
+import { TrendingUp, TrendingDown } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Spinner } from "@/components/ui/Spinner";
 import { SentimentData, SegmentSentimentItem } from "@/lib/types";
@@ -283,33 +283,6 @@ export default function SentimentPage() {
           )}
         </CardContent>
       </Card>
-
-      {/* Alerts */}
-      {data.alerts.length > 0 && (
-        <Card>
-          <CardContent className="pt-5 pb-5">
-            <div className="flex items-center gap-2 mb-3">
-              <AlertTriangle className="h-4 w-4 text-amber-500" />
-              <h2 className="text-sm font-semibold text-gray-900">
-                Alert History
-              </h2>
-            </div>
-            <div className="space-y-2">
-              {data.alerts.map((alert) => (
-                <div
-                  key={alert.id}
-                  className="flex items-center justify-between rounded-lg bg-amber-50 px-4 py-2"
-                >
-                  <p className="text-sm text-amber-800">{alert.message}</p>
-                  <span className="text-xs text-amber-600">
-                    {new Date(alert.triggered_at).toLocaleString()}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }

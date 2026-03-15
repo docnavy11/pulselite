@@ -101,7 +101,7 @@ export default function DeployPage() {
   const [expandedGuide, setExpandedGuide] = useState<string | null>(null);
   const qrRef = useRef<HTMLDivElement>(null);
 
-  const scriptTag = `<script src="https://cdn.pulse.ai/widget.js" data-chatbot-id="${chatbotId}"></script>`;
+  const scriptTag = `<script src="${window.location.origin}/widget/${chatbotId}.js"></script>`;
   const chatUrl = `${APP_URL}/chat/${chatbotId}`;
   const curlExample = `curl -X POST ${API_URL}/api/v1/public/chat \\
   -H "Content-Type: application/json" \\

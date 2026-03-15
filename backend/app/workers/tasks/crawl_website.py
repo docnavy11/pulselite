@@ -4,6 +4,7 @@ import logging
 import uuid
 
 from app.database import async_session_factory, engine
+from app.services.realtime import clear_crawl_state
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -48,5 +49,6 @@ async def _mark_job_failed(job_id: str, error_message: str | None = None) -> Non
                     job.error_message = error_message
                 job.completed_at = datetime.now(timezone.utc)
                 await session.commit()
+                await clear_crawl_state(str(job.workspace_id), job_id)
         except Exception as e:
             logger.error("Failed to mark crawl job %s as failed: %s", job_id, e)

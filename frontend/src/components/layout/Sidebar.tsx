@@ -20,6 +20,7 @@ const SETTINGS_CHILDREN = [
   { href: "/settings/security",       label: "Security" },
   { href: "/settings/data-retention", label: "Data Retention" },
   { href: "/settings/webhooks",       label: "Webhooks" },
+  { href: "/settings/intelligence",  label: "Intelligence" },
 ];
 
 const MAIN_NAV = [
@@ -346,6 +347,19 @@ export function Sidebar({ isOpen, onClose, pinned, onPinToggle }: SidebarProps) 
           </div>
         )}
       </nav>
+
+      {/* Activity console toggle */}
+      <div className={clsx("px-3 pb-0.5", !pinned && "xl:hidden")}>
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent("toggle-activity-console"))}
+          className="flex items-center gap-2.5 w-full px-2.5 py-[7px] rounded-lg text-[12px] font-medium text-gray-500 hover:bg-[#faf8f5] hover:text-gray-700 transition-all"
+        >
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" className="text-gray-400">
+            <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+          </svg>
+          <span className="flex-1 text-left">Activity</span>
+        </button>
+      </div>
 
       {/* Copilot toggle */}
       <div className={clsx("px-3 pb-2", !pinned && "xl:hidden")}>

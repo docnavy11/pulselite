@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 import uuid
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
@@ -8,6 +9,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.intelligence import GapEvent, RetrievalLog
 from app.models.knowledge import Chatbot
 from app.models.organizational import Workspace
 from app.services.encryption import decrypt_api_key
@@ -16,6 +18,44 @@ from app.services.rag.engine import RAGResult, process_query
 from app.services.webhooks import fire_event
 
 logger = logging.getLogger(__name__)
+
+# Patterns that are conversational, not real knowledge queries
+_TRIVIAL_PATTERNS = re.compile(
+    r"^("
+    r"h(i|ey|ello|oi|ola|allo)"
+    r"|yo\b"
+    r"|good\s*(morning|afternoon|evening|day)"
+    r"|goeie?(morgen|middag|avond|dag)"
+    r"|bonjour|bonsoir|salut"
+    r"|who\s+are\s+you"
+    r"|what\s+are\s+you"
+    r"|wie\s+ben\s+j(e|ij)"
+    r"|how\s+are\s+you"
+    r"|hoe\s+gaat\s+het"
+    r"|thanks?(\s+you)?"
+    r"|thank\s+you"
+    r"|bedankt|dank\s*(je|u)"
+    r"|merci"
+    r"|bye|goodbye|see\s+ya|tot\s+ziens"
+    r"|ok(ay)?"
+    r"|yes|no|ja|nee|oui|non"
+    r"|test(ing)?"
+    r"|help"
+    r")[\s!?.]*$",
+    re.IGNORECASE,
+)
+
+MIN_QUERY_LENGTH = 8  # Queries shorter than this are unlikely to be real questions
+
+
+def _is_substantive_query(message: str) -> bool:
+    """Return True if the message looks like a real knowledge question, not a greeting or trivial input."""
+    stripped = message.strip()
+    if len(stripped) < MIN_QUERY_LENGTH:
+        return False
+    if _TRIVIAL_PATTERNS.match(stripped):
+        return False
+    return True
 
 
 @dataclass
@@ -60,15 +100,18 @@ async def handle_message(
         message_type="incoming",
     )
 
-    # Load workspace OpenRouter key if configured
+    # Load workspace OpenRouter key + base URL if configured
     openrouter_key: str | None = None
+    openrouter_base_url: str | None = None
     ws_result = await db.execute(select(Workspace).where(Workspace.id == workspace_id))
     ws = ws_result.scalar_one_or_none()
-    if ws and ws.openrouter_api_key:
-        try:
-            openrouter_key = decrypt_api_key(ws.openrouter_api_key)
-        except Exception:
-            logger.warning(f"Failed to decrypt workspace OpenRouter key for {workspace_id}")
+    if ws:
+        openrouter_base_url = ws.openrouter_base_url
+        if ws.openrouter_api_key:
+            try:
+                openrouter_key = decrypt_api_key(ws.openrouter_api_key)
+            except Exception:
+                logger.warning(f"Failed to decrypt workspace OpenRouter key for {workspace_id}")
 
     # Load enabled actions — those with parameters use function calling; others use post-response trigger
     from app.services.action_service import list_enabled_actions
@@ -82,6 +125,7 @@ async def handle_message(
     async for item in process_query(
         db, message, chatbot, conversation_id,
         openrouter_key=openrouter_key,
+        openrouter_base_url=openrouter_base_url,
         actions=actions_with_params if actions_with_params else None,
     ):
         if isinstance(item, RAGResult):
@@ -97,6 +141,11 @@ async def handle_message(
     confidence_score = rag_result.confidence_score if rag_result else 0.0
     confidence_avg = rag_result.confidence_avg if rag_result else 0.0
     escalated = rag_result.escalated if rag_result else False
+
+    # Don't escalate on non-substantive queries (greetings, identity questions, etc.)
+    # — the bot handles these via its system prompt, not KB retrieval
+    if escalated and not _is_substantive_query(message):
+        escalated = False
 
     bot_message = await conversation_service.add_message(
         db,
@@ -126,6 +175,38 @@ async def handle_message(
     conversation.confidence_avg = confidence_avg
     conversation.ai_participated = True
     await db.flush()
+
+    # Record retrieval log + gap event for intelligence pipeline
+    try:
+        retrieval_log = RetrievalLog(
+            id=uuid.uuid4(),
+            workspace_id=workspace_id,
+            chatbot_id=chatbot.id,
+            conversation_id=conversation_id,
+            message_id=bot_message.id,
+            query=message,
+            confidence_score=confidence_score,
+            confidence_avg=confidence_avg,
+            retrieved_chunk_ids=rag_result.retrieved_chunk_ids if rag_result else [],
+            reranked=chatbot.use_reranking,
+            escalated=escalated,
+            response_generated=True,
+        )
+        db.add(retrieval_log)
+        await db.flush()
+
+        if escalated and _is_substantive_query(message):
+            gap_event = GapEvent(
+                id=uuid.uuid4(),
+                workspace_id=workspace_id,
+                retrieval_log_id=retrieval_log.id,
+                query=message,
+                confidence_score=confidence_score,
+            )
+            db.add(gap_event)
+            await db.flush()
+    except Exception:
+        logger.warning("Failed to record retrieval log / gap event", exc_info=True)
 
     # Yield function-call-triggered action payloads (from actions with parameters)
     for payload in inline_action_payloads:

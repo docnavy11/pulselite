@@ -8,7 +8,7 @@ from sqlalchemy import select
 from app.database import async_session_factory, engine
 from app.models.knowledge import Article, Document
 from app.services.ingestion.chunkers.markdown_chunker import chunk_markdown
-from app.services.realtime import emit_to_workspace
+from app.services.realtime import emit_to_workspace, emit_task_event
 from app.services.ingestion.embedder import embed_chunks
 from app.services.ingestion.vector_store import delete_by_document, insert_chunks
 from app.workers.celery_app import celery_app
@@ -19,12 +19,12 @@ logger = logging.getLogger(__name__)
 @celery_app.task(bind=True, max_retries=3, default_retry_delay=60)
 def reindex_article(self, article_id: str) -> dict:
     try:
-        return asyncio.run(_reindex(uuid.UUID(article_id)))
+        return asyncio.run(_reindex(uuid.UUID(article_id), self.request.id))
     except Exception as exc:
         raise self.retry(exc=exc)  # type: ignore[attr-defined]
 
 
-async def _reindex(article_id: uuid.UUID) -> dict:
+async def _reindex(article_id: uuid.UUID, task_id: str) -> dict:
     await engine.dispose()
     async with async_session_factory() as session:
         try:
@@ -36,6 +36,9 @@ async def _reindex(article_id: uuid.UUID) -> dict:
 
             if not article.body:
                 return {"status": "skipped", "detail": "Article has no body content"}
+
+            await emit_task_event(article.workspace_id, "started", "reindex_article", task_id,
+                                  detail=article.title or str(article_id))
 
             doc_result = await session.execute(
                 select(Document).where(Document.metadata_.op("->>")("article_id") == str(article_id))
@@ -121,7 +124,11 @@ async def _reindex(article_id: uuid.UUID) -> dict:
                 "title": doc.title or "",
                 "error_message": None,
             })
+            await emit_task_event(article.workspace_id, "completed", "reindex_article", task_id,
+                                  detail=f"{count} chunks indexed")
             return {"status": "success", "chunks": count, "article_id": str(article_id)}
-        except Exception:
+        except Exception as exc:
             await session.rollback()
+            await emit_task_event(article.workspace_id, "completed", "reindex_article", task_id,
+                                  error=str(exc))
             raise

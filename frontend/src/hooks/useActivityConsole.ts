@@ -1,6 +1,8 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useSocketEvent } from "@/lib/socket";
-import type { TaskEvent, CrawlCompletedEvent, ChatbotStatusEvent } from "@/lib/types";
+import { useWorkspaceStore } from "@/stores/workspace-store";
+import { getRealtimeState } from "@/lib/api-functions";
+import type { TaskEvent, CrawlCompletedEvent, ChatbotStatusEvent, RealtimeState } from "@/lib/types";
 
 export interface ActivityEntry {
   id: string;
@@ -19,6 +21,71 @@ const AUTO_DISMISS_MS = 30_000;
 export function useActivityConsole() {
   const [entries, setEntries] = useState<ActivityEntry[]>([]);
   const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const seededRef = useRef(false);
+
+  // Seed from REST endpoint on mount
+  const workspace = useWorkspaceStore((s) => s.currentWorkspace);
+  useEffect(() => {
+    if (!workspace?.id || seededRef.current) return;
+    seededRef.current = true;
+
+    getRealtimeState(workspace.id)
+      .then((state: RealtimeState) => {
+        const now = Date.now();
+        const initial: ActivityEntry[] = [];
+
+        for (const task of state.active_tasks) {
+          initial.push({
+            id: task.task_id,
+            taskName: task.task_name,
+            status: "running",
+            detail: task.detail ?? undefined,
+            current: task.current ?? undefined,
+            total: task.total ?? undefined,
+            timestamp: now,
+          });
+        }
+
+        for (const crawl of state.active_crawls) {
+          initial.push({
+            id: crawl.job_id,
+            taskName: "crawl_website",
+            status: "running",
+            detail: `${crawl.phase}: ${crawl.pages_queued}/${crawl.pages_discovered} pages`,
+            current: crawl.pages_queued,
+            total: crawl.pages_discovered,
+            timestamp: now,
+          });
+        }
+
+        for (const doc of state.active_documents) {
+          initial.push({
+            id: doc.document_id,
+            taskName: "ingest_document",
+            status: "running",
+            detail: doc.title || "Processing document",
+            timestamp: now,
+          });
+        }
+
+        for (const setup of state.chatbot_setup) {
+          initial.push({
+            id: `setup-${setup.chatbot_id}`,
+            taskName: "chatbot_setup",
+            status: "running",
+            detail: setup.setup_status === "crawling" ? "Crawling website" : "Auto-configuring",
+            timestamp: now,
+          });
+        }
+
+        if (initial.length > 0) {
+          setEntries(initial.slice(0, MAX_ENTRIES));
+        }
+      })
+      .catch(() => {
+        // REST unavailable — socket events will fill in
+      });
+  }, [workspace?.id]);
 
   const scheduleDismiss = useCallback((id: string) => {
     const existing = timersRef.current.get(id);

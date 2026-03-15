@@ -37,7 +37,7 @@ class GapEvent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     query: Mapped[str] = mapped_column(Text, nullable=False)
     confidence_score: Mapped[float] = mapped_column(Float, nullable=False)
-    gap_cluster_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    gap_cluster_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("gap_clusters.id"), nullable=True)
 
 
 class GapCluster(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -68,5 +68,5 @@ class ConversationAnalysis(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     outcome_category: Mapped[str | None] = mapped_column(Text, nullable=True)
     topics: Mapped[list | None] = mapped_column(ARRAY(Text), nullable=True)
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
-    llm_model: Mapped[str] = mapped_column(Text, server_default=text("'gpt-4o-mini'"))
+    llm_model: Mapped[str] = mapped_column(Text, server_default=text("'claude-haiku-4-5-20251001'"))
     processing_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)

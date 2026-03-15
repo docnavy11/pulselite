@@ -2,19 +2,16 @@
 
 import hashlib
 import hmac
-import json
 import logging
 import uuid
 from datetime import datetime, timezone
 
-import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session_factory
 from app.models.organizational import WorkspaceWebhook
 from app.models.webhook_delivery import WebhookDelivery
-from app.services.encryption import decrypt_api_key
 
 logger = logging.getLogger(__name__)
 

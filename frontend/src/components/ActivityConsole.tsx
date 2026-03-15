@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useActivityConsole, type ActivityEntry } from "@/hooks/useActivityConsole";
 
 const TASK_LABELS: Record<string, string> = {
@@ -39,7 +39,7 @@ function StatusIcon({ status }: { status: ActivityEntry["status"] }) {
   if (status === "done") {
     return (
       <svg className="h-4 w-4 text-green-500" viewBox="0 0 20 20" fill="currentColor">
-        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
       </svg>
     );
   }
@@ -57,19 +57,21 @@ function EntryRow({
   entry: ActivityEntry;
   onDismiss: (id: string) => void;
 }) {
+  const isDone = entry.status === "done";
   return (
-    <div className="flex items-start gap-2 px-3 py-2 border-b border-gray-100 last:border-0">
+    <div className={`flex items-start gap-2 px-3 py-2 border-b border-gray-100 last:border-0 ${isDone ? "opacity-60" : ""}`}>
       <div className="mt-0.5 shrink-0">
         <StatusIcon status={entry.status} />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-gray-800 truncate">
+        <p className={`text-sm font-medium truncate ${isDone ? "text-gray-500" : "text-gray-800"}`}>
           {getLabel(entry.taskName)}
+          {isDone && <span className="ml-1.5 text-[10px] font-normal text-green-600">Done</span>}
         </p>
         {entry.detail && (
           <p className="text-xs text-gray-500 truncate">{entry.detail}</p>
         )}
-        {entry.current != null && entry.total != null && entry.total > 0 && (
+        {entry.current != null && entry.total != null && entry.total > 0 && entry.status === "running" && (
           <div className="mt-1 h-1.5 w-full rounded-full bg-gray-200">
             <div
               className="h-full rounded-full bg-amber-400 transition-all"
@@ -80,7 +82,7 @@ function EntryRow({
       </div>
       <div className="flex items-center gap-1 shrink-0">
         <span className="text-[10px] text-gray-400">{relativeTime(entry.timestamp)}</span>
-        {entry.status === "error" && (
+        {entry.status !== "running" && (
           <button
             onClick={() => onDismiss(entry.id)}
             className="ml-1 text-gray-400 hover:text-gray-600"
@@ -99,13 +101,20 @@ function EntryRow({
 export function ActivityConsole() {
   const { entries, runningCount, dismissEntry } = useActivityConsole();
   const [expanded, setExpanded] = useState(false);
+  // Listen for toggle event from sidebar
+  useEffect(() => {
+    const handler = () => setExpanded((prev) => !prev);
+    window.addEventListener("toggle-activity-console", handler);
+    return () => window.removeEventListener("toggle-activity-console", handler);
+  }, []);
 
   const hasEntries = entries.length > 0;
+  const isVisible = hasEntries || expanded;
 
   return (
     <div
       className={`fixed bottom-4 right-4 z-50 transition-opacity ${
-        hasEntries ? "opacity-100" : "opacity-0 pointer-events-none"
+        isVisible ? "opacity-100" : "opacity-0 pointer-events-none"
       }`}
     >
       {expanded ? (
@@ -124,9 +133,13 @@ export function ActivityConsole() {
             </button>
           </div>
           <div className="overflow-y-auto flex-1">
-            {entries.map((entry) => (
-              <EntryRow key={entry.id} entry={entry} onDismiss={dismissEntry} />
-            ))}
+            {entries.length === 0 ? (
+              <p className="px-3 py-6 text-xs text-gray-400 text-center">No activity yet</p>
+            ) : (
+              entries.map((entry) => (
+                <EntryRow key={entry.id} entry={entry} onDismiss={dismissEntry} />
+              ))
+            )}
           </div>
         </div>
       ) : (

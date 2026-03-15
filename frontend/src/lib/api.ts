@@ -1,4 +1,5 @@
 import { getTokens, setTokens, clearTokens } from "./auth";
+import { reconnectSocket } from "./socket";
 
 const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -62,6 +63,7 @@ class ApiClient {
 
       const data = await response.json();
       setTokens(data);
+      reconnectSocket();
       return true;
     } catch {
       clearTokens();

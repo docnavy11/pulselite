@@ -1,11 +1,11 @@
+import asyncio
 import uuid
 
-from openai import AsyncOpenAI
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.models.knowledge import Chunk
+from app.services.ingestion.embedder import _get_model
 
 DENSE_CANDIDATES = 20
 SPARSE_CANDIDATES = 20
@@ -94,11 +94,8 @@ def _reciprocal_rank_fusion(
 
 
 async def _embed_query(query: str) -> list[float]:
-    if settings.OPENROUTER_API_KEY:
-        client = AsyncOpenAI(api_key=settings.OPENROUTER_API_KEY, base_url="https://openrouter.ai/api/v1")
-        model = "openai/text-embedding-3-small"
-    else:
-        client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
-        model = "text-embedding-3-small"
-    response = await client.embeddings.create(model=model, input=[query])
-    return response.data[0].embedding
+    model = _get_model()
+    embeddings = await asyncio.to_thread(
+        lambda: list(model.embed([query]))
+    )
+    return embeddings[0].tolist()

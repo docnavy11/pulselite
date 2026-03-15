@@ -49,6 +49,8 @@ class ConversationResponse(BaseModel):
     outcome: str | None
     ai_participated: bool
     autonomous_resolved: bool
+    topics: list[str] | None = None
+    last_message_preview: str | None = None
     created_at: datetime
     updated_at: datetime
 

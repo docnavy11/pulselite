@@ -7,8 +7,12 @@ from app.services.llm.base import BaseLLMClient
 
 
 class OpenAILLMClient(BaseLLMClient):
-    def __init__(self, api_key: str | None = None):
-        self._client = AsyncOpenAI(api_key=api_key or settings.OPENAI_API_KEY)
+    def __init__(self, api_key: str | None = None, base_url: str | None = None):
+        kwargs: dict = {"api_key": api_key or settings.AI_API_KEY}
+        resolved_base_url = base_url or settings.AI_BASE_URL
+        if resolved_base_url:
+            kwargs["base_url"] = resolved_base_url
+        self._client = AsyncOpenAI(**kwargs)
 
     async def stream_generate(
         self,

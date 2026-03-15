@@ -49,6 +49,7 @@ class PublicChatRequest(BaseModel):
     chatbot_id: uuid.UUID
     session_id: str
     message: str
+    conversation_id: uuid.UUID | None = None
 
     @field_validator("session_id")
     @classmethod
@@ -94,6 +95,7 @@ async def public_chat(
             workspace_id,
             chatbot,
             body.message,
+            conversation_id=body.conversation_id,
             contact_id=contact.id,
         ):
             chat_event = ChatEvent(

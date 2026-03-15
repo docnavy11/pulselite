@@ -11,6 +11,7 @@ async def stream_response(
     messages: list[dict],
     chatbot: Chatbot,
     openrouter_key: str | None = None,
+    openrouter_base_url: str | None = None,
 ) -> AsyncGenerator[str, None]:
     # Workspace OpenRouter key takes priority over chatbot-level byoak
     api_key = openrouter_key
@@ -23,7 +24,7 @@ async def stream_response(
 
     # If workspace OpenRouter key provided, always use openrouter provider
     provider = "openrouter" if openrouter_key else chatbot.llm_provider
-    client = get_llm_client(provider, api_key=api_key)
+    client = get_llm_client(provider, api_key=api_key, base_url=openrouter_base_url)
     async for token in client.stream_generate(  # type: ignore[misc]
         messages=messages,
         model=chatbot.llm_model,

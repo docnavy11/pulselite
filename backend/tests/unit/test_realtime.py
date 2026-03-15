@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, patch
 @pytest.mark.asyncio
 async def test_emit_to_workspace_publishes_event():
     """emit_to_workspace calls mgr.emit with correct room and event."""
-    with patch("app.services.realtime._mgr") as mock_mgr:
-        mock_mgr.emit = AsyncMock()
+    mock_mgr = AsyncMock()
+    with patch("app.services.realtime._create_manager", return_value=mock_mgr):
         from app.services.realtime import emit_to_workspace
 
         await emit_to_workspace("ws-123", "crawl:progress", {"pages_queued": 5})
@@ -20,9 +20,8 @@ async def test_emit_to_workspace_publishes_event():
 
 @pytest.mark.asyncio
 async def test_emit_to_workspace_noop_when_no_manager():
-    """emit_to_workspace is a no-op if manager is not initialized."""
-    with patch("app.services.realtime._mgr", None):
-        with patch("app.services.realtime._get_manager", return_value=None):
-            from app.services.realtime import emit_to_workspace
-            # Should not raise
-            await emit_to_workspace("ws-123", "test:event", {})
+    """emit_to_workspace is a no-op if manager creation fails."""
+    with patch("app.services.realtime._create_manager", return_value=None):
+        from app.services.realtime import emit_to_workspace
+        # Should not raise
+        await emit_to_workspace("ws-123", "test:event", {})

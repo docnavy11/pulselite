@@ -27,4 +27,15 @@ export function useRealtimeNotifications(): void {
       error("Chatbot auto-configuration failed");
     }
   });
+
+  useSocketEvent<{ chatbot_id: string; count: number }>("qa:questions_generated", (data) => {
+    success(`${data.count} Q&A questions generated — testing in progress`);
+  });
+
+  useSocketEvent<{ qa_pair_id: string; status: string }>("qa:pair_updated", (data) => {
+    if (data.status === "failed") {
+      error("A Q&A test failed");
+    }
+    // Don't toast every successful test (too noisy when batch completes)
+  });
 }

@@ -42,8 +42,7 @@ async def get_chatbot(db: AsyncSession, workspace_id: uuid.UUID, chatbot_id: uui
 async def update_chatbot(db: AsyncSession, workspace_id: uuid.UUID, chatbot_id: uuid.UUID, **kwargs) -> Chatbot:
     chatbot = await get_chatbot(db, workspace_id, chatbot_id)
     for key, value in kwargs.items():
-        if value is not None:
-            setattr(chatbot, key, value)
+        setattr(chatbot, key, value)
     await db.flush()
     await db.refresh(chatbot)
     return chatbot

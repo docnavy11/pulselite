@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     # Redis
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
-    REDIS_URL: str = "redis://localhost:6379/0"
+    REDIS_PASSWORD: str = ""
 
     # JWT
     SECRET_KEY: str
@@ -73,6 +73,10 @@ class Settings(BaseSettings):
     GOOGLE_AI_API_KEY: str = ""
     OPENROUTER_API_KEY: str = ""
 
+    # Global AI proxy overrides (used as defaults when no workspace-level config is set)
+    AI_BASE_URL: str = ""
+    AI_API_KEY: str = ""
+
     # Encryption
     FERNET_KEY: str = ""
 
@@ -90,6 +94,11 @@ class Settings(BaseSettings):
     @property
     def database_url_sync(self) -> str:
         return f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+
+    @property
+    def REDIS_URL(self) -> str:
+        auth = f":{self.REDIS_PASSWORD}@" if self.REDIS_PASSWORD else ""
+        return f"redis://{auth}{self.REDIS_HOST}:{self.REDIS_PORT}/0"
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

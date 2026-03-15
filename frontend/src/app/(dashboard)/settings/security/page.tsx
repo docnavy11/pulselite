@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card, CardContent } from "@/components/ui/Card";
 import { ShieldAlert, ShieldCheck } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 
 interface SetupResponse {
   secret: string;
@@ -118,10 +119,6 @@ export default function SecuritySettingsPage() {
       setDisableLoading(false);
     }
   }
-
-  const qrImageUrl = setupData
-    ? `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(setupData.qr_uri)}&size=200x200`
-    : null;
 
   if (loadingStatus) {
     return (
@@ -238,15 +235,8 @@ export default function SecuritySettingsPage() {
                       <p className="text-sm text-gray-700 font-medium">
                         Step 1: Scan this QR code with your authenticator app
                       </p>
-                      {/* QR code via public free API */}
                       <div className="inline-block rounded-lg border border-gray-200 p-3 bg-white">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={qrImageUrl!}
-                          alt="TOTP QR code"
-                          width={200}
-                          height={200}
-                        />
+                        <QRCodeSVG value={setupData.qr_uri} size={200} />
                       </div>
 
                       <p className="text-sm text-gray-500">

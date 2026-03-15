@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Mock socket.io-client
 const mockOn = vi.fn();
 const mockOff = vi.fn();
+const mockOffAny = vi.fn();
 const mockEmit = vi.fn();
 const mockDisconnect = vi.fn();
 
@@ -11,6 +12,7 @@ vi.mock("socket.io-client", () => ({
   io: vi.fn(() => ({
     on: mockOn,
     off: mockOff,
+    offAny: mockOffAny,
     emit: mockEmit,
     disconnect: mockDisconnect,
     connected: true,

@@ -79,6 +79,7 @@ async def list_conversations(
     offset: int = 0,
     date_from: str | None = None,
     date_to: str | None = None,
+    topic: str | None = None,
 ) -> list[Conversation]:
     query = select(Conversation).where(Conversation.workspace_id == workspace_id)
     if status_filter:
@@ -91,9 +92,54 @@ async def list_conversations(
         query = query.where(Conversation.created_at >= datetime.fromisoformat(date_from))
     if date_to:
         query = query.where(Conversation.created_at < datetime.fromisoformat(date_to) + timedelta(days=1))
+    if topic:
+        from sqlalchemy import exists, literal
+        from app.models.intelligence import ConversationAnalysis
+
+        topic_subq = (
+            select(literal(1))
+            .where(
+                ConversationAnalysis.conversation_id == Conversation.id,
+                ConversationAnalysis.topics.any(topic),
+            )
+        )
+        query = query.where(exists(topic_subq))
     query = query.order_by(Conversation.updated_at.desc()).limit(limit).offset(offset)
     result = await db.execute(query)
-    return list(result.scalars().all())
+    conversations = list(result.scalars().all())
+
+    # Batch-load topics + last message preview
+    if conversations:
+        from sqlalchemy import func
+        from app.models.intelligence import ConversationAnalysis
+
+        conv_ids = [c.id for c in conversations]
+
+        # Topics from analysis
+        analysis_result = await db.execute(
+            select(ConversationAnalysis.conversation_id, ConversationAnalysis.topics)
+            .where(ConversationAnalysis.conversation_id.in_(conv_ids))
+        )
+        topics_map = {row[0]: row[1] for row in analysis_result.all()}
+
+        # Last message preview per conversation
+        latest_msg_subq = (
+            select(
+                Message.conversation_id,
+                func.substring(Message.content, 1, 120).label("preview"),
+            )
+            .where(Message.conversation_id.in_(conv_ids))
+            .distinct(Message.conversation_id)
+            .order_by(Message.conversation_id, Message.created_at.desc())
+        )
+        preview_result = await db.execute(latest_msg_subq)
+        preview_map = {row[0]: row[1] for row in preview_result.all()}
+
+        for conv in conversations:
+            conv.topics = topics_map.get(conv.id)  # type: ignore[attr-defined]
+            conv.last_message_preview = preview_map.get(conv.id)  # type: ignore[attr-defined]
+
+    return conversations
 
 
 async def get_messages(

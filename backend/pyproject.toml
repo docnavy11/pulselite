@@ -22,6 +22,7 @@ dependencies = [
     "PyMuPDF>=1.24.0",
     "python-docx>=1.1.0",
     "openai>=1.0",
+    "fastembed>=0.7",
     "tiktoken>=0.7.0",
     "python-multipart>=0.0.9",
     "anthropic>=0.40",
