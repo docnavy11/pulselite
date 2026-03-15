@@ -419,6 +419,20 @@ export interface Webhook {
   created_at: string;
 }
 
+export interface WebhookDelivery {
+  id: string;
+  webhook_id: string;
+  event_type: string;
+  status: "pending" | "delivered" | "failed";
+  attempts: number;
+  max_attempts: number;
+  next_retry_at: string | null;
+  last_status_code: number | null;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface LLMSettings {
   openrouter_api_key_set: boolean;
   openrouter_base_url: string | null;

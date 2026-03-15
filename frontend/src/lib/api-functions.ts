@@ -30,6 +30,7 @@ import {
   UsageBreakdown,
   SegmentSentimentItem,
   Webhook,
+  WebhookDelivery,
   LLMSettings,
   OpenRouterModel,
   WorkspaceUsage,
@@ -441,19 +442,19 @@ export function getIntegrations(workspaceId: string) {
 
 export function updateIntegration(
   workspaceId: string,
-  integrationId: string,
+  integrationType: string,
   config: Record<string, unknown>,
 ) {
   return api.put<IntegrationConfig>(
-    `/api/v1/workspaces/${workspaceId}/integrations/${integrationId}`,
+    `/api/v1/workspaces/${workspaceId}/integrations/${integrationType}`,
     config,
   );
 }
 
-export function testIntegration(workspaceId: string, integrationId: string) {
-  return api.post<{ success: boolean; message: string }>(
-    `/api/v1/workspaces/${workspaceId}/integrations/${integrationId}/test`,
-  );
+export function testIntegration(workspaceId: string, integrationType: string) {
+  return api.post<{ success: boolean; detail: string }>(
+    `/api/v1/workspaces/${workspaceId}/integrations/${integrationType}/test`,
+  ).then((r) => ({ success: r.success, message: r.detail }));
 }
 
 // Billing
@@ -514,6 +515,10 @@ export function requestDataExport(workspaceId: string) {
 
 export function deleteWorkspace(workspaceId: string) {
   return api.delete<void>(`/api/v1/workspaces/${workspaceId}`);
+}
+
+export function updateWorkspace(workspaceId: string, data: { name?: string; timezone?: string }) {
+  return api.patch<import("./types").Workspace>(`/api/v1/workspaces/${workspaceId}`, data);
 }
 
 export function getWorkspaces() {
@@ -578,6 +583,32 @@ export function createWebhook(
 
 export function deleteWebhook(workspaceId: string, webhookId: string) {
   return api.delete<void>(`/api/v1/workspaces/${workspaceId}/webhooks/${webhookId}`);
+}
+
+export function getWebhookDeliveries(
+  workspaceId: string,
+  webhookId: string,
+  params?: { status?: string; limit?: number; offset?: number },
+) {
+  const query = new URLSearchParams();
+  if (params?.status) query.set("status_filter", params.status);
+  if (params?.limit) query.set("limit", String(params.limit));
+  if (params?.offset) query.set("offset", String(params.offset));
+  const qs = query.toString();
+  return api.get<{ items: WebhookDelivery[]; total: number }>(
+    `/api/v1/workspaces/${workspaceId}/webhooks/${webhookId}/deliveries${qs ? `?${qs}` : ""}`,
+  );
+}
+
+export function retryWebhookDelivery(
+  workspaceId: string,
+  webhookId: string,
+  deliveryId: string,
+) {
+  return api.post<WebhookDelivery>(
+    `/api/v1/workspaces/${workspaceId}/webhooks/${webhookId}/deliveries/${deliveryId}/retry`,
+    {},
+  );
 }
 
 // Invites / Team
