@@ -4,11 +4,21 @@ CITATION_INSTRUCTION = """When answering, cite your sources using numbered refer
 Only use information from the provided context. If the context doesn't contain enough information to answer the question confidently, say so clearly rather than guessing."""
 
 PERSONA_TEMPLATE = """You are {display_name}, an AI assistant for {chatbot_name}.
-Your tone is {tone}. You respond in {language}.
+Your tone is {tone}. {language_instruction}
 
 {system_prompt}
 
 {citation_instruction}"""
+
+
+def _build_language_instruction(chatbot: Chatbot) -> str:
+    language = chatbot.language or "English"
+    if getattr(chatbot, "auto_detect_language", False):
+        return (
+            "Detect the language of the user's message and always respond in that same language. "
+            f"If unsure, default to {language}."
+        )
+    return f"You respond in {language}."
 
 
 def build_system_prompt(chatbot: Chatbot) -> str:
@@ -16,7 +26,7 @@ def build_system_prompt(chatbot: Chatbot) -> str:
         display_name=chatbot.display_name or "Assistant",
         chatbot_name=chatbot.name,
         tone=chatbot.tone or "professional",
-        language=chatbot.language or "English",
+        language_instruction=_build_language_instruction(chatbot),
         system_prompt=chatbot.system_prompt or "",
         citation_instruction=CITATION_INSTRUCTION,
     ).strip()
