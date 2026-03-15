@@ -26,7 +26,7 @@ RETRY_DELAYS = [60, 300, 900, 3600, 10800]  # ~4.2 hours total
 def deliver_webhook(self, delivery_id: str) -> dict:
     try:
         return asyncio.run(_deliver(uuid.UUID(delivery_id), self))
-    except Exception as exc:
+    except Exception:
         raise
 
 
