@@ -220,7 +220,7 @@ async def handle_message(
         db.add(retrieval_log)
         await db.flush()
 
-        if escalated and _is_substantive_query(message):
+        if rag_result and rag_result.original_confidence_low and _is_substantive_query(message):
             gap_event = GapEvent(
                 id=uuid.uuid4(),
                 workspace_id=workspace_id,

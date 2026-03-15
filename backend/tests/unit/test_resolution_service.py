@@ -250,3 +250,112 @@ class TestHandleMessage:
         assert len(events) == 1
         assert events[0].type == "error"
         assert "credit" in events[0].data.lower()
+
+    @pytest.mark.asyncio
+    async def test_gap_event_recorded_when_original_confidence_low_even_if_retry_succeeds(self):
+        """Gap event should be recorded based on original_confidence_low, not escalated."""
+        from app.services.resolution_service import handle_message
+
+        ws = _make_workspace()
+        chatbot = _make_chatbot(workspace_id=ws.id)
+        conversation = MagicMock(id=uuid.uuid4())
+        conversation.escalation_reason = None
+        conversation.outcome = None
+        conversation.confidence_avg = None
+        conversation.ai_participated = False
+        conversation.autonomous_resolved = False
+        user_message = MagicMock(id=uuid.uuid4())
+        bot_message = MagicMock(id=uuid.uuid4())
+
+        # Retry succeeded: escalated=False but original_confidence_low=True
+        rag_result = RAGResult(
+            confidence_score=0.8, confidence_avg=0.7, escalated=False,
+            retrieved_chunk_ids=[], query="How do I configure SAML SSO?",
+            sources=[], retried=True, original_confidence_low=True,
+        )
+
+        async def fake_process_query(*args, **kwargs):
+            yield rag_result
+            yield "Here's how to configure SAML SSO..."
+            yield {"prompt_tokens": 50, "completion_tokens": 20}
+
+        ws_result = MagicMock()
+        ws_result.scalar_one_or_none.return_value = ws
+        db = AsyncMock()
+        db.execute = AsyncMock(return_value=ws_result)
+        db.add = MagicMock()
+        db.flush = AsyncMock()
+
+        with patch("app.services.resolution_service.is_cloud", return_value=False), \
+             patch("app.services.resolution_service.conversation_service") as mock_conv, \
+             patch("app.services.resolution_service.process_query", side_effect=fake_process_query), \
+             patch("app.services.resolution_service.fire_event", new_callable=AsyncMock), \
+             patch("app.services.action_service.list_enabled_actions", new_callable=AsyncMock, return_value=[]), \
+             patch("app.services.action_executor.run_actions", new_callable=AsyncMock, return_value=[]):
+
+            mock_conv.create_conversation = AsyncMock(return_value=conversation)
+            mock_conv.add_message = AsyncMock(side_effect=[user_message, bot_message])
+
+            events = await _collect_events(
+                handle_message(db, ws.id, chatbot, "How do I configure SAML SSO?")
+            )
+
+        # Gap event should be recorded (db.add called with GapEvent)
+        add_calls = db.add.call_args_list
+        from app.models.intelligence import GapEvent as GapEventModel
+        gap_adds = [c for c in add_calls if isinstance(c[0][0], GapEventModel)]
+        assert len(gap_adds) == 1
+
+    @pytest.mark.asyncio
+    async def test_no_gap_event_when_original_confidence_was_fine(self):
+        """No gap event when original confidence was above threshold (no retry needed)."""
+        from app.services.resolution_service import handle_message
+
+        ws = _make_workspace()
+        chatbot = _make_chatbot(workspace_id=ws.id)
+        conversation = MagicMock(id=uuid.uuid4())
+        conversation.escalation_reason = None
+        conversation.outcome = None
+        conversation.confidence_avg = None
+        conversation.ai_participated = False
+        conversation.autonomous_resolved = False
+        user_message = MagicMock(id=uuid.uuid4())
+        bot_message = MagicMock(id=uuid.uuid4())
+
+        rag_result = RAGResult(
+            confidence_score=0.9, confidence_avg=0.8, escalated=False,
+            retrieved_chunk_ids=[], query="What are your pricing plans?",
+            sources=[], retried=False, original_confidence_low=False,
+        )
+
+        async def fake_process_query(*args, **kwargs):
+            yield rag_result
+            yield "Our pricing plans are..."
+            yield {"prompt_tokens": 30, "completion_tokens": 15}
+
+        ws_result = MagicMock()
+        ws_result.scalar_one_or_none.return_value = ws
+        db = AsyncMock()
+        db.execute = AsyncMock(return_value=ws_result)
+        db.add = MagicMock()
+        db.flush = AsyncMock()
+
+        with patch("app.services.resolution_service.is_cloud", return_value=False), \
+             patch("app.services.resolution_service.conversation_service") as mock_conv, \
+             patch("app.services.resolution_service.process_query", side_effect=fake_process_query), \
+             patch("app.services.resolution_service.fire_event", new_callable=AsyncMock), \
+             patch("app.services.action_service.list_enabled_actions", new_callable=AsyncMock, return_value=[]), \
+             patch("app.services.action_executor.run_actions", new_callable=AsyncMock, return_value=[]):
+
+            mock_conv.create_conversation = AsyncMock(return_value=conversation)
+            mock_conv.add_message = AsyncMock(side_effect=[user_message, bot_message])
+
+            events = await _collect_events(
+                handle_message(db, ws.id, chatbot, "What are your pricing plans?")
+            )
+
+        # No gap event should be recorded
+        add_calls = db.add.call_args_list
+        from app.models.intelligence import GapEvent as GapEventModel
+        gap_adds = [c for c in add_calls if isinstance(c[0][0], GapEventModel)]
+        assert len(gap_adds) == 0
