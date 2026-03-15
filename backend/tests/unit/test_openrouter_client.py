@@ -12,9 +12,16 @@ async def test_openrouter_client_streams_tokens():
     mock_chunk = MagicMock()
     mock_chunk.choices = [MagicMock()]
     mock_chunk.choices[0].delta.content = "hello"
+    mock_chunk.usage = None
+
+    # Final chunk with usage metadata
+    mock_final = MagicMock()
+    mock_final.choices = []
+    mock_final.usage = MagicMock(prompt_tokens=10, completion_tokens=5)
 
     async def fake_stream():
         yield mock_chunk
+        yield mock_final
 
     mock_openai = AsyncMock()
     mock_openai.chat.completions.create = AsyncMock(return_value=fake_stream())
@@ -27,7 +34,7 @@ async def test_openrouter_client_streams_tokens():
         ):
             tokens.append(token)
 
-    assert tokens == ["hello"]
+    assert tokens == ["hello", {"prompt_tokens": 10, "completion_tokens": 5}]
 
 
 def test_get_llm_client_openrouter():
