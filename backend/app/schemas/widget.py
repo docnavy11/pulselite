@@ -104,6 +104,7 @@ class PersonaUpdate(BaseModel):
     display_name: str | None = None
     avatar_url: str | None = None
     language: str | None = None
+    auto_detect_language: bool | None = None
 
 
 class LLMConfigUpdate(BaseModel):

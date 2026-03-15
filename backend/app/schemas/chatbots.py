@@ -21,7 +21,7 @@ class ChatbotCreate(BaseModel):
     tone: str = "professional"
     language: str = "en"
     llm_provider: str = "openrouter"
-    llm_model: str = "anthropic/claude-haiku-4-5"
+    llm_model: str = "claude-haiku-4-5-20251001"
     temperature: float = Field(default=0.3, ge=0.0, le=2.0)
     max_tokens: int = Field(default=1000, ge=1, le=32000)
     confidence_threshold: float = Field(default=0.65, ge=0.0, le=1.0)
@@ -56,6 +56,7 @@ class ChatbotUpdate(BaseModel):
     retrieval_top_k: int | None = Field(default=None, ge=1, le=50)
     use_reranking: bool | None = None
     use_hybrid_retrieval: bool | None = None
+    auto_detect_language: bool | None = None
     fallback_type: str | None = None
     fallback_message: str | None = None
     is_active: bool | None = None
@@ -97,6 +98,7 @@ class ChatbotResponse(BaseModel):
     retrieval_top_k: int
     use_reranking: bool
     use_hybrid_retrieval: bool
+    auto_detect_language: bool = False
     fallback_type: str
     fallback_message: str | None
     is_active: bool
