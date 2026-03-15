@@ -2,12 +2,14 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_user, get_workspace
+from app.dependencies import get_current_user, get_workspace, get_workspace_admin
 from app.models.organizational import Agent, WorkspaceWebhook
+from app.models.webhook_delivery import WebhookDelivery
+from app.schemas.webhook_delivery import WebhookDeliveryListResponse, WebhookDeliveryResponse
 from app.services.encryption import encrypt_api_key
 
 router = APIRouter(tags=["webhooks"])
@@ -49,7 +51,7 @@ async def list_webhooks(
 @router.post("/workspaces/{workspace_id}/webhooks", status_code=201)
 async def create_webhook(
     body: WebhookCreate,
-    workspace_id: uuid.UUID = Depends(get_workspace),
+    workspace_id: uuid.UUID = Depends(get_workspace_admin),
     db: AsyncSession = Depends(get_db),
     current_user: Agent = Depends(get_current_user),
 ):
@@ -67,13 +69,13 @@ async def create_webhook(
     db.add(hook)
     await db.commit()
     await db.refresh(hook)
-    return {"id": str(hook.id), "url": hook.url, "event_types": hook.event_types, "is_active": hook.is_active}
+    return {"id": str(hook.id), "url": hook.url, "event_types": hook.event_types, "is_active": hook.is_active, "created_at": hook.created_at.isoformat()}
 
 
 @router.delete("/workspaces/{workspace_id}/webhooks/{webhook_id}", status_code=204)
 async def delete_webhook(
     webhook_id: uuid.UUID,
-    workspace_id: uuid.UUID = Depends(get_workspace),
+    workspace_id: uuid.UUID = Depends(get_workspace_admin),
     db: AsyncSession = Depends(get_db),
     current_user: Agent = Depends(get_current_user),
 ):
@@ -88,3 +90,88 @@ async def delete_webhook(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Webhook not found")
     await db.delete(hook)
     await db.commit()
+
+
+@router.get(
+    "/workspaces/{workspace_id}/webhooks/{webhook_id}/deliveries",
+    response_model=WebhookDeliveryListResponse,
+)
+async def list_deliveries(
+    webhook_id: uuid.UUID,
+    workspace_id: uuid.UUID = Depends(get_workspace_admin),
+    db: AsyncSession = Depends(get_db),
+    current_user: Agent = Depends(get_current_user),
+    status_filter: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+):
+    """List delivery attempts for a webhook, newest first."""
+    # Verify webhook belongs to workspace
+    hook_result = await db.execute(
+        select(WorkspaceWebhook).where(
+            WorkspaceWebhook.id == webhook_id,
+            WorkspaceWebhook.workspace_id == workspace_id,
+        )
+    )
+    if hook_result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Webhook not found")
+
+    base_filters = [
+        WebhookDelivery.webhook_id == webhook_id,
+        WebhookDelivery.workspace_id == workspace_id,
+    ]
+    if status_filter:
+        base_filters.append(WebhookDelivery.status == status_filter)
+
+    total_result = await db.execute(
+        select(func.count(WebhookDelivery.id)).where(*base_filters)
+    )
+    total = total_result.scalar_one()
+
+    query = select(WebhookDelivery).where(*base_filters)
+
+    result = await db.execute(
+        query.order_by(WebhookDelivery.created_at.desc()).limit(limit).offset(offset)
+    )
+    deliveries = result.scalars().all()
+
+    return WebhookDeliveryListResponse(items=deliveries, total=total)
+
+
+@router.post(
+    "/workspaces/{workspace_id}/webhooks/{webhook_id}/deliveries/{delivery_id}/retry",
+    response_model=WebhookDeliveryResponse,
+)
+async def retry_delivery(
+    webhook_id: uuid.UUID,
+    delivery_id: uuid.UUID,
+    workspace_id: uuid.UUID = Depends(get_workspace_admin),
+    db: AsyncSession = Depends(get_db),
+    current_user: Agent = Depends(get_current_user),
+):
+    """Retry a failed webhook delivery."""
+    result = await db.execute(
+        select(WebhookDelivery).where(
+            WebhookDelivery.id == delivery_id,
+            WebhookDelivery.webhook_id == webhook_id,
+            WebhookDelivery.workspace_id == workspace_id,
+        )
+    )
+    delivery = result.scalar_one_or_none()
+    if delivery is None or delivery.status != "failed":
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Failed delivery not found",
+        )
+
+    delivery.status = "pending"
+    delivery.attempts = 0
+    delivery.next_retry_at = None
+    delivery.last_error = None
+    await db.commit()
+    await db.refresh(delivery)
+
+    from app.workers.tasks.deliver_webhook import deliver_webhook  # noqa: PLC0415
+    deliver_webhook.delay(str(delivery_id))
+
+    return delivery
