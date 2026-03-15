@@ -615,3 +615,44 @@ export interface QAPairListResponse {
   items: QAPair[];
   total: number;
 }
+
+export interface WorkerHealthTopError {
+  task_name: string;
+  error: string;
+  count: number;
+}
+
+export interface WorkerHealthTaskPerf {
+  task_name: string;
+  count: number;
+  success_rate_pct: number;
+  avg_duration_ms: number | null;
+  p95_duration_ms: number | null;
+  last_failure_at: string | null;
+}
+
+export interface WorkerHealthTimeseries {
+  bucket: string;
+  completed: number;
+  failed: number;
+}
+
+export interface WorkerHealth {
+  queue: {
+    pending: number;
+    running: number;
+    throughput_per_hour: number;
+  };
+  reliability: {
+    total: number;
+    succeeded: number;
+    failed: number;
+    failure_rate_pct: number;
+    total_retries: number;
+    top_errors: WorkerHealthTopError[];
+  };
+  performance: {
+    by_task: WorkerHealthTaskPerf[];
+  };
+  timeseries: WorkerHealthTimeseries[];
+}

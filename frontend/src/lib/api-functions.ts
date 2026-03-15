@@ -41,6 +41,7 @@ import {
   type QAPairListResponse,
   type RealtimeState,
   type BackgroundTaskLogResponse,
+  type WorkerHealth,
 } from "./types";
 
 // Chatbot CRUD
@@ -830,5 +831,12 @@ export function getBackgroundTaskLogs(
   if (status) params.set("status", status);
   return api.get<BackgroundTaskLogResponse>(
     `/api/v1/workspaces/${workspaceId}/realtime/logs?${params}`,
+  );
+}
+
+// Worker health
+export function getWorkerHealth(workspaceId: string, window: "1h" | "24h" | "7d" = "24h") {
+  return api.get<WorkerHealth>(
+    `/api/v1/workspaces/${workspaceId}/workers/health?window=${window}`,
   );
 }
