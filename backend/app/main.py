@@ -167,6 +167,11 @@ def create_app() -> FastAPI:
         from app.services.plan_service import load_plan_tiers
         await load_plan_tiers()
 
+    # Light mode: serve built frontend as static files (must be LAST)
+    if settings.serve_frontend:
+        from app.static_files import mount_frontend
+        mount_frontend(application)
+
     return application
 
 
