@@ -1,12 +1,42 @@
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.conversations import Conversation, Message
+from app.services.deployment import is_cloud
+from app.services.plan_service import get_plan_limits
+
+
+async def check_conversation_cap(workspace, db: AsyncSession) -> None:
+    """Raise HTTP 429 if workspace has hit its monthly conversation cap (cloud mode only)."""
+    if not is_cloud():
+        return
+
+    limits = get_plan_limits(workspace.plan)
+    cap = limits["conversations"]
+    if cap == -1:
+        return
+
+    now = datetime.now(timezone.utc)
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    result = await db.execute(
+        select(func.count(Conversation.id)).where(
+            Conversation.workspace_id == workspace.id,
+            Conversation.created_at >= month_start,
+        )
+    )
+    count = result.scalar_one()
+
+    if count >= cap:
+        raise HTTPException(
+            status_code=429,
+            detail="Monthly conversation limit reached",
+        )
 
 
 async def create_conversation(
