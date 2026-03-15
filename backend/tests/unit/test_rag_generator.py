@@ -76,3 +76,48 @@ class TestStreamResponse:
                 pass
 
         mock_get.assert_called_once_with("openai", api_key="decrypted-key", base_url=None)
+
+    @pytest.mark.asyncio
+    async def test_byoak_decrypt_failure_falls_back_to_none(self):
+        """When BYOAK decryption fails, api_key stays None (uses platform key)."""
+        from app.services.rag.generator import stream_response
+
+        async def fake_stream(**kwargs):
+            yield "ok"
+
+        mock_client = MagicMock()
+        mock_client.stream_generate = fake_stream
+
+        with patch("app.services.rag.generator.get_llm_client", return_value=mock_client) as mock_get, \
+             patch("app.services.encryption.decrypt_api_key", side_effect=Exception("bad key")):
+            async for _ in stream_response(
+                [{"role": "user", "content": "hi"}],
+                _make_chatbot(byoak="bad-encrypted-key", llm_provider="openai"),
+            ):
+                pass
+
+        # Falls back to chatbot.llm_provider with api_key=None
+        mock_get.assert_called_once_with("openai", api_key=None, base_url=None)
+
+    @pytest.mark.asyncio
+    async def test_passes_chatbot_temperature_and_max_tokens(self):
+        from app.services.rag.generator import stream_response
+
+        captured_kwargs = {}
+
+        async def fake_stream(**kwargs):
+            captured_kwargs.update(kwargs)
+            yield "ok"
+
+        mock_client = MagicMock()
+        mock_client.stream_generate = fake_stream
+
+        with patch("app.services.rag.generator.get_llm_client", return_value=mock_client):
+            async for _ in stream_response(
+                [{"role": "user", "content": "hi"}],
+                _make_chatbot(temperature=0.3, max_tokens=512),
+            ):
+                pass
+
+        assert captured_kwargs["temperature"] == 0.3
+        assert captured_kwargs["max_tokens"] == 512

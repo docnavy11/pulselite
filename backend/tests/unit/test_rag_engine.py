@@ -320,3 +320,134 @@ class TestProcessQuery:
         assert len(chunk_ids) == 2
         assert "shared" in chunk_ids
         assert "unique" in chunk_ids
+
+    @pytest.mark.asyncio
+    async def test_no_kb_returns_default_retry_fields(self):
+        """Early return path (no KB) should have retried=False, original_confidence_low=False."""
+        from app.services.rag.engine import process_query, RAGResult
+
+        db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        db.execute = AsyncMock(return_value=mock_result)
+
+        items = []
+        async for item in process_query(db, "test", _make_chatbot()):
+            items.append(item)
+
+        rag = [i for i in items if isinstance(i, RAGResult)][0]
+        assert rag.retried is False
+        assert rag.original_confidence_low is False
+
+    @pytest.mark.asyncio
+    async def test_high_confidence_skips_retry(self):
+        """When confidence is above threshold, no retry is attempted."""
+        from app.services.rag.engine import process_query, RAGResult
+
+        kb = _make_kb()
+        chunk = _make_chunk()
+
+        kb_result = MagicMock()
+        kb_result.scalar_one_or_none.return_value = kb
+        docs_result = MagicMock()
+        docs_result.all.return_value = []
+
+        db = AsyncMock()
+        db.execute = AsyncMock(side_effect=[kb_result, docs_result])
+
+        async def fake_stream(*args, **kwargs):
+            yield "answer"
+
+        with patch("app.services.rag.engine.hybrid_search", new_callable=AsyncMock, return_value=[chunk]), \
+             patch("app.services.rag.engine.compute_confidence", return_value=(0.9, 0.85)), \
+             patch("app.services.rag.engine.should_escalate", return_value=False), \
+             patch("app.services.rag.engine.reformulate_queries", new_callable=AsyncMock) as mock_reform, \
+             patch("app.services.rag.engine.get_conversation_history", new_callable=AsyncMock, return_value=[]), \
+             patch("app.services.rag.engine.stream_response", side_effect=fake_stream):
+
+            items = []
+            async for item in process_query(db, "test", _make_chatbot()):
+                items.append(item)
+
+        mock_reform.assert_not_awaited()
+        rag = [i for i in items if isinstance(i, RAGResult)][0]
+        assert rag.retried is False
+        assert rag.original_confidence_low is False
+        assert rag.escalated is False
+
+    @pytest.mark.asyncio
+    async def test_source_urls_built_from_doc_metadata(self):
+        """Sources list is built from document metadata for chunks with source_url."""
+        from app.services.rag.engine import process_query, RAGResult
+
+        kb = _make_kb()
+        doc_id = uuid.uuid4()
+        chunk = _make_chunk(doc_id=doc_id)
+
+        kb_result = MagicMock()
+        kb_result.scalar_one_or_none.return_value = kb
+
+        doc_row = MagicMock()
+        doc_row.__getitem__ = lambda self, key: {
+            0: doc_id, 1: "Getting Started", 2: "https://docs.example.com/start"
+        }[key]
+        docs_result = MagicMock()
+        docs_result.all.return_value = [doc_row]
+
+        db = AsyncMock()
+        db.execute = AsyncMock(side_effect=[kb_result, docs_result])
+
+        async def fake_stream(*args, **kwargs):
+            yield "answer"
+
+        with patch("app.services.rag.engine.hybrid_search", new_callable=AsyncMock, return_value=[chunk]), \
+             patch("app.services.rag.engine.compute_confidence", return_value=(0.9, 0.9)), \
+             patch("app.services.rag.engine.should_escalate", return_value=False), \
+             patch("app.services.rag.engine.get_conversation_history", new_callable=AsyncMock, return_value=[]), \
+             patch("app.services.rag.engine.stream_response", side_effect=fake_stream):
+
+            items = []
+            async for item in process_query(db, "test", _make_chatbot()):
+                items.append(item)
+
+        rag = [i for i in items if isinstance(i, RAGResult)][0]
+        assert len(rag.sources) == 1
+        assert rag.sources[0]["title"] == "Getting Started"
+        assert rag.sources[0]["url"] == "https://docs.example.com/start"
+        assert rag.sources[0]["index"] == 1
+
+    @pytest.mark.asyncio
+    async def test_no_sources_when_doc_has_no_url(self):
+        """Chunks from documents without source_url produce no sources."""
+        from app.services.rag.engine import process_query, RAGResult
+
+        kb = _make_kb()
+        doc_id = uuid.uuid4()
+        chunk = _make_chunk(doc_id=doc_id)
+
+        kb_result = MagicMock()
+        kb_result.scalar_one_or_none.return_value = kb
+
+        doc_row = MagicMock()
+        doc_row.__getitem__ = lambda self, key: {0: doc_id, 1: "Uploaded PDF", 2: None}[key]
+        docs_result = MagicMock()
+        docs_result.all.return_value = [doc_row]
+
+        db = AsyncMock()
+        db.execute = AsyncMock(side_effect=[kb_result, docs_result])
+
+        async def fake_stream(*args, **kwargs):
+            yield "answer"
+
+        with patch("app.services.rag.engine.hybrid_search", new_callable=AsyncMock, return_value=[chunk]), \
+             patch("app.services.rag.engine.compute_confidence", return_value=(0.9, 0.9)), \
+             patch("app.services.rag.engine.should_escalate", return_value=False), \
+             patch("app.services.rag.engine.get_conversation_history", new_callable=AsyncMock, return_value=[]), \
+             patch("app.services.rag.engine.stream_response", side_effect=fake_stream):
+
+            items = []
+            async for item in process_query(db, "test", _make_chatbot()):
+                items.append(item)
+
+        rag = [i for i in items if isinstance(i, RAGResult)][0]
+        assert len(rag.sources) == 0

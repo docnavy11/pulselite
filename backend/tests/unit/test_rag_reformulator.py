@@ -133,3 +133,45 @@ class TestReformulateQueries:
         assert "alternative" in system_msg["content"].lower() or "rephras" in system_msg["content"].lower()
         user_msg = [m for m in messages if m["role"] == "user"][0]
         assert "How do I login?" in user_msg["content"]
+
+    @pytest.mark.asyncio
+    async def test_filters_whitespace_only_queries(self):
+        from app.services.rag.reformulator import reformulate_queries
+
+        mock_client = MagicMock()
+        mock_client.generate = AsyncMock(return_value='{"queries": ["valid query", "  ", ""]}')
+
+        with patch("app.services.rag.reformulator.get_llm_client", return_value=mock_client):
+            result = await reformulate_queries("test", _make_chatbot())
+
+        assert result == ["valid query"]
+
+    @pytest.mark.asyncio
+    async def test_passes_openrouter_base_url(self):
+        from app.services.rag.reformulator import reformulate_queries
+
+        mock_client = MagicMock()
+        mock_client.generate = AsyncMock(return_value='{"queries": ["q1"]}')
+
+        with patch("app.services.rag.reformulator.get_llm_client", return_value=mock_client) as mock_get:
+            await reformulate_queries(
+                "test",
+                _make_chatbot(),
+                openrouter_key="sk-key",
+                openrouter_base_url="https://custom.api.com",
+            )
+
+        mock_get.assert_called_once_with("openrouter", api_key="sk-key", base_url="https://custom.api.com")
+
+    @pytest.mark.asyncio
+    async def test_uses_chatbot_model(self):
+        from app.services.rag.reformulator import reformulate_queries
+
+        mock_client = MagicMock()
+        mock_client.generate = AsyncMock(return_value='{"queries": ["q1"]}')
+
+        with patch("app.services.rag.reformulator.get_llm_client", return_value=mock_client):
+            await reformulate_queries("test", _make_chatbot(llm_model="anthropic/claude-3-haiku"))
+
+        call_kwargs = mock_client.generate.call_args
+        assert call_kwargs.kwargs.get("model") == "anthropic/claude-3-haiku"

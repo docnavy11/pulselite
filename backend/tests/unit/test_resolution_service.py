@@ -359,3 +359,109 @@ class TestHandleMessage:
         from app.models.intelligence import GapEvent as GapEventModel
         gap_adds = [c for c in add_calls if isinstance(c[0][0], GapEventModel)]
         assert len(gap_adds) == 0
+
+    @pytest.mark.asyncio
+    async def test_done_event_includes_sources(self):
+        """Done event should include sources from RAGResult."""
+        from app.services.resolution_service import handle_message
+
+        ws = _make_workspace()
+        chatbot = _make_chatbot(workspace_id=ws.id)
+        conversation = MagicMock(id=uuid.uuid4())
+        conversation.escalation_reason = None
+        conversation.outcome = None
+        conversation.confidence_avg = None
+        conversation.ai_participated = False
+        conversation.autonomous_resolved = False
+        user_message = MagicMock(id=uuid.uuid4())
+        bot_message = MagicMock(id=uuid.uuid4())
+
+        sources = [{"index": 1, "title": "FAQ", "url": "https://example.com/faq"}]
+        rag_result = RAGResult(
+            confidence_score=0.9, confidence_avg=0.8, escalated=False,
+            retrieved_chunk_ids=[], query="pricing info",
+            sources=sources,
+        )
+
+        async def fake_process_query(*args, **kwargs):
+            yield rag_result
+            yield "Here are our pricing plans..."
+            yield {"prompt_tokens": 30, "completion_tokens": 15}
+
+        ws_result = MagicMock()
+        ws_result.scalar_one_or_none.return_value = ws
+        db = AsyncMock()
+        db.execute = AsyncMock(return_value=ws_result)
+        db.add = MagicMock()
+        db.flush = AsyncMock()
+
+        with patch("app.services.resolution_service.is_cloud", return_value=False), \
+             patch("app.services.resolution_service.conversation_service") as mock_conv, \
+             patch("app.services.resolution_service.process_query", side_effect=fake_process_query), \
+             patch("app.services.resolution_service.fire_event", new_callable=AsyncMock), \
+             patch("app.services.action_service.list_enabled_actions", new_callable=AsyncMock, return_value=[]), \
+             patch("app.services.action_executor.run_actions", new_callable=AsyncMock, return_value=[]):
+
+            mock_conv.create_conversation = AsyncMock(return_value=conversation)
+            mock_conv.add_message = AsyncMock(side_effect=[user_message, bot_message])
+
+            events = await _collect_events(
+                handle_message(db, ws.id, chatbot, "What are your pricing plans?")
+            )
+
+        done_event = [e for e in events if e.type == "done"][0]
+        assert done_event.sources == sources
+
+    @pytest.mark.asyncio
+    async def test_existing_conversation_reuses_id(self):
+        """When conversation_id is provided, no new conversation is created."""
+        from app.services.resolution_service import handle_message
+
+        ws = _make_workspace()
+        chatbot = _make_chatbot(workspace_id=ws.id)
+        existing_conv_id = uuid.uuid4()
+        conversation = MagicMock(id=existing_conv_id)
+        conversation.escalation_reason = None
+        conversation.outcome = None
+        conversation.confidence_avg = None
+        conversation.ai_participated = False
+        conversation.autonomous_resolved = False
+        user_message = MagicMock(id=uuid.uuid4())
+        bot_message = MagicMock(id=uuid.uuid4())
+
+        rag_result = RAGResult(
+            confidence_score=0.9, confidence_avg=0.8, escalated=False,
+            retrieved_chunk_ids=[], query="follow-up question", sources=[],
+        )
+
+        async def fake_process_query(*args, **kwargs):
+            yield rag_result
+            yield "Follow-up answer"
+            yield {"prompt_tokens": 10, "completion_tokens": 5}
+
+        ws_result = MagicMock()
+        ws_result.scalar_one_or_none.return_value = ws
+        db = AsyncMock()
+        db.execute = AsyncMock(return_value=ws_result)
+        db.add = MagicMock()
+        db.flush = AsyncMock()
+
+        with patch("app.services.resolution_service.is_cloud", return_value=False), \
+             patch("app.services.resolution_service.conversation_service") as mock_conv, \
+             patch("app.services.resolution_service.process_query", side_effect=fake_process_query), \
+             patch("app.services.resolution_service.fire_event", new_callable=AsyncMock), \
+             patch("app.services.action_service.list_enabled_actions", new_callable=AsyncMock, return_value=[]), \
+             patch("app.services.action_executor.run_actions", new_callable=AsyncMock, return_value=[]):
+
+            mock_conv.get_conversation = AsyncMock(return_value=conversation)
+            mock_conv.add_message = AsyncMock(side_effect=[user_message, bot_message])
+
+            events = await _collect_events(
+                handle_message(db, ws.id, chatbot, "follow-up question",
+                               conversation_id=existing_conv_id)
+            )
+
+        # Should NOT create a new conversation
+        mock_conv.create_conversation.assert_not_called()
+        done_event = [e for e in events if e.type == "done"][0]
+        assert done_event.conversation_id == existing_conv_id
