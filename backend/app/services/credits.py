@@ -116,6 +116,9 @@ async def get_history(
     return list(result.scalars().all())
 
 
-def estimate_token_cost(model: str, token_count: int) -> int:
+def estimate_token_cost(model: str, token_count: int, is_byok: bool = False) -> int:
     rate = COST_PER_1K_TOKENS.get(model, 2)
-    return max(1, (token_count * rate) // 1000)
+    cost = max(1, (token_count * rate) // 1000)
+    if is_byok:
+        cost = max(1, cost // 2)
+    return cost

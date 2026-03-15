@@ -144,3 +144,14 @@ async def test_get_balance_reflects_multiple_adds(db, workspace):
     await add_credits(db, workspace.id, amount=200, reason="add2")
     after = await get_balance(db, workspace.id)
     assert after == before + 300
+
+
+def test_estimate_token_cost_byok_applies_50_percent_discount():
+    cost_full = estimate_token_cost("gpt-4o", 1000, is_byok=False)
+    cost_byok = estimate_token_cost("gpt-4o", 1000, is_byok=True)
+    assert cost_byok == max(1, cost_full // 2)
+
+
+def test_estimate_token_cost_byok_minimum_one_credit():
+    cost = estimate_token_cost("gpt-4o-mini", 1, is_byok=True)
+    assert cost >= 1
