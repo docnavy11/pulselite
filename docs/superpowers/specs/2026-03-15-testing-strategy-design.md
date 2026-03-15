@@ -6,7 +6,7 @@ A bottom-up, phased testing strategy to bring PulseLite from 45% coverage with 3
 
 **Approach:** Layer-by-layer through the test pyramid. Each phase produces a self-contained improvement with a progressive coverage gate ramp (45% → 70% → 80% → 90%).
 
-**Scope:** 7 phases, estimated 6-8 implementation cycles.
+**Scope:** 7 phases, 10 implementation cycles.
 
 ## Current State
 
@@ -18,6 +18,14 @@ A bottom-up, phased testing strategy to bring PulseLite from 45% coverage with 3
 - **8+ route groups** with zero integration tests
 - **No contract tests**
 - **4 E2E flows** (auth, chatbots, dashboard, conversations)
+
+## Prerequisite: Test Database Migration
+
+All phases require the `pulse_test` database to be in sync with `pulse`. Before starting any phase, run:
+```bash
+docker compose exec backend bash -c "POSTGRES_DB=pulse_test PYTHONPATH=/app alembic upgrade head"
+```
+Phase 6 automates this in CI, but until then it must be done manually before running tests.
 
 ## Phase 0: Green Baseline
 
@@ -63,22 +71,28 @@ Target 9 untested services plus all Celery workers. Largest phase by volume.
 | `action_service.py` | Medium | Low | Action CRUD, validation |
 | `encryption.py` | Medium | Low | Fernet encrypt/decrypt round-trip, invalid key handling |
 | `billing.py` | Medium | Medium | Stripe checkout/portal session creation (mock Stripe SDK), webhook event handling, plan transitions |
-| `webhook_service.py` | Medium | Low | Webhook config CRUD |
+| `webhooks.py` | Medium | Low | Webhook config CRUD |
+| `crawl_service.py` | Medium | Medium | Crawl preparation, URL validation, job creation |
 
-### Untested workers
+### Workers to cover
 
-| Worker | Complexity | What to test |
-|--------|-----------|-------------|
-| `analyze_conversation.py` | Medium | Sentiment scoring, topic extraction, DB writes |
-| `cluster_gaps.py` | Medium | Gap clustering logic, threshold behavior |
-| `compute_sentiment_trends.py` | Low | Trend aggregation, date range handling |
-| `generate_qa.py` | Medium | Q&A generation from doc content, LLM mock |
-| `close_stale_conversations.py` | Low | Staleness detection, status transitions |
-| `auto_recharge.py` | Low | Threshold check, credit top-up, self-hosted skip |
-| `gdpr_export.py` | Medium | Data collection, archive creation, cleanup |
-| `purge_old_data.py` | Low | Retention policy enforcement, cascade deletes |
-| `sync_documents.py` | Medium | External source sync, diff detection |
-| `reindex_article.py` | Low | Re-embedding, chunk replacement |
+| Worker | Status | Complexity | What to test |
+|--------|--------|-----------|-------------|
+| `crawl_website.py` | Partial | High | Full crawl orchestration: URL discovery, page fetching, progress commits, ingest dispatch ordering. Extend existing indirect coverage. |
+| `ingest_document.py` | Partial | High | Full ingestion pipeline: extraction, chunking, embedding, status transitions, autoconfig trigger. Extend `test_ingest_completion_check`. |
+| `run_autoconfig.py` | Partial | Medium | Extend existing 3 tests: error paths, LLM mock failures, concurrent execution guard |
+| `deliver_webhook.py` | Partial | Medium | Extend retry logic tests: full delivery cycle, HTTP error handling, payload signing |
+| `send_report.py` | Partial | Medium | Extend existing 9 tests: scheduling edge cases, provider failures |
+| `analyze_conversation.py` | None | Medium | Sentiment scoring, topic extraction, DB writes |
+| `cluster_gaps.py` | None | Medium | Gap clustering logic, threshold behavior |
+| `compute_sentiment_trends.py` | None | Low | Trend aggregation, date range handling |
+| `generate_qa.py` | None | Medium | Q&A generation from doc content, LLM mock |
+| `close_stale_conversations.py` | None | Low | Staleness detection, status transitions |
+| `auto_recharge.py` | None | Low | Threshold check, credit top-up, self-hosted skip |
+| `gdpr_export.py` | None | Medium | Data collection, archive creation, cleanup |
+| `purge_old_data.py` | None | Low | Retention policy enforcement, cascade deletes |
+| `sync_documents.py` | None | Medium | External source sync, diff detection |
+| `reindex_article.py` | None | Low | Re-embedding, chunk replacement |
 
 ### Worker testing pattern
 
@@ -99,11 +113,15 @@ This phase is too large for a single plan. Split into:
 
 - **1a:** `resolution_service` + RAG pipeline (~40-50 tests)
 - **1b:** Remaining 8 services (~50-60 tests)
-- **1c:** All workers (~50-60 tests)
+- **1c:** All workers (~70-80 tests, includes extending partial coverage)
+
+### Factory extensions
+
+New test factories needed for this phase: `make_article()`, `make_qa_pair()`, `make_action()`, `make_webhook_config()`, `make_crawl_job()` (if not already in factories). Add to `backend/tests/factories.py`.
 
 ### Deliverable
 
-- ~150-200 new unit tests
+- ~160-200 new unit tests
 - Coverage gate raised to **70%**
 - Workers included in coverage (remove `app/workers/tasks/*` from `pyproject.toml` omit)
 
@@ -111,22 +129,34 @@ This phase is too large for a single plan. Split into:
 
 Test every API route group that currently has zero integration tests. Uses `auth_client` fixture (httpx AsyncClient with valid JWT) hitting real DB via savepoint rollback.
 
-### Untested route groups
+### Route groups needing integration tests
 
-| Route Group | Endpoints | What to test |
-|-------------|----------|-------------|
-| `articles.py` | CRUD | Create, list, get, update, delete — workspace scoping |
-| `gdpr.py` | Export/delete | Request export, poll status, request deletion |
-| `two_fa.py` | TOTP setup/verify | Enable, verify code, disable, login with 2FA |
-| `oauth.py` | Callbacks | Google Drive, Notion, Slack, Shopify callback handling |
-| `onboarding.py` | Step progression | Step update, completion, skip |
-| `config.py` | Deployment config | Returns correct `cloud_mode` value |
-| `gaps.py` | Gap list/detail | List, detail, clustering trigger |
-| `widget_config.py` | Widget CRUD + public | Config CRUD, public retrieval without auth |
-| `intelligence.py` | Config + features | Intelligence config, feature gating by plan |
-| `qa.py` | Q&A CRUD | Create, list, update, delete pairs |
-| `billing.py` | Checkout/portal/webhook | Both cloud and self-hosted modes. Mock Stripe. Webhook returns 200 in self-hosted. |
-| `realtime.py` | Internal emit | Auth via internal secret, event emission |
+| Route Group | Status | What to test |
+|-------------|--------|-------------|
+| `actions.py` | None | Action CRUD, execution, workspace scoping |
+| `articles.py` | None | Create, list, get, update, delete — workspace scoping |
+| `billing.py` | None | Checkout/portal/webhook — both cloud and self-hosted modes. Mock Stripe. Webhook returns 200 in self-hosted. |
+| `chat.py` | None | Authenticated chat initiation, message history, SSE streaming |
+| `config.py` | None | Deployment config — returns correct `cloud_mode` value |
+| `copilot.py` | None | Copilot message, tool calls, streaming |
+| `documents.py` | None | Document upload, content retrieval, status, deletion |
+| `gaps.py` | None | Gap list, detail, clustering trigger |
+| `gdpr.py` | None | Request export, poll status, request deletion |
+| `integrations.py` | None | Integration config CRUD (email, Slack, etc.) |
+| `intelligence.py` | None | Intelligence config, feature gating by plan |
+| `invites.py` | None | Create invite, accept, revoke, list |
+| `logs.py` | None | Task logs, filtering, pagination |
+| `oauth.py` | None | Google Drive, Notion, Slack, Shopify callback handling |
+| `onboarding.py` | None | Step progression, completion, skip |
+| `public_chat.py` | None | Public widget chat, rate limiting, origin check |
+| `qa.py` | None | Q&A pair CRUD |
+| `realtime.py` | None | Internal emit — auth via internal secret |
+| `two_fa.py` | None | TOTP setup, verify code, disable, login with 2FA |
+| `webhooks.py` | None | Incoming Meta/Slack webhook handling, signature verification |
+| `widget_config.py` | None | Widget config CRUD, public retrieval without auth |
+| `workspaces.py` | None | Workspace CRUD, member management, settings |
+
+Note: Some of these have unit-level tests in `tests/unit/` (e.g., `test_logs_endpoints.py`, `test_copilot_endpoint.py`), but no integration tests that exercise the full route → service → DB path.
 
 ### Tenant isolation expansion
 
@@ -139,10 +169,21 @@ async def test_articles_idor(auth_client, second_workspace):
     assert resp.status_code == 403
 ```
 
+### Implementation grouping
+
+22 route groups is too large for a single plan. Split into:
+
+- **2a:** Core routes — chatbots (extend), workspaces, documents, chat, public_chat, crawl (extend), knowledge_bases (extend) (~80-100 tests)
+- **2b:** Remaining routes — articles, actions, billing, copilot, config, gaps, gdpr, integrations, intelligence, invites, logs, oauth, onboarding, qa, realtime, two_fa, webhooks, widget_config (~100-120 tests)
+
+### Factory extensions
+
+Additional factories needed: `make_invite()`, `make_gdpr_request()`, `make_integration_config()`, `make_widget_config()`. Add to `backend/tests/factories.py`.
+
 ### Deliverable
 
-- ~100-120 new integration tests
-- Tenant isolation coverage for all new route groups
+- ~180-220 new integration tests
+- Tenant isolation coverage for all route groups
 - Coverage gate raised to **80%**
 
 ## Phase 3: Contract Tests — Lock Down API Schemas
@@ -166,7 +207,7 @@ Every route group:
 
 | Endpoint | Contract coverage |
 |----------|------------------|
-| `POST /api/v1/public/chat` | SSE event shapes: `token`, `done` (with metadata), `error` |
+| `POST /api/v1/public/chat` | SSE event shapes: `token`, `done` (with metadata), `error`. Requires parsing the SSE stream into individual events and validating each event's JSON payload — use a helper that reads `text/event-stream` response and yields parsed `{event, data}` dicts. |
 | `GET /api/v1/widget/{chatbot_id}/config` | Widget config envelope (consumed by external embed script) |
 | Stripe webhook handler | Incoming event shape validation |
 | Slack/Meta webhook handlers | Incoming payload shape validation |
@@ -257,7 +298,7 @@ Expand Playwright E2E from 4 flows to 12, covering every major user journey.
 ### Deliverable
 
 - ~40-50 new E2E tests across 8 new test files
-- Coverage gate raised to **90%** (final target)
+- E2E tests provide confidence but do NOT contribute to pytest/Vitest coverage numbers
 
 ## Phase 6: CI Hardening + Final Gate
 
@@ -265,14 +306,16 @@ Infrastructure-only phase. No new tests. Tie everything together.
 
 ### Coverage gate progression
 
-| Phase | Backend | Frontend |
-|-------|---------|----------|
-| 0 | 45% | — |
-| 1 | 70% | — |
-| 2 | 80% | — |
-| 3 | 80% | — |
-| 4 | 80% | 80% |
-| 5 | 90% | 90% |
+| Phase | Backend | Frontend | Notes |
+|-------|---------|----------|-------|
+| 0 | 45% | — | Fix existing failures |
+| 1 | 70% | — | Workers included in coverage |
+| 2 | 80% | — | Split into 2a/2b |
+| 3 | 85% | — | Contract tests add incremental coverage |
+| 4 | 90% | 90% | Frontend gate introduced at final target |
+| 5 | 90% | 90% | E2E adds confidence, not coverage numbers |
+
+Note: E2E (Playwright) tests run against a live stack and do not contribute to pytest or Vitest coverage reports. The 90% gate must be achievable from unit + integration + contract tests (Phases 1-4). The expanded scope in Phases 1 and 2 (workers, all route groups) makes this realistic.
 
 ### CI pipeline (final)
 
@@ -319,11 +362,14 @@ Each phase becomes its own spec → plan → implementation cycle:
 2. **Phase 1a** — Resolution service + RAG pipeline unit tests (1 cycle)
 3. **Phase 1b** — Remaining service unit tests (1 cycle)
 4. **Phase 1c** — Worker unit tests (1 cycle)
-5. **Phase 2** — Integration tests (1 cycle)
-6. **Phase 3** — Contract tests (1 cycle)
-7. **Phase 4** — Frontend component tests (1 cycle)
-8. **Phase 5** — E2E expansion (1 cycle)
-9. **Phase 6** — CI hardening (1 cycle, small)
+5. **Phase 2a** — Core route integration tests (1 cycle)
+6. **Phase 2b** — Remaining route integration tests (1 cycle)
+7. **Phase 3** — Contract tests (1 cycle)
+8. **Phase 4** — Frontend component tests (1 cycle)
+9. **Phase 5** — E2E expansion (1 cycle)
+10. **Phase 6** — CI hardening (1 cycle, small)
+
+Total: 7 phases, 10 implementation cycles.
 
 ## Scope Exclusions
 
