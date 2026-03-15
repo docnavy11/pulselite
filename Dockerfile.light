@@ -13,8 +13,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc g++ build-essential libffi-dev \
     && rm -rf /var/lib/apt/lists/*
 RUN pip install uv
-COPY backend/pyproject.toml backend/
-RUN cd backend && uv pip install --system "."
+COPY backend/requirements.lock backend/
+RUN cd backend && pip install --no-deps -r requirements.lock
 
 # ── Stage 3: Final image ─────────────────────────────────────────
 FROM python:3.12-slim AS final
@@ -35,8 +35,9 @@ RUN playwright install chromium --with-deps
 # Copy built frontend
 COPY --from=frontend-build /app/frontend/dist /app/static
 
-# Copy backend source
+# Copy backend source and ensure it's on Python path
 COPY backend/ /app/backend/
+ENV PYTHONPATH=/app/backend
 
 # Copy infra configs
 COPY infra/light/ /app/infra/light/
