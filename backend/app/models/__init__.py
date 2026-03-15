@@ -11,6 +11,7 @@ from app.models.intelligence import (
     GapEvent,
     RetrievalLog,
 )
+from app.models.plan_tier import PlanTier  # noqa: F401
 from app.models.qa import QAPair  # noqa: F401
 from app.models.task_log import BackgroundTaskLog  # noqa: F401
 from app.models.webhook_delivery import WebhookDelivery  # noqa: F401
@@ -37,6 +38,7 @@ __all__ = [
     "IntegrationConfig",
     "KnowledgeBase",
     "Message",
+    "PlanTier",
     "RetrievalLog",
     "Segment",
     "Tag",

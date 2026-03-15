@@ -162,6 +162,11 @@ def create_app() -> FastAPI:
         )
         return {"ok": True}
 
+    @application.on_event("startup")
+    async def _load_plan_tiers():
+        from app.services.plan_service import load_plan_tiers
+        await load_plan_tiers()
+
     return application
 
 
