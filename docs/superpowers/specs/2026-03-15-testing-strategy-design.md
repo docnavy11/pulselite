@@ -14,8 +14,8 @@ A bottom-up, phased testing strategy to bring PulseLite from 45% coverage with 3
 - **32 pre-existing failures** (13 backend, 19 frontend)
 - **Coverage gate:** 45% backend, none frontend
 - **Workers excluded** from coverage
-- **9 services** with zero unit tests
-- **8+ route groups** with zero integration tests
+- **9 services** with zero or insufficient unit tests
+- **22 route groups** with zero integration tests
 - **No contract tests**
 - **4 E2E flows** (auth, chatbots, dashboard, conversations)
 
@@ -81,7 +81,7 @@ Target 9 untested services plus all Celery workers. Largest phase by volume.
 | `crawl_website.py` | Partial | High | Full crawl orchestration: URL discovery, page fetching, progress commits, ingest dispatch ordering. Extend existing indirect coverage. |
 | `ingest_document.py` | Partial | High | Full ingestion pipeline: extraction, chunking, embedding, status transitions, autoconfig trigger. Extend `test_ingest_completion_check`. |
 | `run_autoconfig.py` | Partial | Medium | Extend existing 3 tests: error paths, LLM mock failures, concurrent execution guard |
-| `deliver_webhook.py` | Partial | Medium | Extend retry logic tests: full delivery cycle, HTTP error handling, payload signing |
+| `deliver_webhook.py` | None | Medium | Full delivery cycle, HTTP error handling, payload signing, retry logic. Note: `test_webhook_delivery.py` tests the `webhooks` service (`fire_event`), not this worker. |
 | `send_report.py` | Partial | Medium | Extend existing 9 tests: scheduling edge cases, provider failures |
 | `analyze_conversation.py` | None | Medium | Sentiment scoring, topic extraction, DB writes |
 | `cluster_gaps.py` | None | Medium | Gap clustering logic, threshold behavior |
@@ -226,7 +226,7 @@ lint → backend-tests → contract-tests → e2e
 - ~80-100 contract tests
 - New `backend/tests/contract/` directory
 - New CI job
-- Coverage gate stays at **80%**
+- Coverage gate raised to **85%**
 
 ## Phase 4: Frontend Tests — Component Coverage + Store Hardening
 
@@ -312,8 +312,9 @@ Infrastructure-only phase. No new tests. Tie everything together.
 | 1 | 70% | — | Workers included in coverage |
 | 2 | 80% | — | Split into 2a/2b |
 | 3 | 85% | — | Contract tests add incremental coverage |
-| 4 | 90% | 90% | Frontend gate introduced at final target |
-| 5 | 90% | 90% | E2E adds confidence, not coverage numbers |
+| 4 | 90% | 80% | Frontend gate introduced |
+| 5 | 90% | 80% | E2E adds confidence, not coverage numbers |
+| 6 | 90% | 90% | Final gates enforced in CI |
 
 Note: E2E (Playwright) tests run against a live stack and do not contribute to pytest or Vitest coverage reports. The 90% gate must be achievable from unit + integration + contract tests (Phases 1-4). The expanded scope in Phases 1 and 2 (workers, all route groups) makes this realistic.
 
