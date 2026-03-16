@@ -48,7 +48,9 @@ function DashboardShell() {
           <TopBar onMenuToggle={() => setSidebarOpen((o) => !o)} />
           <div className="flex flex-1 overflow-hidden">
             <main className="flex-1 overflow-auto bg-[#faf8f5] p-6">
-              <Outlet />
+              <div className="max-w-7xl mx-auto">
+                <Outlet />
+              </div>
             </main>
             {/* CopilotPanel hidden below xl */}
             <div className="hidden xl:flex">
