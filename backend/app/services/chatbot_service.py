@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.conversations import Conversation
 from app.models.intelligence import GapCluster, GapEvent, RetrievalLog
-from app.models.knowledge import Chatbot, Document, KnowledgeBase
+from app.models.knowledge import Article, Chatbot, Chunk, CrawlJob, Document, KnowledgeBase
 from app.services.realtime import emit_to_workspace
 
 
@@ -79,19 +79,18 @@ async def delete_chatbot(db: AsyncSession, workspace_id: uuid.UUID, chatbot_id: 
             {"n": total_chars, "workspace_id": workspace_id},
         )
 
-    # Delete documents, then KBs (FK-safe order)
-    docs_result = await db.execute(
-        select(Document).where(Document.knowledge_base_id.in_(kb_subq))
-    )
-    for doc in docs_result.scalars().all():
-        await db.delete(doc)
+    # Clear chatbot's FK to crawl_jobs before deleting them
+    chatbot.active_crawl_job_id = None
     await db.flush()
 
-    kb_result = await db.execute(
-        select(KnowledgeBase).where(KnowledgeBase.chatbot_id == chatbot_id)
+    # Delete in FK-safe order: crawl_jobs → chunks → documents → articles (nullify) → KBs
+    await db.execute(delete(CrawlJob).where(CrawlJob.kb_id.in_(kb_subq)))
+    await db.execute(delete(Chunk).where(Chunk.knowledge_base_id.in_(kb_subq)))
+    await db.execute(delete(Document).where(Document.knowledge_base_id.in_(kb_subq)))
+    await db.execute(
+        update(Article).where(Article.knowledge_base_id.in_(kb_subq)).values(knowledge_base_id=None)
     )
-    for kb in kb_result.scalars().all():
-        await db.delete(kb)
+    await db.execute(delete(KnowledgeBase).where(KnowledgeBase.chatbot_id == chatbot_id))
     await db.flush()
 
     # Delete child records in FK-safe order before deleting chatbot

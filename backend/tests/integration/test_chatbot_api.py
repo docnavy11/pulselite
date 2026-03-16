@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from sqlalchemy import select
 
-from tests.factories import make_chatbot
+from tests.factories import make_chatbot, make_knowledge_base, make_crawl_job, make_document
 
 
 async def test_list_chatbots_returns_200(auth_client, workspace):
@@ -165,3 +165,20 @@ async def test_create_chatbot_no_model_restriction_when_allowed_models_empty(aut
         json={"name": "Any Model Bot", "llm_model": "some-random-model"},
     )
     assert r.status_code == 200
+
+
+# ── Cascading delete with crawl jobs ──────────────────────────────────────
+
+
+async def test_delete_chatbot_with_crawl_jobs(db, auth_client, workspace):
+    """Deleting a chatbot that has KBs, documents, and crawl jobs should not crash."""
+    bot = await make_chatbot(db, workspace, name="Bot With Crawl")
+    kb = await make_knowledge_base(db, workspace, bot)
+    await make_document(db, workspace, kb, title="Doc 1")
+    job = await make_crawl_job(db, workspace, kb)
+    # Link crawl job to chatbot
+    bot.active_crawl_job_id = job.id
+    await db.flush()
+
+    r = await auth_client.delete(f"/api/v1/workspaces/{workspace.id}/chatbots/{bot.id}")
+    assert r.status_code == 204
