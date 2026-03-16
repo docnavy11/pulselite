@@ -537,6 +537,7 @@ export interface DocumentStatusEvent {
 export interface ChatbotStatusEvent {
   chatbot_id: string;
   setup_status: "crawling" | "configuring" | "ready" | "setup_failed";
+  setup_error?: string;
 }
 
 export interface WorkspaceUsageEvent {

@@ -212,6 +212,25 @@ export default function ChatbotSetupPage() {
     return () => clearTimeout(timer);
   }, [chatbot?.setup_status]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Polling fallback: if stuck on crawling/configuring, poll every 5s in case a socket event was missed
+  useEffect(() => {
+    const step = getSetupStep(chatbot?.setup_status);
+    if (step !== "crawling" && step !== "configuring") return;
+    if (!workspace || !id) return;
+
+    const interval = setInterval(() => {
+      getChatbot(workspace.id, id).then((bot) => {
+        const newStep = getSetupStep(bot.setup_status);
+        if (newStep !== step) {
+          setChatbot(bot);
+          if (newStep === "review") populateReviewForm(bot);
+          if (newStep === "done") navigate(`/chatbots/${id}`, { replace: true });
+        }
+      }).catch(() => {});
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [chatbot?.setup_status, workspace, id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   function populateReviewForm(bot: Chatbot) {
     setReviewName(bot.name ?? "");
     setReviewWelcome(bot.welcome_message ?? "");
@@ -252,11 +271,14 @@ export default function ChatbotSetupPage() {
   // Real-time chatbot status transitions (crawling → configuring → ready/failed)
   useSocketEvent<ChatbotStatusEvent>("chatbot:status_changed", (data) => {
     if (data.chatbot_id !== id) return;
-    setChatbot((prev) => prev ? { ...prev, setup_status: data.setup_status } : prev);
+    setChatbot((prev) => prev ? { ...prev, setup_status: data.setup_status, setup_error: data.setup_error ?? prev.setup_error } : prev);
     const step = getSetupStep(data.setup_status);
     if (step === "review" && workspace) {
       // Refetch full chatbot to populate review form with autoconfig results
-      getChatbot(workspace.id, data.chatbot_id).then(populateReviewForm).catch(() => {});
+      getChatbot(workspace.id, data.chatbot_id).then((bot) => {
+        setChatbot(bot);
+        populateReviewForm(bot);
+      }).catch(() => {});
     }
     if (step === "done" && !step4ActiveRef.current) {
       navigate(`/chatbots/${id}`, { replace: true });
