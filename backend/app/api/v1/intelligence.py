@@ -37,7 +37,7 @@ router = APIRouter(prefix="/workspaces/{workspace_id}", tags=["intelligence"])
 async def get_retrieval_logs(
     workspace_id: uuid.UUID = Depends(get_workspace),
     limit: int = Query(50, ge=1, le=200),
-    offset: int = Query(0, ge=0, le=100_000_000),
+    offset: int = Query(0, ge=0, le=10_000),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -54,7 +54,7 @@ async def get_retrieval_logs(
 async def get_gap_events(
     workspace_id: uuid.UUID = Depends(get_workspace),
     limit: int = Query(50, ge=1, le=200),
-    offset: int = Query(0, ge=0, le=100_000_000),
+    offset: int = Query(0, ge=0, le=10_000),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -124,6 +124,7 @@ async def get_sentiment_by_segment(
             )
             .group_by(Chatbot.id, Chatbot.name)
             .order_by(func.count().desc())
+            .limit(20)
         )
         rows = result.all()
         data = [
@@ -180,7 +181,7 @@ async def trigger_analyze_all_conversations(
         select(Conversation.id).where(
             Conversation.workspace_id == workspace_id,
             Conversation.id.notin_(analyzed_subq),
-        )
+        ).limit(1000)
     )
     conversation_ids = [row[0] for row in result.all()]
 

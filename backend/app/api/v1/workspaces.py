@@ -199,6 +199,13 @@ async def list_openrouter_models(
     raw_base_url = workspace.openrouter_base_url or app_settings.AI_BASE_URL
     if not raw_base_url:
         raise HTTPException(status_code=400, detail="No AI base URL configured. Set AI_BASE_URL in .env or configure one in Settings > AI Models.")
+    # Validate URL scheme to prevent SSRF against internal services
+    from urllib.parse import urlparse
+    parsed = urlparse(raw_base_url)
+    if parsed.scheme not in ("http", "https"):
+        raise HTTPException(status_code=400, detail="AI base URL must use http:// or https://")
+    if parsed.hostname in ("169.254.169.254", "metadata.google.internal"):
+        raise HTTPException(status_code=400, detail="AI base URL cannot point to cloud metadata services")
     base_url = raw_base_url.rstrip("/")
     async with httpx.AsyncClient(timeout=15.0) as client:
         resp = await client.get(

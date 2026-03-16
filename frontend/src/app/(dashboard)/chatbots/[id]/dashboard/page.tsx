@@ -139,8 +139,8 @@ export default function ChatbotDashboardPage() {
         is_enabled: !action.is_enabled,
       });
       setActions((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
-    } catch {
-      // ignore
+    } catch (err) {
+      console.error("Failed to toggle action:", err);
     }
   }
 

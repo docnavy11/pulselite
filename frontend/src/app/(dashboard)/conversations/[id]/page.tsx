@@ -56,8 +56,8 @@ export default function ConversationDetailPage() {
         status,
       );
       setConversation(updated);
-    } catch {
-      // handle error
+    } catch (err) {
+      console.error("Failed to update conversation status:", err);
     }
   }
 

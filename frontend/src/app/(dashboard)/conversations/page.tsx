@@ -178,8 +178,8 @@ export default function ConversationsPage() {
         setConversations((prev) =>
           prev.map((c) => (c.id === updated.id ? { ...c, ...updated } : c)),
         );
-      } catch {
-        // ignore
+      } catch (err) {
+        console.error("Failed to update conversation status:", err);
       }
     },
     [selected, workspace?.id],

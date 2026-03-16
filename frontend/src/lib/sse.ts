@@ -73,7 +73,11 @@ export async function* streamChat(
           yield event;
           if (event.type === "done" || event.type === "error") return;
         } catch {
-          yield { type: "token", data };
+          // Server sent non-JSON SSE data — treat as raw token text only if it
+          // looks like content (not an SSE control line or empty string).
+          if (data && !data.startsWith(":")) {
+            yield { type: "token", data };
+          }
         }
       }
     }

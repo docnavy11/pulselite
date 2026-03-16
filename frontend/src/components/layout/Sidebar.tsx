@@ -98,13 +98,14 @@ export function Sidebar({ isOpen, onClose, pinned, onPinToggle }: SidebarProps) 
       setWsSwitcherOpen(false);
       setCreatingWs(false);
       setNewWsName("");
-    } catch {
-      // handle error
+    } catch (err) {
+      console.error("Failed to create workspace:", err);
     } finally {
       setSavingWs(false);
     }
   }
 
+  const logout = useAuthStore((s) => s.logout);
   const { isOpen: copilotOpen, toggle: toggleCopilot } = useCopilot();
   const wsInitial = workspace?.name?.[0]?.toUpperCase() ?? "W";
   const userName = user?.name ?? user?.email ?? "";
@@ -396,6 +397,17 @@ export function Sidebar({ isOpen, onClose, pinned, onPinToggle }: SidebarProps) 
               {isCloud ? (PLAN_LABELS[plan] ?? "Free") + " plan" : "Self-Hosted"}
             </div>
           </div>
+          <button
+            onClick={() => { logout(); navigate("/login"); }}
+            className="flex items-center justify-center w-6 h-6 rounded-md hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600 flex-shrink-0"
+            aria-label="Sign out"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+          </button>
         </div>
       </div>
     </aside>

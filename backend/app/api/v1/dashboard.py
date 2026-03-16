@@ -148,25 +148,24 @@ async def get_dashboard(
 
     # Top topics: count both total and resolved per topic
     top_topics_params: dict = {"ws": str(workspace_id), "cutoff": period_start}
-    chatbot_filter = ""
+    chatbot_clause = "AND TRUE" if not chatbot_id else "AND c.chatbot_id = :chatbot_id"
     if chatbot_id:
-        chatbot_filter = "AND c.chatbot_id = :chatbot_id"
         top_topics_params["chatbot_id"] = str(chatbot_id)
     top_topics_result = await db.execute(
-        text(f"""
-            SELECT topic,
-                   count(*) AS total_count,
-                   count(*) FILTER (WHERE c.autonomous_resolved = TRUE) AS resolved_count
-            FROM conversation_analysis ca
-            JOIN conversations c ON c.id = ca.conversation_id
-            CROSS JOIN LATERAL unnest(ca.topics) AS topic
-            WHERE ca.workspace_id = :ws
-              AND ca.created_at >= :cutoff
-              {chatbot_filter}
-            GROUP BY topic
-            ORDER BY total_count DESC
-            LIMIT 5
-        """),
+        text(
+            "SELECT topic,"
+            "       count(*) AS total_count,"
+            "       count(*) FILTER (WHERE c.autonomous_resolved = TRUE) AS resolved_count"
+            " FROM conversation_analysis ca"
+            " JOIN conversations c ON c.id = ca.conversation_id"
+            " CROSS JOIN LATERAL unnest(ca.topics) AS topic"
+            " WHERE ca.workspace_id = :ws"
+            "   AND ca.created_at >= :cutoff"
+            f"   {chatbot_clause}"
+            " GROUP BY topic"
+            " ORDER BY total_count DESC"
+            " LIMIT 5"
+        ),
         top_topics_params,
     )
     top_topics_rows = top_topics_result.all()
@@ -181,22 +180,22 @@ async def get_dashboard(
 
         # Find a relevant example query, preferring ones that match the topic keyword
         example_result = await db.execute(
-            text(f"""
-                SELECT rl.query
-                FROM retrieval_logs rl
-                JOIN conversations c ON c.id = rl.conversation_id
-                JOIN conversation_analysis ca ON ca.conversation_id = c.id
-                WHERE ca.workspace_id = :ws
-                  AND ca.created_at >= :cutoff
-                  AND :topic = ANY(ca.topics)
-                  AND length(rl.query) > 10
-                  {chatbot_filter}
-                ORDER BY
-                  (rl.query ILIKE '%' || :topic || '%')::int DESC,
-                  rl.escalated::int ASC,
-                  length(rl.query) DESC
-                LIMIT 1
-            """),
+            text(
+                "SELECT rl.query"
+                " FROM retrieval_logs rl"
+                " JOIN conversations c ON c.id = rl.conversation_id"
+                " JOIN conversation_analysis ca ON ca.conversation_id = c.id"
+                " WHERE ca.workspace_id = :ws"
+                "   AND ca.created_at >= :cutoff"
+                "   AND :topic = ANY(ca.topics)"
+                "   AND length(rl.query) > 10"
+                f"   {chatbot_clause}"
+                " ORDER BY"
+                "   (rl.query ILIKE '%' || :topic || '%')::int DESC,"
+                "   rl.escalated::int ASC,"
+                "   length(rl.query) DESC"
+                " LIMIT 1"
+            ),
             {**top_topics_params, "topic": topic_name},
         )
         example_query = example_result.scalar_one_or_none()
