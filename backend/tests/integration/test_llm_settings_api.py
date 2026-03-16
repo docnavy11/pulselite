@@ -1,6 +1,8 @@
 """Integration tests for /workspaces/{workspace_id}/llm-settings endpoints."""
 from unittest.mock import patch
 
+from sqlalchemy import select
+
 
 async def test_get_llm_settings_returns_200(auth_client, workspace):
     r = await auth_client.get(f"/api/v1/workspaces/{workspace.id}/llm-settings")
@@ -139,6 +141,41 @@ async def test_get_llm_settings_effective_key_true_with_env_key(auth_client, wor
     assert r.status_code == 200
     # AI_API_KEY is set to "test-ai-key" in conftest
     assert r.json()["effective_api_key_set"] is True
+
+
+# ── SSRF protection on models endpoint ────────────────────────────────────
+
+
+async def test_models_endpoint_rejects_non_http_scheme(db, auth_client, workspace):
+    """base_url with non-http scheme should be rejected to prevent SSRF."""
+    from app.models.organizational import Workspace
+    from app.services.encryption import encrypt_api_key
+
+    result = await db.execute(select(Workspace).where(Workspace.id == workspace.id))
+    ws = result.scalar_one()
+    ws.openrouter_api_key = encrypt_api_key("sk-test")
+    ws.openrouter_base_url = "file:///etc/passwd"
+    await db.flush()
+
+    r = await auth_client.get(f"/api/v1/workspaces/{workspace.id}/llm-settings/models")
+    assert r.status_code == 400
+    assert "http" in r.json()["detail"].lower()
+
+
+async def test_models_endpoint_rejects_metadata_ip(db, auth_client, workspace):
+    """base_url pointing to cloud metadata service should be blocked."""
+    from app.models.organizational import Workspace
+    from app.services.encryption import encrypt_api_key
+
+    result = await db.execute(select(Workspace).where(Workspace.id == workspace.id))
+    ws = result.scalar_one()
+    ws.openrouter_api_key = encrypt_api_key("sk-test")
+    ws.openrouter_base_url = "http://169.254.169.254/latest/meta-data"
+    await db.flush()
+
+    r = await auth_client.get(f"/api/v1/workspaces/{workspace.id}/llm-settings/models")
+    assert r.status_code == 400
+    assert "metadata" in r.json()["detail"].lower()
 
 
 async def test_create_chatbot_uses_workspace_default_model(db, auth_client, workspace):
