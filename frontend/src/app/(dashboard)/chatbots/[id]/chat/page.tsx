@@ -51,7 +51,7 @@ export default function TestChatPage() {
     setInput("");
 
     const userMsg: Message = {
-      id: crypto.randomUUID(),
+      id: (crypto.randomUUID?.() ?? Math.random().toString(36).slice(2) + Date.now().toString(36)),
       conversation_id: conversationId || "",
       role: "user",
       content: text,
@@ -59,7 +59,7 @@ export default function TestChatPage() {
     };
     setMessages((prev) => [...prev, userMsg]);
 
-    const botMsgId = crypto.randomUUID();
+    const botMsgId = (crypto.randomUUID?.() ?? Math.random().toString(36).slice(2) + Date.now().toString(36));
     const botMsg: Message = {
       id: botMsgId,
       conversation_id: conversationId || "",

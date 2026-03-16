@@ -194,7 +194,7 @@ export function useActivityConsole() {
   useSocketEvent<ChatbotStatusEvent>("chatbot:status_changed", (data) => {
     if (data.setup_status !== "ready" && data.setup_status !== "setup_failed") return;
     const isError = data.setup_status === "setup_failed";
-    const id = crypto.randomUUID();
+    const id = (crypto.randomUUID?.() ?? Math.random().toString(36).slice(2) + Date.now().toString(36));
     const entry: ActivityEntry = {
       id,
       taskName: "chatbot_ready",

@@ -13,7 +13,7 @@ function getSessionId(chatbotId: string): string {
   const key = `pulse_session_${chatbotId}`;
   let sid = localStorage.getItem(key);
   if (!sid) {
-    sid = crypto.randomUUID();
+    sid = (crypto.randomUUID?.() ?? Math.random().toString(36).slice(2) + Date.now().toString(36));
     localStorage.setItem(key, sid);
   }
   return sid;
@@ -80,7 +80,7 @@ export default function PublicChatPage() {
     setInput("");
 
     const userMsg: Message = {
-      id: crypto.randomUUID(),
+      id: (crypto.randomUUID?.() ?? Math.random().toString(36).slice(2) + Date.now().toString(36)),
       conversation_id: conversationId || "",
       role: "user",
       content: msg,
@@ -88,7 +88,7 @@ export default function PublicChatPage() {
     };
     setMessages((prev) => [...prev, userMsg]);
 
-    const botMsgId = crypto.randomUUID();
+    const botMsgId = (crypto.randomUUID?.() ?? Math.random().toString(36).slice(2) + Date.now().toString(36));
     const botMsg: Message = {
       id: botMsgId,
       conversation_id: conversationId || "",
