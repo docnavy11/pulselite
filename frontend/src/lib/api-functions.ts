@@ -326,10 +326,20 @@ export function getConversation(workspaceId: string, conversationId: string) {
   );
 }
 
-export function getMessages(workspaceId: string, conversationId: string) {
-  return api.get<Message[]>(
+export async function getMessages(workspaceId: string, conversationId: string): Promise<Message[]> {
+  const raw = await api.get<Array<Record<string, unknown>>>(
     `/api/v1/workspaces/${workspaceId}/conversations/${conversationId}/messages`,
   );
+  // Backend returns author_type ("bot"/"contact") + confidence_score;
+  // frontend expects role ("assistant"/"user") + confidence.
+  return raw.map((m) => ({
+    id: m.id as string,
+    conversation_id: m.conversation_id as string,
+    role: (m.author_type === "contact" ? "user" : "assistant") as Message["role"],
+    content: (m.content ?? "") as string,
+    confidence: m.confidence_score as number | undefined,
+    created_at: m.created_at as string,
+  }));
 }
 
 export function updateConversationStatus(
@@ -663,7 +673,7 @@ export async function getLLMSettings(workspaceId: string): Promise<LLMSettings> 
 
 export async function updateLLMSettings(
   workspaceId: string,
-  data: { openrouter_api_key?: string; openrouter_base_url?: string | null; allowed_models?: string[]; internal_model?: string | null },
+  data: { openrouter_api_key?: string; openrouter_base_url?: string | null; allowed_models?: string[]; internal_model?: string | null; default_chatbot_model?: string | null },
 ): Promise<LLMSettings> {
   const result = await api.put(`/api/v1/workspaces/${workspaceId}/llm-settings`, data);
   return result as LLMSettings;
