@@ -201,7 +201,9 @@ export default function NewBotWizardPage() {
     try {
       const bot = await createChatbot(workspace.id, { name });
       await startCrawl(workspace.id, normalized, [], [], bot.id);
-      setChatbot(bot);
+      // Set setup_status immediately — the DB update happens async via the Celery task,
+      // but we know crawling has started so we can show step 2 right away.
+      setChatbot({ ...bot, setup_status: "crawling" });
       // Update URL without navigating — keeps the same component mounted
       window.history.replaceState(null, "", `/chatbots/${bot.id}/setup`);
     } catch (err: unknown) {
