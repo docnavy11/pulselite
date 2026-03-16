@@ -46,7 +46,7 @@ mark_api_process()
 # Worker events reach clients via the internal HTTP emit endpoint.
 sio = socketio_lib.AsyncServer(
     async_mode="asgi",
-    cors_allowed_origins=settings.BACKEND_CORS_ORIGINS,
+    cors_allowed_origins=settings.cors_origins,
     logger=False,
     engineio_logger=False,
 )
@@ -157,7 +157,7 @@ def create_app() -> FastAPI:
 
     application.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.BACKEND_CORS_ORIGINS,
+        allow_origins=settings.cors_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

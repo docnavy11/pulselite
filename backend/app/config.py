@@ -100,8 +100,16 @@ class Settings(BaseSettings):
     serve_frontend: bool = False
     INTERNAL_API_URL: str = "http://backend:8000"
 
-    # CORS
-    BACKEND_CORS_ORIGINS: list[str] = ["http://localhost:3000"]
+    # CORS — if not explicitly set, automatically derived from FRONTEND_URL
+    BACKEND_CORS_ORIGINS: list[str] | None = None
+
+    @property
+    def cors_origins(self) -> list[str]:
+        """Resolve CORS origins: explicit list if set, otherwise derived from FRONTEND_URL."""
+        if self.BACKEND_CORS_ORIGINS:
+            return self.BACKEND_CORS_ORIGINS
+        # Auto-derive from FRONTEND_URL so a port/host change doesn't break CORS
+        return [self.FRONTEND_URL] if self.FRONTEND_URL else ["http://localhost:3001"]
 
     @property
     def database_url(self) -> str:
