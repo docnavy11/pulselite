@@ -64,3 +64,6 @@ celerybeat-schedule
 .superpowers/
 docs/superpowers/plans/
 docs/superpowers/specs/.brainstorm/
+
+# Backups
+backups/

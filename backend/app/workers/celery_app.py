@@ -18,6 +18,15 @@ celery_app.conf.update(
     task_track_started=True,
     task_acks_late=True,
     worker_prefetch_multiplier=1,
+    task_default_queue="default",
+    task_routes={
+        "app.workers.tasks.crawl_website.*": {"queue": "crawl"},
+        "app.workers.tasks.ingest_document.*": {"queue": "crawl"},
+        "app.workers.tasks.deliver_webhook.*": {"queue": "webhooks"},
+        "app.workers.tasks.cluster_gaps.*": {"queue": "analytics"},
+        "app.workers.tasks.compute_sentiment_trends.*": {"queue": "analytics"},
+        "app.workers.tasks.purge_old_data.*": {"queue": "analytics"},
+    },
     # Each prefork worker uses ~250MB RAM. Tasks are I/O-bound (LLM API calls, DB queries),
     # so 2 workers is enough for most self-hosted deployments. Increase if you have many
     # concurrent crawl/ingestion jobs. Set via CELERY_WORKER_CONCURRENCY in .env.

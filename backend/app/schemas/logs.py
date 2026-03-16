@@ -66,3 +66,25 @@ class AnalysisRunLogItem(BaseModel):
 class AnalysisRunLogResponse(BaseModel):
     items: list[AnalysisRunLogItem]
     total: int
+
+
+class RetrievalLogItem(BaseModel):
+    id: str
+    chatbot_id: str
+    conversation_id: Optional[str] = None
+    message_id: Optional[str] = None
+    query: str
+    confidence_score: float
+    confidence_avg: Optional[float] = None
+    chunk_count: Optional[int] = None
+    reranked: bool
+    escalated: bool
+    response_generated: bool
+    retrieval_ms: Optional[int] = None
+    generation_ms: Optional[int] = None
+    created_at: str
+
+
+class RetrievalLogResponse(BaseModel):
+    items: list[RetrievalLogItem]
+    total: int

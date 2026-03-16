@@ -10,7 +10,7 @@ from app.workers.celery_app import celery_app
 logger = logging.getLogger(__name__)
 
 
-@celery_app.task(bind=True, max_retries=3, default_retry_delay=60)
+@celery_app.task(bind=True, max_retries=3, default_retry_delay=60, soft_time_limit=540, time_limit=600)
 def crawl_website(self, job_id: str) -> dict:
     try:
         asyncio.run(_run(uuid.UUID(job_id)))

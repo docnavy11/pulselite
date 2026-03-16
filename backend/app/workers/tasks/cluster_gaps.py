@@ -3,6 +3,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
+from celery.exceptions import MaxRetriesExceededError
 from sqlalchemy import func, select
 
 from app.database import async_session_factory, engine
@@ -14,9 +15,15 @@ from app.workers.celery_app import celery_app
 logger = logging.getLogger(__name__)
 
 
-@celery_app.task(bind=True, time_limit=600)
+@celery_app.task(bind=True, max_retries=3, default_retry_delay=60, soft_time_limit=540, time_limit=600)
 def cluster_gaps(self) -> dict:
-    return asyncio.run(_cluster(self.request.id))
+    try:
+        return asyncio.run(_cluster(self.request.id))
+    except MaxRetriesExceededError:
+        logger.error("cluster_gaps failed after max retries")
+        return {"status": "failed", "reason": "max retries exceeded"}
+    except Exception as exc:
+        raise self.retry(exc=exc)
 
 
 async def _cluster(task_id: str) -> dict:

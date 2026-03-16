@@ -1,6 +1,8 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,10 +11,12 @@ from app.models.knowledge import Chatbot
 from app.schemas.widget import WidgetConfig, WidgetConfigResponse
 
 router = APIRouter(tags=["widget"])
+limiter = Limiter(key_func=get_remote_address)
 
 
 @router.get("/widget/{chatbot_id}/config", response_model=WidgetConfigResponse)
-async def get_widget_config(chatbot_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+@limiter.limit("60/minute")
+async def get_widget_config(request: Request, chatbot_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Chatbot).where(Chatbot.id == chatbot_id, Chatbot.is_active == True))  # noqa: E712
     chatbot = result.scalar_one_or_none()
     if chatbot is None:

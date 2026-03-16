@@ -61,7 +61,7 @@ def _normalize(text: str) -> str:
     return re.sub(r"[^\w\s]", "", text.lower()).strip()
 
 
-@celery_app.task(bind=True, max_retries=2, default_retry_delay=30)
+@celery_app.task(bind=True, max_retries=2, default_retry_delay=30, soft_time_limit=270, time_limit=300)
 def generate_qa(self, chatbot_id: str, workspace_id: str, count: int) -> dict:
     try:
         return asyncio.run(_generate(uuid.UUID(chatbot_id), uuid.UUID(workspace_id), count, self.request.id))
@@ -192,7 +192,7 @@ async def _generate(chatbot_id: uuid.UUID, workspace_id: uuid.UUID, count: int, 
         return {"status": "success", "generated": len(pair_ids)}
 
 
-@celery_app.task(bind=True, max_retries=2, default_retry_delay=30)
+@celery_app.task(bind=True, max_retries=2, default_retry_delay=30, soft_time_limit=110, time_limit=120)
 def test_qa_question(self, qa_pair_id: str) -> dict:
     try:
         return asyncio.run(_test_question(uuid.UUID(qa_pair_id), self.request.id))
@@ -322,7 +322,7 @@ async def _test_question(qa_pair_id: uuid.UUID, task_id: str) -> dict:
         return {"status": pair.status, "qa_pair_id": str(qa_pair_id)}
 
 
-@celery_app.task(bind=True, max_retries=2, default_retry_delay=30)
+@celery_app.task(bind=True, max_retries=2, default_retry_delay=30, soft_time_limit=110, time_limit=120)
 def suggest_qa_answer(self, qa_pair_id: str, workspace_id: str) -> dict:
     try:
         return asyncio.run(_suggest(uuid.UUID(qa_pair_id), uuid.UUID(workspace_id), self.request.id))

@@ -11,7 +11,7 @@ from app.database import get_db
 from app.dependencies import get_workspace, get_workspace_admin
 from app.models.contacts import Contact
 from app.models.conversations import Conversation
-from app.models.intelligence import ConversationAnalysis
+from app.models.intelligence import ConversationAnalysis, RetrievalLog
 from app.models.knowledge import Chatbot, CrawlJob, Document, KnowledgeBase
 from app.models.task_log import BackgroundTaskLog
 from app.schemas.logs import (
@@ -21,6 +21,8 @@ from app.schemas.logs import (
     CrawlRunLogResponse,
     DocumentLogItem,
     DocumentLogResponse,
+    RetrievalLogItem,
+    RetrievalLogResponse,
 )
 from app.schemas.worker_health import (
     PerformanceStats,
@@ -217,6 +219,61 @@ async def list_analysis_run_logs(
     return AnalysisRunLogResponse(items=items, total=total)
 
 
+@router.get("/logs/retrievals", response_model=RetrievalLogResponse)
+async def list_retrieval_logs(
+    workspace_id: uuid.UUID = Depends(get_workspace),
+    db: AsyncSession = Depends(get_db),
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    chatbot_id: uuid.UUID | None = Query(default=None),
+) -> RetrievalLogResponse:
+    """List retrieval logs, newest first. Optionally filter by chatbot."""
+    count_query = select(func.count(RetrievalLog.id)).where(RetrievalLog.workspace_id == workspace_id)
+    if chatbot_id:
+        count_query = count_query.where(RetrievalLog.chatbot_id == chatbot_id)
+
+    total_result = await db.execute(count_query)
+    total = total_result.scalar_one()
+
+    if total == 0:
+        return RetrievalLogResponse(items=[], total=0)
+
+    data_query = (
+        select(RetrievalLog)
+        .where(RetrievalLog.workspace_id == workspace_id)
+        .order_by(RetrievalLog.created_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    if chatbot_id:
+        data_query = data_query.where(RetrievalLog.chatbot_id == chatbot_id)
+
+    rows_result = await db.execute(data_query)
+    rows = rows_result.scalars().all()
+
+    items = []
+    for log in rows:
+        items.append(
+            RetrievalLogItem(
+                id=str(log.id),
+                chatbot_id=str(log.chatbot_id),
+                conversation_id=str(log.conversation_id) if log.conversation_id else None,
+                message_id=str(log.message_id) if log.message_id else None,
+                query=log.query,
+                confidence_score=log.confidence_score,
+                confidence_avg=log.confidence_avg,
+                chunk_count=len(log.retrieved_chunk_ids) if log.retrieved_chunk_ids else None,
+                reranked=log.reranked,
+                escalated=log.escalated,
+                response_generated=log.response_generated,
+                retrieval_ms=log.retrieval_ms,
+                generation_ms=log.generation_ms,
+                created_at=log.created_at.isoformat(),
+            )
+        )
+    return RetrievalLogResponse(items=items, total=total)
+
+
 @router.get("/workers/health", response_model=WorkerHealthResponse)
 async def get_worker_health(
     workspace_id: uuid.UUID = Depends(get_workspace_admin),
@@ -402,3 +459,18 @@ async def get_worker_health(
         performance=PerformanceStats(by_task=by_task),
         timeseries=timeseries,
     )
+
+
+@router.get("/server-logs")
+async def get_server_logs(
+    workspace_id: uuid.UUID = Depends(get_workspace_admin),
+    limit: int = Query(default=100, le=1000),
+    level: str | None = Query(default=None, description="Filter by log level: DEBUG, INFO, WARNING, ERROR"),
+    logger_name: str | None = Query(default=None, description="Filter by logger name"),
+):
+    """Get recent server log entries from the in-memory buffer. Admin only."""
+    from app.services.log_buffer import LogBuffer
+
+    buffer = LogBuffer.get_instance()
+    entries = buffer.get_entries(limit=limit, level=level, logger_name=logger_name)
+    return {"entries": entries, "total": len(entries)}

@@ -15,7 +15,7 @@ from app.workers.celery_app import celery_app
 logger = logging.getLogger(__name__)
 
 
-@celery_app.task(bind=True, max_retries=2, default_retry_delay=30)
+@celery_app.task(bind=True, max_retries=2, default_retry_delay=30, soft_time_limit=270, time_limit=300)
 def run_autoconfig_for_chatbot(self, chatbot_id: str) -> dict:
     try:
         asyncio.run(_run(uuid.UUID(chatbot_id)))

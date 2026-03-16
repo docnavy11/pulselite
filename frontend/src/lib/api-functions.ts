@@ -38,6 +38,7 @@ import {
   type AnalysisRunLogResponse,
   type CrawlRunLogResponse,
   type DocumentLogResponse,
+  type RetrievalLogResponse,
   type QAPair,
   type QAPairListResponse,
   type RealtimeState,
@@ -170,6 +171,19 @@ export async function getAnalysisRunLogs(
 ): Promise<AnalysisRunLogResponse> {
   return api.get<AnalysisRunLogResponse>(
     `/api/v1/workspaces/${workspaceId}/logs/analysis-runs?limit=${limit}&offset=${offset}`,
+  );
+}
+
+export async function getRetrievalLogs(
+  workspaceId: string,
+  limit = 50,
+  offset = 0,
+  chatbotId?: string,
+): Promise<RetrievalLogResponse> {
+  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  if (chatbotId) params.set("chatbot_id", chatbotId);
+  return api.get<RetrievalLogResponse>(
+    `/api/v1/workspaces/${workspaceId}/logs/retrievals?${params}`,
   );
 }
 
@@ -827,6 +841,24 @@ export async function addQAPairToKB(
   pairId: string,
 ): Promise<{ status: string; document_id: string }> {
   return api.post(`/api/v1/workspaces/${workspaceId}/chatbots/${chatbotId}/qa/${pairId}/add-to-kb`);
+}
+
+// Admin — System Health
+export async function getSystemHealth(workspaceId: string) {
+  return api.get(`/api/v1/workspaces/${workspaceId}/system-health`);
+}
+
+// Admin — Server Logs
+export async function getServerLogs(workspaceId: string, limit = 100, level?: string) {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (level) params.set("level", level);
+  return api.get(`/api/v1/workspaces/${workspaceId}/server-logs?${params}`);
+}
+
+// Admin — Audit Logs
+export async function getAuditLogs(workspaceId: string, limit = 50, offset = 0) {
+  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  return api.get(`/api/v1/workspaces/${workspaceId}/audit-logs?${params}`);
 }
 
 // Realtime state

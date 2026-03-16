@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 EXPORT_DIR = "/app/data/exports"
 
 
-@celery_app.task(bind=True, max_retries=3, default_retry_delay=30)
+@celery_app.task(bind=True, max_retries=3, default_retry_delay=30, soft_time_limit=270, time_limit=300)
 def export_workspace_data(self, workspace_id: str, export_id: str) -> dict:
     try:
         return asyncio.run(_export(uuid.UUID(workspace_id), export_id, self.request.id))

@@ -35,4 +35,10 @@ def decode_token(token: str) -> dict | None:
         payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
         return payload
     except JWTError:
+        if settings.JWT_SECRET_KEY_PREVIOUS:
+            try:
+                payload = jwt.decode(token, settings.JWT_SECRET_KEY_PREVIOUS, algorithms=[settings.JWT_ALGORITHM])
+                return payload
+            except JWTError:
+                pass
         return None

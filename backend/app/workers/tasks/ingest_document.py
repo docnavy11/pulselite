@@ -23,7 +23,7 @@ except ImportError:  # pragma: no cover
     run_autoconfig_for_chatbot = None  # type: ignore[assignment]
 
 
-@celery_app.task(bind=True, max_retries=3, default_retry_delay=60)
+@celery_app.task(bind=True, max_retries=3, default_retry_delay=60, soft_time_limit=270, time_limit=300)
 def ingest_document(self, document_id: str) -> dict:
     try:
         result = asyncio.run(_run(uuid.UUID(document_id)))

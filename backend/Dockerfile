@@ -27,9 +27,12 @@ RUN uv pip install --system -e "." \
 RUN apt-get purge -y gcc g++ build-essential && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/*
 COPY . .
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 RUN useradd -r -s /bin/false appuser
 USER appuser
 EXPOSE 8000
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["uvicorn", "app.main:combined_app", "--host", "0.0.0.0", "--port", "8000"]
 
 # ── Worker: full deps + Playwright for crawling ─────────────────

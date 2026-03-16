@@ -18,7 +18,7 @@ from app.workers.celery_app import celery_app
 logger = logging.getLogger(__name__)
 
 
-@celery_app.task(bind=True, max_retries=3, default_retry_delay=60)
+@celery_app.task(bind=True, max_retries=3, default_retry_delay=60, soft_time_limit=55, time_limit=60)
 def trigger_auto_recharge(self, workspace_id: str) -> dict:
     try:
         return asyncio.run(_recharge(uuid.UUID(workspace_id), self.request.id))

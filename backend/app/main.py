@@ -1,11 +1,17 @@
+import logging
+import time
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from app.api.v1 import (
     actions,
     articles,
+    audit,
     auth,
     billing,
     chat,
@@ -101,6 +107,45 @@ async def leave_workspace(sid: str, data: dict) -> None:
         await sio.leave_room(sid, str(workspace_id))
 
 
+_request_logger = logging.getLogger("pulse.requests")
+
+SECURITY_HEADERS = {
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "X-XSS-Protection": "1; mode=block",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+}
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Adds security headers to every response."""
+
+    async def dispatch(self, request: Request, call_next):
+        response: Response = await call_next(request)
+        for header, value in SECURITY_HEADERS.items():
+            response.headers[header] = value
+        return response
+
+
+class RequestLoggingMiddleware(BaseHTTPMiddleware):
+    """Logs method, path, status code, and duration for every request."""
+
+    async def dispatch(self, request: Request, call_next):
+        start = time.perf_counter()
+        response: Response = await call_next(request)
+        duration_ms = (time.perf_counter() - start) * 1000
+        _request_logger.info(
+            "%s %s %d %.1fms",
+            request.method,
+            request.url.path,
+            response.status_code,
+            duration_ms,
+        )
+        return response
+
+
 def _run_preflight_checks(logger) -> list[str]:
     """Validate configuration at startup and log actionable warnings. Returns list of warnings."""
     warnings: list[str] = []
@@ -136,6 +181,31 @@ def _run_preflight_checks(logger) -> list[str]:
         logger.warning(msg)
         warnings.append(msg)
 
+    # CORS origins check
+    if settings.CLOUD_MODE and all("localhost" in origin for origin in settings.cors_origins):
+        msg = "CORS origins only contain localhost URLs. Set FRONTEND_URL for production."
+        logger.warning(msg)
+        warnings.append(msg)
+
+    # Redis password check
+    if not settings.REDIS_PASSWORD:
+        msg = "Redis has no password configured. Set REDIS_PASSWORD for production deployments."
+        logger.warning(msg)
+        warnings.append(msg)
+
+    # Default database credentials check
+    default_passwords = {"pulse_dev_password", "password", "postgres"}
+    if settings.POSTGRES_PASSWORD in default_passwords:
+        msg = "Using default database password. Set a strong POSTGRES_PASSWORD for production."
+        logger.warning(msg)
+        warnings.append(msg)
+
+    # Frontend URL check
+    if "localhost" in settings.FRONTEND_URL:
+        msg = "FRONTEND_URL is set to localhost. Update for production deployment."
+        logger.info(msg)
+        warnings.append(msg)
+
     # AI configuration
     if not settings.AI_API_KEY:
         msg = "AI_API_KEY is not set. Chatbots will not work until you configure an AI provider (in .env or Settings > AI Models in the UI)."
@@ -155,6 +225,8 @@ def create_app() -> FastAPI:
     application.state.limiter = limiter
     application.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+    # Middleware ordering: Starlette wraps in reverse — last added is outermost.
+    # Desired order (outermost → innermost): SecurityHeaders → RequestLogging → CORS
     application.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
@@ -162,6 +234,8 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    application.add_middleware(RequestLoggingMiddleware)
+    application.add_middleware(SecurityHeadersMiddleware)
 
     # Authenticated routes
     application.include_router(auth.router, prefix="/api/v1")
@@ -175,6 +249,7 @@ def create_app() -> FastAPI:
     application.include_router(articles.router, prefix="/api/v1")
     application.include_router(crawl.router, prefix="/api/v1")
     application.include_router(logs.router, prefix="/api/v1")
+    application.include_router(audit.router, prefix="/api/v1")
     application.include_router(chat.router, prefix="/api/v1")
     application.include_router(intelligence.router, prefix="/api/v1")
     application.include_router(gaps.router, prefix="/api/v1")
@@ -212,7 +287,9 @@ def create_app() -> FastAPI:
 
     @application.on_event("startup")
     async def _startup():
-        import logging
+        from app.logging_config import setup_logging
+        setup_logging()
+
         _logger = logging.getLogger("pulse.startup")
 
         from app.services.plan_service import load_plan_tiers
@@ -244,6 +321,14 @@ def create_app() -> FastAPI:
             )
         else:
             _logger.info("Startup completed — all pre-flight checks passed.")
+
+    @application.on_event("shutdown")
+    async def _shutdown():
+        from app.database import engine as db_engine
+
+        _logger = logging.getLogger("pulse.shutdown")
+        _logger.info("Application shutting down gracefully")
+        await db_engine.dispose()
 
     # Light mode: serve built frontend as static files (must be LAST)
     if settings.serve_frontend:

@@ -147,3 +147,13 @@ perf-widget:
 	k6 run k6/widget.js
 
 perf-all: perf-smoke perf-auth perf-widget
+
+# ── Backup / Restore ──────────────────────────────
+backup:                          ## Create a database backup
+	@bash scripts/backup.sh
+
+restore:                         ## Restore from a backup file (usage: make restore FILE=backups/pulse_backup_xxx.sql.gz)
+	@bash scripts/restore.sh $(FILE)
+
+backup-list:                     ## List available backups
+	@ls -lh backups/pulse_backup_*.sql.gz 2>/dev/null || echo "No backups found in ./backups/"

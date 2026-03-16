@@ -83,6 +83,20 @@ export function IconSettings({ className = "stroke-current", size = 16 }: IconPr
   );
 }
 
+export function IconAdmin({ className = "stroke-current", size = 16 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" className={className}>
+      <path
+        d="M8 1.5 L14 5 L14 9.5 C14 12 11 14.5 8 14.5 C5 14.5 2 12 2 9.5 L2 5 Z"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M6 8 L7.5 9.5 L10 6.5" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 // ── Tab icons (12×12) ──
 
 export function IconKnowledge({ className = "stroke-current", size = 12 }: IconProps) {

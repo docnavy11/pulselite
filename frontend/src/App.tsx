@@ -59,6 +59,9 @@ import IntelligenceSettingsPage from './app/(dashboard)/settings/intelligence/pa
 // Logs page
 import LogsPage from './app/(dashboard)/logs/page'
 
+// Admin page
+import AdminPage from './app/(dashboard)/admin/page'
+
 // Public
 import PublicChatPage from './app/chat/[chatbotId]/page'
 
@@ -110,6 +113,7 @@ export default function App() {
           <Route path="/conversations/:id" element={<ConversationDetailPage />} />
 
           <Route path="/logs" element={<LogsPage />} />
+          <Route path="/admin" element={<AdminPage />} />
 
           <Route path="/intelligence" element={<IntelligencePage />} />
           <Route path="/intelligence/sentiment" element={<SentimentPage />} />

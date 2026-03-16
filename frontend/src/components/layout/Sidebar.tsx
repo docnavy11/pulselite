@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   IconOverview, IconChatbots, IconConversations,
   IconIntelligence, IconLogs, IconSettings, IconChevronDown,
+  IconAdmin,
 } from "@/components/icons/NavIcons";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -30,6 +31,7 @@ const MAIN_NAV = [
   { href: "/conversations", label: "Conversations", Icon: IconConversations },
   { href: "/logs",          label: "Logs",          Icon: IconLogs },
   { href: "/intelligence",  label: "Intelligence",  Icon: IconIntelligence },
+  { href: "/admin",         label: "Admin",          Icon: IconAdmin },
 ];
 
 const PLAN_LABELS: Record<string, string> = {

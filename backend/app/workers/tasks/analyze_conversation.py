@@ -37,7 +37,7 @@ Conversation transcript:
 """
 
 
-@celery_app.task(bind=True, max_retries=3, default_retry_delay=30)
+@celery_app.task(bind=True, max_retries=3, default_retry_delay=30, soft_time_limit=110, time_limit=120)
 def analyze_conversation(self, conversation_id: str, workspace_id: str, force: bool = False) -> dict:
     try:
         return asyncio.run(_analyze(uuid.UUID(conversation_id), uuid.UUID(workspace_id), self.request.id, force=force))

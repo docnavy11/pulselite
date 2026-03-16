@@ -2,6 +2,7 @@ import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 
+from celery.exceptions import MaxRetriesExceededError
 from sqlalchemy import select, update
 
 from app.database import async_session_factory, engine
@@ -15,9 +16,15 @@ logger = logging.getLogger(__name__)
 STALE_MINUTES = 30
 
 
-@celery_app.task(bind=True, time_limit=120)
+@celery_app.task(bind=True, max_retries=3, default_retry_delay=60, soft_time_limit=110, time_limit=120)
 def close_stale_conversations(self) -> dict:
-    return asyncio.run(_close_stale(self.request.id))
+    try:
+        return asyncio.run(_close_stale(self.request.id))
+    except MaxRetriesExceededError:
+        logger.error("close_stale_conversations failed after max retries")
+        return {"status": "failed", "reason": "max retries exceeded"}
+    except Exception as exc:
+        raise self.retry(exc=exc)
 
 
 async def _close_stale(task_id: str) -> dict:

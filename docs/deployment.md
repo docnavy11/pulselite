@@ -224,3 +224,58 @@ Automate with a cron job or use your managed DB provider's automatic backup feat
 - [ ] Automatic Postgres backups enabled
 - [ ] Uptime monitoring on `/api/v1/health`
 - [ ] Celery worker `restart: always` policy set
+
+## Upgrading
+
+1. Pull the latest images:
+   ```bash
+   docker compose pull
+   ```
+2. Apply database migrations:
+   ```bash
+   docker compose up -d
+   # Migrations run automatically on backend startup
+   # Or manually: make migrate
+   ```
+3. Verify health:
+   ```bash
+   curl http://localhost:8000/api/v1/health
+   ```
+
+### Breaking Changes
+Check the [CHANGELOG](../CHANGELOG.md) before upgrading. Irreversible migrations are noted — always backup first:
+```bash
+make backup
+```
+
+## Troubleshooting
+
+### Redis won't connect
+- Check Redis is running: `docker compose ps redis`
+- Check Redis health: `docker compose exec redis redis-cli ping`
+- Verify `REDIS_HOST` and `REDIS_PORT` in `.env`
+- If using external Redis, ensure the host is reachable from the Docker network
+
+### Crawl jobs stuck in "pending"
+- Check Celery worker is running: `docker compose ps celery_worker`
+- Check worker logs: `docker compose logs celery_worker --tail=50`
+- Verify Redis broker is reachable (Celery uses Redis as message broker)
+- Restart worker: `docker compose restart celery_worker`
+
+### Out of memory
+- Check container memory: `docker stats`
+- Reduce Celery concurrency: set `CELERY_WORKER_CONCURRENCY=1` in `.env`
+- Reduce DB pool: set `DB_POOL_SIZE=3` and `DB_MAX_OVERFLOW=5` in `.env`
+- Consider the light deployment mode (single container)
+
+### Database migration fails
+- Check database is running: `docker compose ps postgres`
+- Check migration logs: `docker compose logs backend --tail=50`
+- Try manual migration: `make migrate`
+- For fresh start: `make reset-db` (WARNING: destroys all data)
+
+### Chat responses are slow
+- Check LLM API key is valid and has credits
+- Check if reranking is enabled (adds latency): disable `use_reranking` on the chatbot
+- Monitor worker health: `GET /api/v1/workspaces/{id}/workers/health`
+- Consider increasing `CELERY_WORKER_CONCURRENCY`

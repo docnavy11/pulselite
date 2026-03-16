@@ -1,19 +1,20 @@
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_workspace
+from app.dependencies import get_current_user, get_workspace
 from app.models.conversations import Conversation
 from app.models.knowledge import Chatbot as ChatbotModel, CrawlJob
-from app.models.organizational import Workspace
+from app.models.organizational import Agent, Workspace
 from app.schemas.chatbots import AutoConfigRequest, AutoConfigResponse, ChatbotCreate, ChatbotResponse, ChatbotUpdate, CrawlProgressResponse
 from app.schemas.widget import LLMConfigUpdate, PersonaUpdate, WidgetConfig
 from app.config import settings as app_settings
 from app.services import chatbot_service
+from app.services.audit_service import record_audit_event
 from app.services.encryption import encrypt_api_key
 
 router = APIRouter(prefix="/workspaces/{workspace_id}/chatbots", tags=["chatbots"])
@@ -22,7 +23,9 @@ router = APIRouter(prefix="/workspaces/{workspace_id}/chatbots", tags=["chatbots
 @router.post("", response_model=ChatbotResponse)
 async def create_chatbot(
     body: ChatbotCreate,
+    request: Request,
     workspace_id: uuid.UUID = Depends(get_workspace),
+    current_user: Agent = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     ws_result = await db.execute(select(Workspace).where(Workspace.id == workspace_id))
@@ -51,6 +54,19 @@ async def create_chatbot(
         )
 
     chatbot = await chatbot_service.create_chatbot(db, workspace_id, **data)
+
+    await record_audit_event(
+        db,
+        workspace_id=workspace_id,
+        user_id=current_user.id,
+        user_email=current_user.email,
+        action="chatbot.created",
+        resource_type="chatbot",
+        resource_id=chatbot.id,
+        ip_address=request.client.host if request.client else None,
+        details={"name": chatbot.name},
+    )
+
     return chatbot
 
 
@@ -155,10 +171,23 @@ async def update_chatbot(
 @router.delete("/{chatbot_id}", status_code=204)
 async def delete_chatbot(
     chatbot_id: uuid.UUID,
+    request: Request,
     workspace_id: uuid.UUID = Depends(get_workspace),
+    current_user: Agent = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     await chatbot_service.delete_chatbot(db, workspace_id, chatbot_id)
+
+    await record_audit_event(
+        db,
+        workspace_id=workspace_id,
+        user_id=current_user.id,
+        user_email=current_user.email,
+        action="chatbot.deleted",
+        resource_type="chatbot",
+        resource_id=chatbot_id,
+        ip_address=request.client.host if request.client else None,
+    )
 
 
 @router.post("/{chatbot_id}/archive", response_model=ChatbotResponse)

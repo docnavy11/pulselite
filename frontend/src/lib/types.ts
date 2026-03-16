@@ -169,6 +169,27 @@ export interface AnalysisRunLogResponse {
   total: number;
 }
 
+export interface RetrievalLogItem {
+  id: string;
+  chatbot_id: string;
+  conversation_id: string | null;
+  message_id: string | null;
+  query: string;
+  confidence_score: number;
+  confidence_avg: number | null;
+  chunk_count: number | null;
+  reranked: boolean;
+  escalated: boolean;
+  response_generated: boolean;
+  retrieval_ms: number | null;
+  generation_ms: number | null;
+  created_at: string;
+}
+export interface RetrievalLogResponse {
+  items: RetrievalLogItem[];
+  total: number;
+}
+
 export interface WorkspaceUsage {
   chars_indexed: number;
   chars_limit: number | null;

@@ -3,6 +3,7 @@ import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 
+from celery.exceptions import MaxRetriesExceededError
 from sqlalchemy import func, select
 
 from app.database import async_session_factory, engine
@@ -46,9 +47,15 @@ def _should_send_report(frequency: str, last_sent: datetime | None) -> bool:
     return elapsed >= _MIN_INTERVALS[frequency]
 
 
-@celery_app.task(bind=True)
+@celery_app.task(bind=True, max_retries=3, default_retry_delay=60, soft_time_limit=110, time_limit=120)
 def send_report_task(self) -> dict:
-    return asyncio.run(_send_reports(self.request.id))
+    try:
+        return asyncio.run(_send_reports(self.request.id))
+    except MaxRetriesExceededError:
+        logger.error("send_report_task failed after max retries")
+        return {"status": "failed", "reason": "max retries exceeded"}
+    except Exception as exc:
+        raise self.retry(exc=exc)
 
 
 async def _send_reports(task_id: str) -> dict:

@@ -1,7 +1,7 @@
 import urllib.parse
 
 import httpx
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,6 +10,7 @@ from app.database import get_db
 from app.api.v1.public_chat import limiter
 from app.schemas.auth import AuthResponse, LoginRequest, RefreshRequest, RegisterRequest, TokenResponse, UserResponse
 from app.services import auth_service
+from app.services.audit_service import record_audit_event
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -30,7 +31,19 @@ async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends
     from app.services.encryption import decrypt_api_key
     import pyotp
 
-    agent, tokens = await auth_service.authenticate_user(db, body.email, body.password)
+    try:
+        agent, tokens = await auth_service.authenticate_user(db, body.email, body.password)
+    except HTTPException:
+        await record_audit_event(
+            db,
+            workspace_id=None,
+            action="auth.login_failed",
+            user_email=body.email,
+            ip_address=request.client.host if request.client else None,
+            details={"reason": "invalid_credentials"},
+        )
+        await db.commit()
+        raise
 
     # 2FA check: if enabled, require a valid TOTP code before issuing tokens
     if agent.two_fa_enabled:
@@ -58,6 +71,16 @@ async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid 2FA code",
             )
+
+    await record_audit_event(
+        db,
+        workspace_id=agent.workspace_id,
+        user_id=agent.id,
+        user_email=agent.email,
+        action="auth.login_success",
+        ip_address=request.client.host if request.client else None,
+    )
+    await db.commit()
 
     return AuthResponse(user=UserResponse.model_validate(agent), tokens=TokenResponse(**tokens))
 

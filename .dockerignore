@@ -1,0 +1,14 @@
+.git
+.github
+__pycache__
+*.pyc
+node_modules
+.env
+.env.*
+!.env.example
+*.md
+docs/
+e2e/
+tests/
+.pytest_cache
+.coverage

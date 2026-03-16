@@ -57,6 +57,7 @@ async def create_action(
     trigger_description: str,
     config: dict,
     is_enabled: bool = True,
+    parameters: list[dict] | None = None,
 ) -> ChatbotAction:
     action = ChatbotAction(
         id=uuid.uuid4(),
@@ -67,6 +68,7 @@ async def create_action(
         trigger_description=trigger_description,
         config=config,
         is_enabled=is_enabled,
+        parameters=parameters or [],
     )
     db.add(action)
     await db.flush()

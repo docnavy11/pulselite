@@ -16,7 +16,7 @@ from app.workers.celery_app import celery_app
 logger = logging.getLogger(__name__)
 
 
-@celery_app.task(bind=True, max_retries=3, default_retry_delay=60)
+@celery_app.task(bind=True, max_retries=3, default_retry_delay=60, soft_time_limit=270, time_limit=300)
 def reindex_article(self, article_id: str) -> dict:
     try:
         return asyncio.run(_reindex(uuid.UUID(article_id), self.request.id))

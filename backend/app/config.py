@@ -17,6 +17,12 @@ class Settings(BaseSettings):
     # JWT
     SECRET_KEY: str
     JWT_SECRET_KEY: str
+    # JWT Key Rotation Procedure:
+    # 1. Set JWT_SECRET_KEY_PREVIOUS to the current JWT_SECRET_KEY value
+    # 2. Set JWT_SECRET_KEY to the new secret value
+    # 3. Restart the application
+    # 4. After 30+ minutes (access token TTL), remove JWT_SECRET_KEY_PREVIOUS
+    JWT_SECRET_KEY_PREVIOUS: str = ""
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
@@ -89,6 +95,12 @@ class Settings(BaseSettings):
     # Stripe
     STRIPE_SECRET_KEY: str = ""
     STRIPE_WEBHOOK_SECRET: str = ""
+
+    # Database connection pool
+    DB_POOL_SIZE: int = 5
+    DB_MAX_OVERFLOW: int = 10
+    DB_POOL_TIMEOUT: int = 30
+    DB_POOL_RECYCLE: int = 1800
 
     # Worker tuning
     CELERY_WORKER_CONCURRENCY: int = 2

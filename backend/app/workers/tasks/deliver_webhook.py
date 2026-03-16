@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 RETRY_DELAYS = [60, 300, 900, 3600, 10800]  # ~4.2 hours total
 
 
-@celery_app.task(bind=True, max_retries=5, default_retry_delay=60)
+@celery_app.task(bind=True, max_retries=5, default_retry_delay=60, soft_time_limit=55, time_limit=60)
 def deliver_webhook(self, delivery_id: str) -> dict:
     try:
         return asyncio.run(_deliver(uuid.UUID(delivery_id), self))

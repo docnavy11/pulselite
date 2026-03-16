@@ -47,6 +47,11 @@ jobs:
             backend/app/ \
             --error
 
+      - name: Audit Python dependencies
+        run: |
+          pip install pip-audit
+          pip-audit -r backend/requirements.lock --desc on || true
+
   # ── Backend Tests + Coverage ───────────────────────────────────────────────
   backend-tests:
     name: Backend Tests + Coverage
@@ -116,6 +121,10 @@ jobs:
       - name: Vitest
         run: npx vitest run
         working-directory: frontend
+
+      - name: Audit Node dependencies
+        working-directory: frontend
+        run: npm audit --audit-level=high || true
 
   # ── E2E Tests ──────────────────────────────────────────────────────────────
   e2e:
@@ -190,6 +199,23 @@ jobs:
         with:
           name: playwright-report
           path: frontend/playwright-report/
+
+  # ── Container Image Scan ───────────────────────────────────────────────────
+  image-scan:
+    name: Container Image Scan (Trivy)
+    runs-on: ubuntu-latest
+    needs: [lint]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build backend image
+        run: docker build -t pulselight-backend:ci -f backend/Dockerfile --target api backend/
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'pulselight-backend:ci'
+          format: 'table'
+          exit-code: '0'
+          severity: 'CRITICAL,HIGH'
 
   # ── Schema Fuzz + k6 Smoke ─────────────────────────────────────────────────
   schema-perf:

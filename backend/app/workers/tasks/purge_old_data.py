@@ -4,6 +4,7 @@ import asyncio
 import logging
 from datetime import datetime, timezone, timedelta
 
+from celery.exceptions import MaxRetriesExceededError
 from sqlalchemy import delete, select
 
 from app.database import async_session_factory, engine
@@ -15,9 +16,15 @@ from app.workers.celery_app import celery_app
 logger = logging.getLogger(__name__)
 
 
-@celery_app.task(bind=True)
+@celery_app.task(bind=True, max_retries=3, default_retry_delay=60, soft_time_limit=270, time_limit=300)
 def purge_old_data(self) -> dict:
-    return asyncio.run(_purge(self.request.id))
+    try:
+        return asyncio.run(_purge(self.request.id))
+    except MaxRetriesExceededError:
+        logger.error("purge_old_data failed after max retries")
+        return {"status": "failed", "reason": "max retries exceeded"}
+    except Exception as exc:
+        raise self.retry(exc=exc)
 
 
 async def _purge(task_id: str) -> dict:
