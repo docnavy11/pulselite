@@ -48,13 +48,20 @@ class LLMSettingsResponse(BaseModel):
     effective_api_key_set: bool = False
     allowed_models: list[str]
     internal_model: str | None = None
+    default_chatbot_model: str | None = None
+    # Env-level defaults (read-only, for UI display)
+    env_api_key_set: bool = False
+    env_base_url: str | None = None
+    env_default_chatbot_model: str | None = None
+    env_internal_model: str | None = None
 
 
 class LLMSettingsUpdate(BaseModel):
     openrouter_api_key: str | None = None
     openrouter_base_url: str | None = None
-    allowed_models: list[str] = []
+    allowed_models: list[str] | None = None
     internal_model: str | None = None
+    default_chatbot_model: str | None = None
 
 
 @router.post("", response_model=WorkspaceResponse)
@@ -136,11 +143,14 @@ async def update_llm_settings(
             workspace.openrouter_api_key = encrypt_api_key(body.openrouter_api_key)
     if body.openrouter_base_url is not None:
         workspace.openrouter_base_url = body.openrouter_base_url.strip() or None
-    if len(body.allowed_models) > 100:
-        raise HTTPException(status_code=400, detail="allowed_models may not exceed 100 items")
-    workspace.allowed_models = body.allowed_models
+    if body.allowed_models is not None:
+        if len(body.allowed_models) > 100:
+            raise HTTPException(status_code=400, detail="allowed_models may not exceed 100 items")
+        workspace.allowed_models = body.allowed_models
     if body.internal_model is not None:
         workspace.internal_model = body.internal_model.strip() or None
+    if body.default_chatbot_model is not None:
+        workspace.default_chatbot_model = body.default_chatbot_model.strip() or None
     await db.commit()
     await db.refresh(workspace)
     return _build_llm_response(workspace)
@@ -156,6 +166,11 @@ def _build_llm_response(workspace: Workspace) -> LLMSettingsResponse:
         effective_api_key_set=effective_key,
         allowed_models=workspace.allowed_models or [],
         internal_model=workspace.internal_model,
+        default_chatbot_model=workspace.default_chatbot_model,
+        env_api_key_set=bool(app_settings.AI_API_KEY),
+        env_base_url=app_settings.AI_BASE_URL or None,
+        env_default_chatbot_model=app_settings.DEFAULT_CHATBOT_MODEL or None,
+        env_internal_model=app_settings.INTERNAL_MODEL or None,
     )
 
 
@@ -181,7 +196,10 @@ async def list_openrouter_models(
     if not api_key:
         raise HTTPException(status_code=400, detail="No API key configured")
 
-    base_url = (workspace.openrouter_base_url or app_settings.AI_BASE_URL).rstrip("/")
+    raw_base_url = workspace.openrouter_base_url or app_settings.AI_BASE_URL
+    if not raw_base_url:
+        raise HTTPException(status_code=400, detail="No AI base URL configured. Set AI_BASE_URL in .env or configure one in Settings > AI Models.")
+    base_url = raw_base_url.rstrip("/")
     async with httpx.AsyncClient(timeout=15.0) as client:
         resp = await client.get(
             f"{base_url}/models",

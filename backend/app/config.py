@@ -76,6 +76,12 @@ class Settings(BaseSettings):
     # Global AI proxy overrides (used as defaults when no workspace-level config is set)
     AI_BASE_URL: str = ""
     AI_API_KEY: str = ""
+    DEFAULT_CHATBOT_MODEL: str = ""
+    INTERNAL_MODEL: str = ""
+
+    # Bootstrap admin account (auto-created on startup if no users exist)
+    ADMIN_EMAIL: str = ""
+    ADMIN_PASSWORD: str = ""
 
     # Encryption
     FERNET_KEY: str = ""
@@ -83,6 +89,9 @@ class Settings(BaseSettings):
     # Stripe
     STRIPE_SECRET_KEY: str = ""
     STRIPE_WEBHOOK_SECRET: str = ""
+
+    # Worker tuning
+    CELERY_WORKER_CONCURRENCY: int = 2
 
     # Deployment mode
     CLOUD_MODE: bool = False

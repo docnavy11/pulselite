@@ -18,6 +18,10 @@ celery_app.conf.update(
     task_track_started=True,
     task_acks_late=True,
     worker_prefetch_multiplier=1,
+    # Each prefork worker uses ~250MB RAM. Tasks are I/O-bound (LLM API calls, DB queries),
+    # so 2 workers is enough for most self-hosted deployments. Increase if you have many
+    # concurrent crawl/ingestion jobs. Set via CELERY_WORKER_CONCURRENCY in .env.
+    worker_concurrency=settings.CELERY_WORKER_CONCURRENCY,
     beat_schedule={
         "sync-stale-documents": {
             "task": "app.workers.tasks.sync_documents.sync_stale_documents",

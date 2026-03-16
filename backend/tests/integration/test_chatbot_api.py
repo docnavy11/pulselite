@@ -1,5 +1,9 @@
 """Integration tests for /workspaces/{workspace_id}/chatbots CRUD."""
 import uuid
+from unittest.mock import patch
+
+from sqlalchemy import select
+
 from tests.factories import make_chatbot
 
 
@@ -73,3 +77,91 @@ async def test_chatbot_response_has_required_fields(auth_client, workspace):
     data = r.json()
     for field in ("id", "name", "workspace_id", "llm_provider", "llm_model"):
         assert field in data, f"Missing field: {field}"
+
+
+# ── AI config validation on chatbot creation ──────────────────────────────
+
+
+async def test_create_chatbot_fails_without_ai_key(db, auth_client, workspace):
+    """When no AI key is configured (neither workspace nor env), return 400."""
+    with patch("app.api.v1.chatbots.app_settings") as mock_settings:
+        mock_settings.AI_API_KEY = ""
+        mock_settings.DEFAULT_CHATBOT_MODEL = ""
+        r = await auth_client.post(
+            f"/api/v1/workspaces/{workspace.id}/chatbots",
+            json={"name": "Should Fail"},
+        )
+    assert r.status_code == 400
+    assert "No AI provider configured" in r.json()["detail"]
+
+
+async def test_create_chatbot_succeeds_with_env_ai_key(auth_client, workspace):
+    """When AI_API_KEY is set in env (via conftest), chatbot creation works."""
+    r = await auth_client.post(
+        f"/api/v1/workspaces/{workspace.id}/chatbots",
+        json={"name": "Env Key Bot", "llm_model": "gpt-4o-mini"},
+    )
+    assert r.status_code == 200
+
+
+async def test_create_chatbot_succeeds_with_workspace_key(db, auth_client, workspace):
+    """When workspace has openrouter_api_key set, chatbot creation works even without env key."""
+    from app.models.organizational import Workspace
+    from app.services.encryption import encrypt_api_key
+
+    result = await db.execute(select(Workspace).where(Workspace.id == workspace.id))
+    ws = result.scalar_one()
+    ws.openrouter_api_key = encrypt_api_key("sk-or-v1-test")
+    await db.flush()
+
+    with patch("app.api.v1.chatbots.app_settings") as mock_settings:
+        mock_settings.AI_API_KEY = ""
+        mock_settings.DEFAULT_CHATBOT_MODEL = ""
+        r = await auth_client.post(
+            f"/api/v1/workspaces/{workspace.id}/chatbots",
+            json={"name": "Workspace Key Bot", "llm_model": "gpt-4o-mini"},
+        )
+    assert r.status_code == 200
+
+
+async def test_create_chatbot_fails_with_disallowed_model(db, auth_client, workspace):
+    """When workspace has allowed_models, creating a chatbot with an unlisted model returns 400."""
+    from app.models.organizational import Workspace
+
+    result = await db.execute(select(Workspace).where(Workspace.id == workspace.id))
+    ws = result.scalar_one()
+    ws.allowed_models = ["model-a", "model-b"]
+    await db.flush()
+
+    r = await auth_client.post(
+        f"/api/v1/workspaces/{workspace.id}/chatbots",
+        json={"name": "Bad Model Bot", "llm_model": "model-c"},
+    )
+    assert r.status_code == 400
+    assert "not in the workspace's allowed models" in r.json()["detail"]
+
+
+async def test_create_chatbot_succeeds_with_allowed_model(db, auth_client, workspace):
+    """When workspace has allowed_models, creating with a listed model succeeds."""
+    from app.models.organizational import Workspace
+
+    result = await db.execute(select(Workspace).where(Workspace.id == workspace.id))
+    ws = result.scalar_one()
+    ws.allowed_models = ["model-a", "model-b"]
+    await db.flush()
+
+    r = await auth_client.post(
+        f"/api/v1/workspaces/{workspace.id}/chatbots",
+        json={"name": "Good Model Bot", "llm_model": "model-a"},
+    )
+    assert r.status_code == 200
+    assert r.json()["llm_model"] == "model-a"
+
+
+async def test_create_chatbot_no_model_restriction_when_allowed_models_empty(auth_client, workspace):
+    """When allowed_models is empty (default), any model is allowed."""
+    r = await auth_client.post(
+        f"/api/v1/workspaces/{workspace.id}/chatbots",
+        json={"name": "Any Model Bot", "llm_model": "some-random-model"},
+    )
+    assert r.status_code == 200

@@ -4,6 +4,9 @@ WORKDIR /app/frontend
 COPY frontend/package*.json ./
 RUN npm ci
 COPY frontend/ .
+# Default VITE_API_URL to same-origin (light mode serves everything on :8000)
+ARG VITE_API_URL=http://localhost:8000
+ENV VITE_API_URL=$VITE_API_URL
 RUN npm run build
 
 # ── Stage 2: Install Python dependencies ─────────────────────────
@@ -13,8 +16,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc g++ build-essential libffi-dev \
     && rm -rf /var/lib/apt/lists/*
 RUN pip install uv
-COPY backend/requirements.lock backend/
-RUN cd backend && pip install --no-deps -r requirements.lock
+COPY backend/pyproject.toml backend/
+# CPU-only PyTorch — saves ~6GB by excluding CUDA/nvidia/triton
+RUN cd backend && uv pip install --system \
+    --extra-index-url https://download.pytorch.org/whl/cpu \
+    --index-strategy unsafe-best-match \
+    -e "." \
+    && rm -rf /root/.cache/pip /root/.cache/uv /tmp/*
 
 # ── Stage 3: Final image ─────────────────────────────────────────
 FROM python:3.12-slim AS final
@@ -29,7 +37,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=python-deps /usr/local/lib/python3.12 /usr/local/lib/python3.12
 COPY --from=python-deps /usr/local/bin /usr/local/bin
 
-# Install Playwright browser + runtime deps in final stage (arch-independent)
+# Install Playwright browser + runtime deps in final stage
 RUN playwright install chromium --with-deps
 
 # Copy built frontend

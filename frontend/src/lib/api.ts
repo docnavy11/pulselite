@@ -4,11 +4,24 @@ import { reconnectSocket } from "./socket";
 const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 class ApiError extends Error {
+  public detail: string;
+
   constructor(
     public status: number,
     message: string,
   ) {
-    super(message);
+    // Try to extract "detail" from JSON error responses for user-friendly messages
+    let detail = message;
+    try {
+      const parsed = JSON.parse(message);
+      if (parsed.detail) {
+        detail = typeof parsed.detail === "string" ? parsed.detail : JSON.stringify(parsed.detail);
+      }
+    } catch {
+      // Not JSON — use raw message
+    }
+    super(detail);
+    this.detail = detail;
     this.name = "ApiError";
   }
 }
@@ -81,11 +94,20 @@ class ApiClient {
   ): Promise<T> {
     const url = `${this.baseUrl}${path}`;
 
-    const response = await fetch(url, {
-      method,
-      headers: this.getHeaders(),
-      body: body ? JSON.stringify(body) : undefined,
-    });
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method,
+        headers: this.getHeaders(),
+        body: body ? JSON.stringify(body) : undefined,
+      });
+    } catch (err) {
+      // Network error — backend unreachable, CORS failure, DNS resolution failure, etc.
+      const detail =
+        `Cannot reach the backend at ${this.baseUrl}. ` +
+        "Check that Docker containers are running (make up) and VITE_API_URL is correct in your .env file.";
+      throw new ApiError(0, detail);
+    }
 
     if (response.status === 401) {
       const refreshed = await this.refreshToken();

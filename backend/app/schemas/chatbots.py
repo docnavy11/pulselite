@@ -108,6 +108,7 @@ class ChatbotResponse(BaseModel):
     welcome_message: str | None = None
     suggested_questions: list[str] | None = None
     setup_status: str | None = None
+    setup_error: str | None = None
     active_crawl_job_id: uuid.UUID | None = None
     crawl_progress: CrawlProgressResponse | None = None
     archived_at: datetime | None = None

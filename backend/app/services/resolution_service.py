@@ -134,24 +134,42 @@ async def handle_message(
     inline_action_payloads: list[dict] = []
     token_usage: dict | None = None
 
-    async for item in process_query(
-        db, message, chatbot, conversation_id,
-        openrouter_key=openrouter_key,
-        openrouter_base_url=openrouter_base_url,
-        actions=actions_with_params if actions_with_params else None,
-    ):
-        if isinstance(item, RAGResult):
-            rag_result = item
-            continue
-        if isinstance(item, dict):
-            if "prompt_tokens" in item:
-                token_usage = item
-            else:
-                # Triggered action payload (client-side) from function calling
-                inline_action_payloads.append(item)
-            continue
-        full_response += item
-        yield ResolutionEvent(type="token", data=item, conversation_id=conversation_id)
+    try:
+        async for item in process_query(
+            db, message, chatbot, conversation_id,
+            openrouter_key=openrouter_key,
+            openrouter_base_url=openrouter_base_url,
+            actions=actions_with_params if actions_with_params else None,
+        ):
+            if isinstance(item, RAGResult):
+                rag_result = item
+                continue
+            if isinstance(item, dict):
+                if "prompt_tokens" in item:
+                    token_usage = item
+                else:
+                    # Triggered action payload (client-side) from function calling
+                    inline_action_payloads.append(item)
+                continue
+            full_response += item
+            yield ResolutionEvent(type="token", data=item, conversation_id=conversation_id)
+    except Exception as exc:
+        error_msg = str(exc).lower()
+        if "401" in error_msg or "unauthorized" in error_msg:
+            user_error = "AI provider authentication failed. Please check your API key configuration in Settings > AI Models."
+        elif "429" in error_msg or "rate" in error_msg:
+            user_error = "AI provider rate limit reached. Please try again in a moment."
+        elif "timeout" in error_msg or "timed out" in error_msg:
+            user_error = "AI provider request timed out. The service may be temporarily unavailable."
+        elif "connection" in error_msg or "refused" in error_msg:
+            user_error = "Cannot connect to AI provider. Please check that your AI_BASE_URL is correct and the service is running."
+        elif "model" in error_msg and ("not found" in error_msg or "does not exist" in error_msg):
+            user_error = f"AI model not available. Check your model configuration. Detail: {exc}"
+        else:
+            user_error = "Something went wrong while generating a response. Please try again."
+        logger.error("Chat generation failed for chatbot %s: %s", chatbot.id, exc, exc_info=True)
+        yield ResolutionEvent(type="error", data=user_error, conversation_id=conversation_id)
+        return
 
     confidence_score = rag_result.confidence_score if rag_result else 0.0
     confidence_avg = rag_result.confidence_avg if rag_result else 0.0

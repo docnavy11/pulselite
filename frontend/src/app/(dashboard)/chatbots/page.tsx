@@ -8,7 +8,7 @@ import { Spinner } from "@/components/ui/Spinner";
 import { Chatbot } from "@/lib/types";
 import { useSocketEvent, getSocket } from "@/lib/socket";
 import type { ChatbotStatusEvent, CrawlProgressEvent } from "@/lib/types";
-import { getChatbots, getChatbotStats, updateChatbot, deleteChatbot, archiveChatbot, unarchiveChatbot } from "@/lib/api-functions";
+import { getChatbots, getChatbotStats, getLLMSettings, updateChatbot, deleteChatbot, archiveChatbot, unarchiveChatbot } from "@/lib/api-functions";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useChatbotStore } from "@/stores/chatbot-store";
 import { useCopilot } from "@/components/copilot/CopilotProvider";
@@ -32,6 +32,8 @@ function getProgressText(bot: Chatbot): string | null {
     return "Discovering pages…";
   }
   if (bot.setup_status === "configuring" || bot.setup_status === "ready") return "Almost there…";
+  if (bot.setup_status === "setup_failed" && bot.setup_error) return bot.setup_error;
+  if (bot.setup_status === "setup_failed") return "Setup failed — check your AI provider configuration.";
   return null;
 }
 
@@ -45,6 +47,7 @@ export default function ChatbotsPage() {
   const [actionPending, setActionPending] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [showArchiveHint, setShowArchiveHint] = useState<string | null>(null);
+  const [aiConfigured, setAiConfigured] = useState(true);
 
   const handleToggle = async (e: { preventDefault: () => void }, chatbot: Chatbot) => {
     e.preventDefault();
@@ -121,6 +124,9 @@ export default function ChatbotsPage() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+    getLLMSettings(workspace.id)
+      .then((s) => setAiConfigured(s.effective_api_key_set && s.allowed_models.length > 0))
+      .catch(() => {});
   }, [workspace]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Real-time chatbot status updates
@@ -164,10 +170,16 @@ export default function ChatbotsPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Chatbots</h1>
-        <Button onClick={() => navigate("/chatbots/new")}>
-          <Plus className="h-4 w-4 mr-2" />
-          Create Chatbot
-        </Button>
+        {aiConfigured ? (
+          <Button onClick={() => navigate("/chatbots/new")}>
+            <Plus className="h-4 w-4 mr-2" />
+            Create Chatbot
+          </Button>
+        ) : (
+          <Button onClick={() => navigate("/settings/llm")} variant="secondary">
+            Configure AI to create chatbots
+          </Button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 min-[1200px]:grid-cols-3">
@@ -347,15 +359,19 @@ export default function ChatbotsPage() {
                 />
               </svg>
             </div>
-            <h3 className="text-[16px] font-bold text-gray-800 mb-2">Your first bot is one URL away</h3>
+            <h3 className="text-[16px] font-bold text-gray-800 mb-2">
+              {aiConfigured ? "Your first bot is one URL away" : "Configure your AI provider first"}
+            </h3>
             <p className="text-[13px] text-gray-400 mb-5 max-w-xs">
-              Paste a URL, we crawl it and auto-configure a chatbot in minutes.
+              {aiConfigured
+                ? "Paste a URL, we crawl it and auto-configure a chatbot in minutes."
+                : "Set up an AI API key and select models before creating chatbots."}
             </p>
             <button
-              onClick={() => navigate("/chatbots/new")}
+              onClick={() => navigate(aiConfigured ? "/chatbots/new" : "/settings/llm")}
               className="px-5 py-2.5 bg-primary-500 hover:bg-primary-600 text-white rounded-xl text-[13px] font-semibold transition-colors"
             >
-              Create my first chatbot
+              {aiConfigured ? "Create my first chatbot" : "Go to AI Settings"}
             </button>
           </div>
         )}

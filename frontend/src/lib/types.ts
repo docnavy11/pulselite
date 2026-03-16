@@ -57,6 +57,7 @@ export interface Chatbot {
   suggested_questions?: string[];
   fallback_message?: string;
   setup_status?: string | null;
+  setup_error?: string | null;
   active_crawl_job_id?: string | null;
   crawl_progress?: CrawlProgress | null;
   archived_at?: string | null;
@@ -441,6 +442,11 @@ export interface LLMSettings {
   effective_api_key_set: boolean;
   allowed_models: string[];
   internal_model: string | null;
+  default_chatbot_model: string | null;
+  env_api_key_set: boolean;
+  env_base_url: string | null;
+  env_default_chatbot_model: string | null;
+  env_internal_model: string | null;
 }
 
 export interface OpenRouterModel {

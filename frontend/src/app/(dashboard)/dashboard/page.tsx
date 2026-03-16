@@ -19,6 +19,7 @@ import {
   getChatbots,
   getSentimentTrends,
   getGapClusters,
+  getLLMSettings,
   triggerAnalyzeAll,
   triggerSentimentTrends,
   triggerClusterGaps,
@@ -165,6 +166,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [sentiment, setSentiment] = useState<SentimentData | null>(null);
   const [topics, setTopics] = useState<GapCluster[]>([]);
+  const [aiConfigured, setAiConfigured] = useState(true);
 
   const userName = user?.name || user?.email || "there";
   const greeting = getGreeting(userName);
@@ -173,6 +175,9 @@ export default function DashboardPage() {
     if (!workspace?.id) return;
     getChatbots(workspace.id)
       .then(setChatbots)
+      .catch(() => {});
+    getLLMSettings(workspace.id)
+      .then((s) => setAiConfigured(s.effective_api_key_set && s.allowed_models.length > 0))
       .catch(() => {});
   }, [workspace?.id]);
 
@@ -241,10 +246,10 @@ export default function DashboardPage() {
         {!hasChatbots && !loading && (
           <div className="flex gap-3 mb-7">
             <button
-              onClick={() => navigate("/chatbots/new")}
+              onClick={() => navigate(aiConfigured ? "/chatbots/new" : "/settings/llm")}
               className="flex items-center gap-2 px-4 py-2.5 bg-primary-500 hover:bg-primary-600 text-white rounded-xl text-[13px] font-semibold transition-colors"
             >
-              + New chatbot
+              {aiConfigured ? "+ New chatbot" : "Configure AI to get started"}
             </button>
             <button
               onClick={() => navigate("/conversations")}
@@ -566,16 +571,18 @@ export default function DashboardPage() {
               </svg>
             </div>
             <h3 className="text-[15px] font-bold text-gray-800 mb-2">
-              Your first chatbot is one URL away
+              {aiConfigured ? "Your first chatbot is one URL away" : "Configure your AI provider first"}
             </h3>
             <p className="text-[13px] text-gray-400 mb-5">
-              Paste a URL, we crawl it and auto-configure your bot in minutes.
+              {aiConfigured
+                ? "Paste a URL, we crawl it and auto-configure your bot in minutes."
+                : "Set up an AI API key and select models before creating chatbots."}
             </p>
             <button
-              onClick={() => navigate("/chatbots/new")}
+              onClick={() => navigate(aiConfigured ? "/chatbots/new" : "/settings/llm")}
               className="px-5 py-2.5 bg-primary-500 hover:bg-primary-600 text-white rounded-xl text-[13px] font-semibold transition-colors"
             >
-              Create my first chatbot
+              {aiConfigured ? "Create my first chatbot" : "Go to AI Settings"}
             </button>
           </div>
         )}

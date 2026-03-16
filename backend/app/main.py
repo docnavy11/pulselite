@@ -101,6 +101,54 @@ async def leave_workspace(sid: str, data: dict) -> None:
         await sio.leave_room(sid, str(workspace_id))
 
 
+def _run_preflight_checks(logger) -> list[str]:
+    """Validate configuration at startup and log actionable warnings. Returns list of warnings."""
+    warnings: list[str] = []
+
+    # Security keys
+    if "change-in-production" in settings.SECRET_KEY:
+        msg = "SECRET_KEY is using the default dev value. Generate a secure key for production: python3 -c \"import secrets; print(secrets.token_urlsafe(48))\""
+        logger.warning(msg)
+        warnings.append(msg)
+
+    if "change-in-production" in settings.JWT_SECRET_KEY:
+        msg = "JWT_SECRET_KEY is using the default dev value. Generate a secure key for production."
+        logger.warning(msg)
+        warnings.append(msg)
+
+    # Fernet key
+    if not settings.FERNET_KEY:
+        msg = "FERNET_KEY is not set. Encrypted API key storage will fail. Generate one: python3 -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
+        logger.error(msg)
+        warnings.append(msg)
+    else:
+        try:
+            from cryptography.fernet import Fernet
+            Fernet(settings.FERNET_KEY.encode() if isinstance(settings.FERNET_KEY, str) else settings.FERNET_KEY)
+        except Exception:
+            msg = "FERNET_KEY is invalid (not a valid Fernet key). Encrypted API key storage will fail. Generate a new one: python3 -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
+            logger.error(msg)
+            warnings.append(msg)
+
+    # Admin account
+    if not settings.ADMIN_EMAIL or not settings.ADMIN_PASSWORD:
+        msg = "ADMIN_EMAIL/ADMIN_PASSWORD not set. No admin account will be created on first startup. Set these in .env to enable automatic admin bootstrapping."
+        logger.warning(msg)
+        warnings.append(msg)
+
+    # AI configuration
+    if not settings.AI_API_KEY:
+        msg = "AI_API_KEY is not set. Chatbots will not work until you configure an AI provider (in .env or Settings > AI Models in the UI)."
+        logger.warning(msg)
+        warnings.append(msg)
+    elif not settings.AI_BASE_URL:
+        msg = "AI_API_KEY is set but AI_BASE_URL is empty. You must also set AI_BASE_URL (e.g. https://openrouter.ai/api/v1) for the AI provider to work."
+        logger.warning(msg)
+        warnings.append(msg)
+
+    return warnings
+
+
 def create_app() -> FastAPI:
     application = FastAPI(title="Pulselite API", version="0.1.0", docs_url="/api/docs", redoc_url="/api/redoc")
 
@@ -163,9 +211,39 @@ def create_app() -> FastAPI:
         return {"ok": True}
 
     @application.on_event("startup")
-    async def _load_plan_tiers():
+    async def _startup():
+        import logging
+        _logger = logging.getLogger("pulse.startup")
+
         from app.services.plan_service import load_plan_tiers
-        await load_plan_tiers()
+        from app.services.bootstrap import bootstrap_admin
+
+        # Pre-flight: validate critical config before anything else
+        _preflight_warnings = _run_preflight_checks(_logger)
+
+        try:
+            await bootstrap_admin()
+        except Exception as exc:
+            _logger.error(
+                "Failed to bootstrap admin user: %s. "
+                "Check your database connection (POSTGRES_HOST, POSTGRES_PORT, POSTGRES_USER, POSTGRES_PASSWORD) "
+                "and ensure migrations have been run (make migrate).",
+                exc,
+            )
+
+        try:
+            await load_plan_tiers()
+        except Exception as exc:
+            _logger.warning("Failed to load plan tiers: %s — billing features may not work.", exc)
+
+        # Print summary
+        if _preflight_warnings:
+            _logger.warning(
+                "Startup completed with %d warning(s) — review messages above.",
+                len(_preflight_warnings),
+            )
+        else:
+            _logger.info("Startup completed — all pre-flight checks passed.")
 
     # Light mode: serve built frontend as static files (must be LAST)
     if settings.serve_frontend:

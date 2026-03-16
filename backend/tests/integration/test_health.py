@@ -5,11 +5,12 @@ real DB connection, dependency override, HTTP client, auth fixtures.
 
 
 async def test_health_endpoint_returns_200(client):
-    """The /health endpoint should always return 200 with DB connected."""
+    """The /health endpoint should return 200 with DB + Redis connected."""
     response = await client.get("/api/v1/health")
     assert response.status_code == 200
     data = response.json()
-    assert data.get("status") == "ok"
+    assert data["status"] == "healthy"
+    assert data["checks"]["database"] == "connected"
 
 
 async def test_authenticated_endpoint_requires_auth(client):

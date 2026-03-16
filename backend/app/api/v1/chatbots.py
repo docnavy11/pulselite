@@ -9,8 +9,10 @@ from app.database import get_db
 from app.dependencies import get_workspace
 from app.models.conversations import Conversation
 from app.models.knowledge import Chatbot as ChatbotModel, CrawlJob
+from app.models.organizational import Workspace
 from app.schemas.chatbots import AutoConfigRequest, AutoConfigResponse, ChatbotCreate, ChatbotResponse, ChatbotUpdate, CrawlProgressResponse
 from app.schemas.widget import LLMConfigUpdate, PersonaUpdate, WidgetConfig
+from app.config import settings as app_settings
 from app.services import chatbot_service
 from app.services.encryption import encrypt_api_key
 
@@ -23,7 +25,32 @@ async def create_chatbot(
     workspace_id: uuid.UUID = Depends(get_workspace),
     db: AsyncSession = Depends(get_db),
 ):
-    chatbot = await chatbot_service.create_chatbot(db, workspace_id, **body.model_dump())
+    ws_result = await db.execute(select(Workspace).where(Workspace.id == workspace_id))
+    ws = ws_result.scalar_one()
+
+    # Validate that AI is configured (workspace key or env-level key)
+    has_ai_key = bool(ws.openrouter_api_key or app_settings.AI_API_KEY)
+    if not has_ai_key:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No AI provider configured. Set AI_API_KEY in your .env file or add an API key in Settings > AI Models.",
+        )
+
+    data = body.model_dump()
+    # Apply workspace default chatbot model if the request uses the schema default
+    if body.llm_model == "claude-haiku-4-5-20251001":
+        default = ws.default_chatbot_model or app_settings.DEFAULT_CHATBOT_MODEL
+        if default:
+            data["llm_model"] = default
+
+    # Validate model is in allowed_models (if workspace has a restricted list)
+    if ws.allowed_models and data.get("llm_model") and data["llm_model"] not in ws.allowed_models:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Model '{data['llm_model']}' is not in the workspace's allowed models list.",
+        )
+
+    chatbot = await chatbot_service.create_chatbot(db, workspace_id, **data)
     return chatbot
 
 

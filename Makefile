@@ -1,4 +1,10 @@
-.PHONY: up down build migrate seed test test-unit test-integration test-isolation test-security test-all test-fast lint test-frontend test-frontend-coverage test-e2e test-e2e-headed lint-bandit lint-semgrep lint-security-static test-schema-public test-schema-auth test-schema perf-smoke perf-auth perf-widget perf-all test-coverage-gate
+.PHONY: setup setup-check up down build migrate seed test test-unit test-integration test-isolation test-security test-all test-fast lint test-frontend test-frontend-coverage test-e2e test-e2e-headed lint-bandit lint-semgrep lint-security-static test-schema-public test-schema-auth test-schema perf-smoke perf-auth perf-widget perf-all test-coverage-gate
+
+setup:
+	python3 scripts/setup-env.py
+
+setup-check:
+	python3 scripts/setup-env.py --check
 
 up:
 	docker compose up -d

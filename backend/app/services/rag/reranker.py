@@ -11,7 +11,14 @@ MODEL_NAME = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
 @lru_cache(maxsize=1)
 def _get_model():
-    from sentence_transformers import CrossEncoder
+    try:
+        from sentence_transformers import CrossEncoder
+    except ImportError:
+        logger.warning(
+            "sentence-transformers is not installed — reranking disabled. "
+            "Install with: pip install sentence-transformers (included in the worker image)."
+        )
+        return None
 
     logger.info(f"Loading reranker model: {MODEL_NAME}")
     return CrossEncoder(MODEL_NAME)
@@ -27,6 +34,10 @@ def rerank(query: str, chunks: list[Chunk], top_k: int | None = None) -> list[tu
         return []
 
     model = _get_model()
+    if model is None:
+        # Graceful fallback: return chunks in original order with neutral scores
+        scored = [(chunk, 0.5) for chunk in chunks]
+        return scored[:top_k] if top_k else scored
     pairs = [(query, chunk.content) for chunk in chunks]
     scores = model.predict(pairs)
 

@@ -92,11 +92,9 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "3001:3000"
+      - "${FRONTEND_PORT:-3001}:3000"
     env_file:
       - .env
-    environment:
-      - VITE_API_URL=http://localhost:8000
     volumes:
       - ./frontend:/app
       - /app/node_modules

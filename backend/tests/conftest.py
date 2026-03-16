@@ -37,6 +37,8 @@ os.environ.setdefault("STRIPE_SECRET_KEY", "sk_test_not_real")
 os.environ.setdefault("STRIPE_WEBHOOK_SECRET", "whsec_test_not_real")
 os.environ.setdefault("GOOGLE_CLIENT_ID", "test-client-id")
 os.environ.setdefault("GOOGLE_CLIENT_SECRET", "test-client-secret")
+os.environ.setdefault("AI_API_KEY", "test-ai-key")
+os.environ.setdefault("AI_BASE_URL", "https://openrouter.ai/api/v1")
 
 # Import app AFTER env is set
 from app.main import create_app
@@ -48,7 +50,7 @@ from app.database import get_db
 @pytest_asyncio.fixture(scope="session")
 async def engine() -> AsyncGenerator[AsyncEngine, None]:
     db_url = (
-        f"postgresql+asyncpg://"
+        f"postgresql+psycopg://"
         f"{os.environ['POSTGRES_USER']}:{os.environ['POSTGRES_PASSWORD']}"
         f"@{os.environ['POSTGRES_HOST']}:{os.environ['POSTGRES_PORT']}"
         f"/{os.environ['POSTGRES_DB']}"
