@@ -27,7 +27,7 @@ async def register(request: Request, body: RegisterRequest, db: AsyncSession = D
 @router.post("/login")
 @limiter.limit("5/minute")
 async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends(get_db)):
-    from fastapi import HTTPException, status
+    from fastapi import status
     from app.services.encryption import decrypt_api_key
     import pyotp
 
@@ -86,7 +86,8 @@ async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends
 
 
 @router.post("/refresh", response_model=TokenResponse)
-async def refresh(body: RefreshRequest):
+@limiter.limit("10/minute")
+async def refresh(request: Request, body: RefreshRequest):
     return await auth_service.refresh_tokens(body.refresh_token)
 
 
@@ -114,7 +115,7 @@ async def google_login():
 @router.get("/google/callback", response_model=TokenResponse)
 async def google_callback(code: str = Query(...), state: str = Query(...), db: AsyncSession = Depends(get_db)):
     import redis.asyncio as aioredis
-    from fastapi import HTTPException, status
+    from fastapi import status
 
     r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
     valid = await r.get(f"pulse:oauth_state:{state}")

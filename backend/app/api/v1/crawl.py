@@ -1,4 +1,5 @@
 # backend/app/api/v1/crawl.py
+import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -40,7 +41,7 @@ async def crawl_website_endpoint(
             chatbot_id=body.chatbot_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid crawl request") from e
 
     crawl_website.delay(job_id)
 
@@ -61,7 +62,8 @@ async def crawl_preview_endpoint(
     try:
         discovered = await discover_urls(body.url)
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        logging.getLogger("pulse.crawl").warning("URL discovery failed for %s: %s", body.url, e)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to discover URLs for the given site") from e
 
     urls = [d.url for d in discovered]
 

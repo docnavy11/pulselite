@@ -1,0 +1,6 @@
+<div class="toast px-4 py-3 rounded-lg shadow-lg text-sm
+    {% if type == 'success' %}bg-green-600 text-white
+    {% elif type == 'error' %}bg-red-600 text-white
+    {% else %}bg-gray-800 text-white{% endif %}">
+    {{ message }}
+</div>

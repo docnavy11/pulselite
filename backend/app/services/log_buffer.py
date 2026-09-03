@@ -6,6 +6,9 @@ from collections import deque
 from datetime import datetime, timezone
 
 
+_formatter = logging.Formatter()
+
+
 class LogBuffer(logging.Handler):
     """In-memory ring buffer that captures log records for admin viewing."""
 
@@ -17,19 +20,22 @@ class LogBuffer(logging.Handler):
         self.lock = threading.Lock()
 
     def emit(self, record):
-        entry = {
-            "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
-            "level": record.levelname,
-            "logger": record.name,
-            "message": self.format(record),
-            "module": record.module,
-            "function": record.funcName,
-            "line": record.lineno,
-        }
-        if record.exc_info and record.exc_info[0] is not None:
-            entry["exception"] = self.formatException(record.exc_info)
-        with self.lock:
-            self.buffer.append(entry)
+        try:
+            entry = {
+                "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
+                "level": record.levelname,
+                "logger": record.name,
+                "message": self.format(record),
+                "module": record.module,
+                "function": record.funcName,
+                "line": record.lineno,
+            }
+            if record.exc_info and record.exc_info[0] is not None:
+                entry["exception"] = _formatter.formatException(record.exc_info)
+            with self.lock:
+                self.buffer.append(entry)
+        except Exception:
+            pass
 
     def get_entries(self, limit=100, level=None, logger_name=None):
         with self.lock:

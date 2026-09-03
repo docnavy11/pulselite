@@ -36,6 +36,11 @@ export default function LLMSettingsPage() {
   const [internalSuccess, setInternalSuccess] = useState(false);
   const [internalError, setInternalError] = useState<string | null>(null);
 
+  const [defaultChatbotModel, setDefaultChatbotModel] = useState("");
+  const [savingDefault, setSavingDefault] = useState(false);
+  const [defaultSuccess, setDefaultSuccess] = useState(false);
+  const [defaultError, setDefaultError] = useState<string | null>(null);
+
   const [pageLoading, setPageLoading] = useState(true);
 
   useEffect(() => {
@@ -46,6 +51,7 @@ export default function LLMSettingsPage() {
         setBaseUrlInput(data.openrouter_base_url || "");
         setSelectedModels(new Set(data.allowed_models));
         setInternalModel(data.internal_model || "");
+        setDefaultChatbotModel(data.default_chatbot_model || "");
       })
       .finally(() => setPageLoading(false));
   }, [workspace]);
@@ -113,6 +119,8 @@ export default function LLMSettingsPage() {
         allowed_models: [...selectedModels],
       });
       setSettings(updated);
+      setModels([]);
+      setModelSearch("");
       setModelSuccess(true);
     } catch {
       setModelError("Failed to save model selection.");
@@ -194,9 +202,9 @@ export default function LLMSettingsPage() {
                 <CheckCircle className="h-3 w-3" /> Key saved
               </span>
             )}
-            {!settings?.openrouter_api_key_set && settings?.effective_api_key_set && (
+            {!settings?.openrouter_api_key_set && settings?.env_api_key_set && (
               <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
-                <CheckCircle className="h-3 w-3" /> Server default
+                <CheckCircle className="h-3 w-3" /> From .env
               </span>
             )}
           </div>
@@ -245,7 +253,7 @@ export default function LLMSettingsPage() {
             <div className="flex gap-3 max-w-lg">
               <input
                 type="text"
-                placeholder={settings?.effective_base_url || "https://openrouter.ai/api/v1"}
+                placeholder="https://openrouter.ai/api/v1"
                 value={baseUrlInput}
                 onChange={(e) => setBaseUrlInput(e.target.value)}
                 className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
@@ -275,9 +283,9 @@ export default function LLMSettingsPage() {
                 Save URL
               </Button>
             </div>
-            {!baseUrlInput && settings?.effective_base_url && (
+            {!baseUrlInput && settings?.env_base_url && (
               <p className="mt-1 text-xs text-gray-400">
-                Using server default: <code className="bg-gray-100 px-1 rounded">{settings.effective_base_url}</code>
+                From .env: <code className="bg-gray-100 px-1 rounded">{settings.env_base_url}</code>
               </p>
             )}
           </div>
@@ -304,14 +312,14 @@ export default function LLMSettingsPage() {
               variant="secondary"
               onClick={handleLoadModels}
               loading={loadingModels}
-              disabled={!settings?.openrouter_api_key_set}
+              disabled={!settings?.effective_api_key_set}
             >
               <RefreshCw className="h-4 w-4 mr-1" />
-              Load from OpenRouter
+              Edit models
             </Button>
           </div>
 
-          {!settings?.openrouter_api_key_set && (
+          {!settings?.effective_api_key_set && (
             <p className="text-sm text-gray-500 mb-4">Save your API key first to load available models.</p>
           )}
 
@@ -322,8 +330,27 @@ export default function LLMSettingsPage() {
                 placeholder="Search models..."
                 value={modelSearch}
                 onChange={(e) => setModelSearch(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
               />
+
+              {selectedModels.size > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {[...selectedModels].map((m) => (
+                    <span
+                      key={m}
+                      className="inline-flex items-center gap-1 rounded-full bg-primary-50 border border-primary-200 px-2.5 py-0.5 text-xs font-medium text-primary-700"
+                    >
+                      {m}
+                      <button
+                        onClick={() => toggleModel(m)}
+                        className="ml-0.5 text-primary-400 hover:text-primary-600"
+                      >
+                        &times;
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
 
               <div className="max-h-80 overflow-y-auto space-y-1 border border-gray-200 rounded-lg p-2">
                 {filteredModels.map((model) => (
@@ -391,7 +418,65 @@ export default function LLMSettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Card 3 — Internal / Background Task Model */}
+      {/* Card 3 — Default Chatbot Model */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex items-center gap-2 mb-2">
+            <Cpu className="h-5 w-5 text-primary-500" />
+            <h2 className="text-base font-semibold text-gray-900">Default Chatbot Model</h2>
+          </div>
+          <p className="text-sm text-gray-500 mb-4">
+            Model assigned to new chatbots by default. Used during autoconfig and when creating a chatbot.
+          </p>
+
+          <div className="flex gap-3 max-w-lg">
+            <select
+              value={defaultChatbotModel}
+              onChange={(e) => setDefaultChatbotModel(e.target.value)}
+              className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+            >
+              <option value="">Select a model</option>
+              {(settings?.allowed_models || []).map((m) => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+            <Button
+              onClick={async () => {
+                if (!workspace) return;
+                setSavingDefault(true);
+                setDefaultError(null);
+                setDefaultSuccess(false);
+                try {
+                  const updated = await updateLLMSettings(workspace.id, {
+                    default_chatbot_model: defaultChatbotModel.trim() || null,
+                  });
+                  setSettings(updated);
+                  setDefaultChatbotModel(updated.default_chatbot_model || "");
+                  setDefaultSuccess(true);
+                } catch {
+                  setDefaultError("Failed to save model.");
+                } finally {
+                  setSavingDefault(false);
+                }
+              }}
+              loading={savingDefault}
+            >
+              Save
+            </Button>
+          </div>
+
+          {!defaultChatbotModel && settings?.env_default_chatbot_model && (
+            <p className="mt-2 text-xs text-gray-400">
+              From .env: <code className="bg-gray-100 px-1 rounded">{settings.env_default_chatbot_model}</code>
+            </p>
+          )}
+
+          {defaultError && <p className="mt-3 text-sm text-red-600">{defaultError}</p>}
+          {defaultSuccess && <p className="mt-3 text-sm text-green-600">Default chatbot model saved.</p>}
+        </CardContent>
+      </Card>
+
+      {/* Card 4 — Background Tasks Model */}
       <Card>
         <CardContent className="pt-6">
           <div className="flex items-center gap-2 mb-2">
@@ -400,21 +485,19 @@ export default function LLMSettingsPage() {
           </div>
           <p className="text-sm text-gray-500 mb-4">
             Model used for internal background tasks like conversation analysis, Q&A generation, action triggers, and the copilot.
-            {!internalModel && (
-              <span className="ml-1 text-gray-400">
-                Defaults to <code className="bg-gray-100 px-1 rounded text-xs">anthropic/claude-haiku-4-5</code>
-              </span>
-            )}
           </p>
 
           <div className="flex gap-3 max-w-lg">
-            <input
-              type="text"
-              placeholder="anthropic/claude-haiku-4-5"
+            <select
               value={internalModel}
               onChange={(e) => setInternalModel(e.target.value)}
-              className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-            />
+              className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+            >
+              <option value="">Select a model</option>
+              {(settings?.allowed_models || []).map((m) => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
             <Button
               onClick={async () => {
                 if (!workspace) return;
@@ -426,6 +509,7 @@ export default function LLMSettingsPage() {
                     internal_model: internalModel.trim() || null,
                   });
                   setSettings(updated);
+                  setInternalModel(updated.internal_model || "");
                   setInternalSuccess(true);
                 } catch {
                   setInternalError("Failed to save model.");
@@ -438,6 +522,12 @@ export default function LLMSettingsPage() {
               Save
             </Button>
           </div>
+
+          {!internalModel && settings?.env_internal_model && (
+            <p className="mt-2 text-xs text-gray-400">
+              From .env: <code className="bg-gray-100 px-1 rounded">{settings.env_internal_model}</code>
+            </p>
+          )}
 
           {internalError && <p className="mt-3 text-sm text-red-600">{internalError}</p>}
           {internalSuccess && <p className="mt-3 text-sm text-green-600">Background task model saved.</p>}

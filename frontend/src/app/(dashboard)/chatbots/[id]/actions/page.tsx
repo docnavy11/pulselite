@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { Plus, Trash2, Zap } from "lucide-react";
+import { Pencil, Plus, Trash2, Zap } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { Action, ActionCreate, ActionParameter, ActionType, IntegrationConfig } from "@/lib/types";
@@ -288,6 +288,9 @@ export default function ActionsPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [slackIntegration, setSlackIntegration] = useState<IntegrationConfig | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<ActionCreate>(EMPTY_FORM);
+  const [editSaving, setEditSaving] = useState(false);
 
   useEffect(() => {
     if (!workspace) return;
@@ -330,8 +333,37 @@ export default function ActionsPage() {
     try {
       await deleteAction(workspace.id, chatbotId, id);
       setActions((prev) => prev.filter((a) => a.id !== id));
+      if (editingId === id) setEditingId(null);
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  function startEditing(action: Action) {
+    setEditingId(action.id);
+    setEditForm({
+      action_type: action.action_type as ActionType,
+      name: action.name,
+      trigger_description: action.trigger_description,
+      config: action.config ?? {},
+      parameters: action.parameters ?? [],
+    });
+  }
+
+  async function handleEditSave() {
+    if (!workspace || !editingId || !editForm.name.trim() || !editForm.trigger_description.trim()) return;
+    setEditSaving(true);
+    try {
+      const updated = await updateAction(workspace.id, chatbotId, editingId, {
+        name: editForm.name,
+        trigger_description: editForm.trigger_description,
+        config: editForm.config,
+        parameters: editForm.parameters,
+      });
+      setActions((prev) => prev.map((a) => (a.id === editingId ? updated : a)));
+      setEditingId(null);
+    } finally {
+      setEditSaving(false);
     }
   }
 
@@ -455,42 +487,106 @@ export default function ActionsPage() {
 
       {/* Actions list */}
       <div className="space-y-3">
-        {actions.map((action) => (
-          <div
-            key={action.id}
-            className={`flex items-start gap-3 p-4 border rounded-xl bg-white transition-opacity ${
-              action.is_enabled ? "border-[#e8e2d9]" : "border-[#e8e2d9] opacity-50"
-            }`}
-          >
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1 flex-wrap">
+        {actions.map((action) =>
+          editingId === action.id ? (
+            <div key={action.id} className="p-5 border border-primary-200 rounded-xl bg-[#faf8f5] space-y-4">
+              <div className="flex items-center justify-between">
+                <p className="text-[13px] font-semibold text-gray-800">Edit action</p>
                 <ActionTypeBadge type={action.action_type} />
-                <span className="text-[13px] font-semibold text-gray-800 truncate">{action.name}</span>
               </div>
-              <p className="text-[12px] text-gray-400 line-clamp-2 mt-0.5">{action.trigger_description}</p>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                  Name <span className="text-red-400">*</span>
+                </label>
+                <input
+                  value={editForm.name}
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                  className="w-full px-3 py-2 text-sm border border-[#e8e2d9] rounded-lg focus:outline-none focus:border-primary-400 bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                  When to trigger <span className="text-red-400">*</span>
+                </label>
+                <textarea
+                  value={editForm.trigger_description}
+                  onChange={(e) => setEditForm({ ...editForm, trigger_description: e.target.value })}
+                  rows={2}
+                  className="w-full px-3 py-2 text-sm border border-[#e8e2d9] rounded-lg focus:outline-none focus:border-primary-400 bg-white resize-none"
+                />
+              </div>
+
+              <ConfigFields
+                type={editForm.action_type}
+                config={editForm.config}
+                onChange={(config) => setEditForm({ ...editForm, config })}
+                slackIntegration={slackIntegration}
+              />
+
+              <ParameterEditor
+                parameters={editForm.parameters ?? []}
+                onChange={(parameters) => setEditForm({ ...editForm, parameters })}
+              />
+
+              <div className="flex gap-2 pt-1">
+                <Button
+                  size="sm"
+                  onClick={handleEditSave}
+                  loading={editSaving}
+                  disabled={!editForm.name.trim() || !editForm.trigger_description.trim()}
+                >
+                  Save changes
+                </Button>
+                <Button size="sm" variant="secondary" onClick={() => setEditingId(null)}>
+                  Cancel
+                </Button>
+              </div>
             </div>
-            <div className="flex items-center gap-2 shrink-0 mt-0.5">
-              <button
-                onClick={() => handleToggle(action)}
-                disabled={togglingId === action.id}
-                className={`text-[11px] font-medium px-2.5 py-1 rounded-lg border transition-colors disabled:opacity-50 ${
-                  action.is_enabled
-                    ? "border-[#e8e2d9] text-gray-500 hover:bg-[#faf8f5]"
-                    : "border-primary-200 text-primary-500 bg-primary-50 hover:bg-primary-100"
-                }`}
-              >
-                {togglingId === action.id ? "…" : action.is_enabled ? "Enabled" : "Disabled"}
-              </button>
-              <button
-                onClick={() => handleDelete(action.id)}
-                disabled={deletingId === action.id}
-                className="p-1.5 text-gray-300 hover:text-red-400 transition-colors disabled:opacity-50"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
+          ) : (
+            <div
+              key={action.id}
+              className={`flex items-start gap-3 p-4 border rounded-xl bg-white transition-opacity ${
+                action.is_enabled ? "border-[#e8e2d9]" : "border-[#e8e2d9] opacity-50"
+              }`}
+            >
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                  <ActionTypeBadge type={action.action_type} />
+                  <span className="text-[13px] font-semibold text-gray-800 truncate">{action.name}</span>
+                </div>
+                <p className="text-[12px] text-gray-400 line-clamp-2 mt-0.5">{action.trigger_description}</p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0 mt-0.5">
+                <button
+                  onClick={() => handleToggle(action)}
+                  disabled={togglingId === action.id}
+                  className={`text-[11px] font-medium px-2.5 py-1 rounded-lg border transition-colors disabled:opacity-50 ${
+                    action.is_enabled
+                      ? "border-[#e8e2d9] text-gray-500 hover:bg-[#faf8f5]"
+                      : "border-primary-200 text-primary-500 bg-primary-50 hover:bg-primary-100"
+                  }`}
+                >
+                  {togglingId === action.id ? "…" : action.is_enabled ? "Enabled" : "Disabled"}
+                </button>
+                <button
+                  onClick={() => startEditing(action)}
+                  className="p-1.5 text-gray-300 hover:text-primary-500 transition-colors"
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => handleDelete(action.id)}
+                  disabled={deletingId === action.id}
+                  className="p-1.5 text-gray-300 hover:text-red-400 transition-colors disabled:opacity-50"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
             </div>
-          </div>
-        ))}
+          )
+        )}
       </div>
     </div>
   );

@@ -2,15 +2,15 @@ import uuid
 from datetime import datetime
 from typing import Literal, Optional
 
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class DocumentCreate(BaseModel):
     knowledge_base_id: uuid.UUID
     source_type: str
     source_url: str | None = None
-    raw_content: str | None = None
-    title: str | None = None
+    raw_content: str | None = Field(default=None, max_length=5_000_000)
+    title: str | None = Field(default=None, max_length=1_000)
     sync_frequency: str = "weekly"
 
     @field_validator("source_type", "source_url", "raw_content", "title")

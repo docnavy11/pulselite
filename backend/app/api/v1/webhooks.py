@@ -11,6 +11,7 @@ from app.models.organizational import Agent, WorkspaceWebhook
 from app.models.webhook_delivery import WebhookDelivery
 from app.schemas.webhook_delivery import WebhookDeliveryListResponse, WebhookDeliveryResponse
 from app.services.encryption import encrypt_api_key
+from app.utils.url_validation import validate_url_not_private
 
 router = APIRouter(tags=["webhooks"])
 
@@ -57,6 +58,10 @@ async def create_webhook(
 ):
     if not body.url.startswith("https://"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="URL must use HTTPS")
+    try:
+        validate_url_not_private(body.url)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid webhook URL: must not point to a private network")
     invalid = [e for e in body.event_types if e not in EVENT_TYPES]
     if invalid:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid event types: {invalid}")
@@ -70,6 +75,63 @@ async def create_webhook(
     await db.commit()
     await db.refresh(hook)
     return {"id": str(hook.id), "url": hook.url, "event_types": hook.event_types, "is_active": hook.is_active, "created_at": hook.created_at.isoformat()}
+
+
+class WebhookUpdate(BaseModel):
+    url: str | None = None
+    event_types: list[str] | None = None
+    secret: str | None = None
+    is_active: bool | None = None
+
+
+@router.patch("/workspaces/{workspace_id}/webhooks/{webhook_id}")
+async def update_webhook(
+    body: WebhookUpdate,
+    webhook_id: uuid.UUID,
+    workspace_id: uuid.UUID = Depends(get_workspace_admin),
+    db: AsyncSession = Depends(get_db),
+    current_user: Agent = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(WorkspaceWebhook).where(
+            WorkspaceWebhook.id == webhook_id,
+            WorkspaceWebhook.workspace_id == workspace_id,
+        )
+    )
+    hook = result.scalar_one_or_none()
+    if not hook:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Webhook not found")
+
+    if body.url is not None:
+        if not body.url.startswith("https://"):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="URL must use HTTPS")
+        try:
+            validate_url_not_private(body.url)
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid webhook URL: must not point to a private network")
+        hook.url = body.url
+
+    if body.event_types is not None:
+        invalid = [e for e in body.event_types if e not in EVENT_TYPES]
+        if invalid:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid event types: {invalid}")
+        hook.event_types = body.event_types
+
+    if body.secret is not None:
+        hook.secret = encrypt_api_key(body.secret)
+
+    if body.is_active is not None:
+        hook.is_active = body.is_active
+
+    await db.commit()
+    await db.refresh(hook)
+    return {
+        "id": str(hook.id),
+        "url": hook.url,
+        "event_types": hook.event_types,
+        "is_active": hook.is_active,
+        "created_at": hook.created_at.isoformat(),
+    }
 
 
 @router.delete("/workspaces/{workspace_id}/webhooks/{webhook_id}", status_code=204)

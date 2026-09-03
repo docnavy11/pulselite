@@ -285,6 +285,7 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
                     .values(pages_failed=CrawlJob.pages_failed + 1)
                 )
                 await db.commit()
+                await db.refresh(job)
 
                 # Debounced progress emit
                 now = _time.monotonic()
@@ -295,7 +296,7 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
                         "phase": "fetching",
                         "pages_discovered": job.pages_discovered,
                         "pages_queued": job.pages_queued,
-                        "pages_failed": job.pages_failed + 1,
+                        "pages_failed": job.pages_failed,
                         "status": "running",
                     }
                     await write_crawl_state(str(job.workspace_id), str(job.id), _crawl_state)
@@ -323,6 +324,7 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
                 .values(pages_queued=CrawlJob.pages_queued + 1)
             )
             await db.commit()
+            await db.refresh(job)
 
             # Debounced progress emit (at most every 1s)
             now = _time.monotonic()
@@ -332,7 +334,7 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
                     "chatbot_id": _chatbot_id,
                     "phase": "fetching",
                     "pages_discovered": job.pages_discovered,
-                    "pages_queued": job.pages_queued + 1,
+                    "pages_queued": job.pages_queued,
                     "pages_failed": job.pages_failed,
                     "status": "running",
                 }

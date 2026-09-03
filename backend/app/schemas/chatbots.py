@@ -17,7 +17,7 @@ class ChatbotCreate(BaseModel):
     slug: str | None = None
     display_name: str = "Assistant"
     avatar_url: str | None = None
-    system_prompt: str | None = None
+    system_prompt: str | None = Field(default=None, max_length=50_000)
     tone: str = "professional"
     language: str = "en"
     llm_provider: str = "openrouter"
@@ -29,15 +29,15 @@ class ChatbotCreate(BaseModel):
     use_reranking: bool = True
     use_hybrid_retrieval: bool = True
     fallback_type: str = "escalate"
-    fallback_message: str | None = None
+    fallback_message: str | None = Field(default=None, max_length=5_000)
 
 
 class ChatbotUpdate(BaseModel):
-    name: str | None = None
-    slug: str | None = None
-    display_name: str | None = None
-    avatar_url: str | None = None
-    system_prompt: str | None = None
+    name: str | None = Field(default=None, max_length=200)
+    slug: str | None = Field(default=None, max_length=200)
+    display_name: str | None = Field(default=None, max_length=200)
+    avatar_url: str | None = Field(default=None, max_length=2_000)
+    system_prompt: str | None = Field(default=None, max_length=50_000)
     tone: str | None = None
     language: str | None = None
     llm_provider: str | None = None
@@ -58,9 +58,9 @@ class ChatbotUpdate(BaseModel):
     use_hybrid_retrieval: bool | None = None
     auto_detect_language: bool | None = None
     fallback_type: str | None = None
-    fallback_message: str | None = None
+    fallback_message: str | None = Field(default=None, max_length=5_000)
     is_active: bool | None = None
-    welcome_message: str | None = None
+    welcome_message: str | None = Field(default=None, max_length=5_000)
     brand_color: str | None = None
     suggested_questions: list[str] | None = None
     setup_status: str | None = None

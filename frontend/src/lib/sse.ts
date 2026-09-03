@@ -55,6 +55,7 @@ export async function* streamChat(
 
   const decoder = new TextDecoder();
   let buffer = "";
+  let eventCount = 0;
 
   while (true) {
     if (signal?.aborted) break;
@@ -70,16 +71,23 @@ export async function* streamChat(
         const data = line.slice(6);
         try {
           const event: ChatEvent = JSON.parse(data);
+          eventCount++;
           yield event;
           if (event.type === "done" || event.type === "error") return;
         } catch {
           // Server sent non-JSON SSE data — treat as raw token text only if it
           // looks like content (not an SSE control line or empty string).
           if (data && !data.startsWith(":")) {
+            eventCount++;
             yield { type: "token", data };
           }
         }
       }
     }
+  }
+
+  // Stream ended without any events — server returned empty body
+  if (eventCount === 0) {
+    yield { type: "error", data: "No response from server. The AI service may be unavailable." };
   }
 }

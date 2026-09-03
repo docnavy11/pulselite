@@ -13,7 +13,7 @@ from app.models.organizational import Agent, Workspace, WorkspaceMembership
 from app.utils.security import hash_password
 
 TEST_EMAIL = "test@pulse.dev"
-TEST_PASSWORD = "test"
+TEST_PASSWORD = "Test1234"
 TEST_NAME = "Test User"
 WORKSPACE_SLUG = "test-workspace"
 WORKSPACE_NAME = "Test Workspace"
@@ -25,7 +25,7 @@ async def seed():
     db = os.environ.get("POSTGRES_DB", "pulse")
     user = os.environ.get("POSTGRES_USER", "pulse")
     password = os.environ.get("POSTGRES_PASSWORD", "pulse_dev_password")
-    url = f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{db}"
+    url = f"postgresql+psycopg://{user}:{password}@{host}:{port}/{db}"
 
     engine = create_async_engine(url)
     async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)

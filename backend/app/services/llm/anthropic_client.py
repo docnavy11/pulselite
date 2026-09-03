@@ -1,5 +1,6 @@
 from collections.abc import AsyncGenerator
 
+import httpx
 import anthropic
 
 from app.config import settings
@@ -8,7 +9,10 @@ from app.services.llm.base import BaseLLMClient
 
 class AnthropicLLMClient(BaseLLMClient):
     def __init__(self, api_key: str | None = None):
-        self._client = anthropic.AsyncAnthropic(api_key=api_key or settings.ANTHROPIC_API_KEY)
+        self._client = anthropic.AsyncAnthropic(
+            api_key=api_key or settings.ANTHROPIC_API_KEY,
+            timeout=httpx.Timeout(60.0),
+        )
 
     async def stream_generate(
         self,

@@ -24,7 +24,7 @@ export function getSocket(): Socket {
     auth: (cb) => {
       cb({ token: useAuthStore.getState().tokens?.access_token });
     },
-    transports: ["polling"],
+    transports: ["websocket", "polling"],
     reconnection: true,
     reconnectionDelay: 1000,
     reconnectionDelayMax: 5000,

@@ -612,6 +612,14 @@ export function createWebhook(
   return api.post<Webhook>(`/api/v1/workspaces/${workspaceId}/webhooks`, data);
 }
 
+export function updateWebhook(
+  workspaceId: string,
+  webhookId: string,
+  data: { url?: string; event_types?: string[]; secret?: string; is_active?: boolean },
+) {
+  return api.patch<Webhook>(`/api/v1/workspaces/${workspaceId}/webhooks/${webhookId}`, data);
+}
+
 export function deleteWebhook(workspaceId: string, webhookId: string) {
   return api.delete<void>(`/api/v1/workspaces/${workspaceId}/webhooks/${webhookId}`);
 }

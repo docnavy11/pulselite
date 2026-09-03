@@ -64,8 +64,8 @@ async def _create_jira_issue(
 
         issue = jira.create_issue(fields=issue_dict)
         return {"key": issue.key, "url": f"{config['server']}/browse/{issue.key}"}
-    except Exception as e:
-        logger.error(f"Jira issue creation failed: {e}")
+    except Exception:
+        logger.error("Jira issue creation failed", exc_info=True)
         return None
 
 
@@ -78,7 +78,7 @@ async def _create_linear_issue(
     try:
         import httpx
 
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=15.0) as client:
             mutation = """
             mutation IssueCreate($title: String!, $description: String, $teamId: String!) {
                 issueCreate(input: {title: $title, description: $description, teamId: $teamId}) {
@@ -107,6 +107,6 @@ async def _create_linear_issue(
             if issue:
                 return {"key": issue.get("identifier"), "url": issue.get("url")}
             return None
-    except Exception as e:
-        logger.error(f"Linear issue creation failed: {e}")
+    except Exception:
+        logger.error("Linear issue creation failed", exc_info=True)
         return None

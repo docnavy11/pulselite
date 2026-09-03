@@ -147,10 +147,7 @@ async def get_dashboard(
     feedback_counts: dict[str, int] = {row.rating: row.n for row in feedback_result.all()}
 
     # Top topics: count both total and resolved per topic
-    top_topics_params: dict = {"ws": str(workspace_id), "cutoff": period_start}
-    chatbot_clause = "AND TRUE" if not chatbot_id else "AND c.chatbot_id = :chatbot_id"
-    if chatbot_id:
-        top_topics_params["chatbot_id"] = str(chatbot_id)
+    top_topics_params: dict = {"ws": str(workspace_id), "cutoff": period_start, "chatbot_id": str(chatbot_id) if chatbot_id else None}
     top_topics_result = await db.execute(
         text(
             "SELECT topic,"
@@ -161,7 +158,7 @@ async def get_dashboard(
             " CROSS JOIN LATERAL unnest(ca.topics) AS topic"
             " WHERE ca.workspace_id = :ws"
             "   AND ca.created_at >= :cutoff"
-            f"   {chatbot_clause}"
+            "   AND (CAST(:chatbot_id AS uuid) IS NULL OR c.chatbot_id = CAST(:chatbot_id AS uuid))"
             " GROUP BY topic"
             " ORDER BY total_count DESC"
             " LIMIT 5"
@@ -189,7 +186,7 @@ async def get_dashboard(
                 "   AND ca.created_at >= :cutoff"
                 "   AND :topic = ANY(ca.topics)"
                 "   AND length(rl.query) > 10"
-                f"   {chatbot_clause}"
+                "   AND (CAST(:chatbot_id AS uuid) IS NULL OR c.chatbot_id = CAST(:chatbot_id AS uuid))"
                 " ORDER BY"
                 "   (rl.query ILIKE '%' || :topic || '%')::int DESC,"
                 "   rl.escalated::int ASC,"

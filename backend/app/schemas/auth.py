@@ -9,13 +9,30 @@ class RegisterRequest(BaseModel):
     name: str
     workspace_name: str
 
-    @field_validator("workspace_name", "name", "password")
+    @field_validator("workspace_name", "name")
     @classmethod
     def not_empty(cls, v: str) -> str:
         if not v or not v.strip():
             raise ValueError("must not be empty")
         if "\x00" in v:
             raise ValueError("must not contain null bytes")
+        return v
+
+    @field_validator("password")
+    @classmethod
+    def password_strength(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("must not be empty")
+        if "\x00" in v:
+            raise ValueError("must not contain null bytes")
+        if len(v) < 8:
+            raise ValueError("must be at least 8 characters")
+        if not any(c.isupper() for c in v):
+            raise ValueError("must contain at least one uppercase letter")
+        if not any(c.islower() for c in v):
+            raise ValueError("must contain at least one lowercase letter")
+        if not any(c.isdigit() for c in v):
+            raise ValueError("must contain at least one digit")
         return v
 
 

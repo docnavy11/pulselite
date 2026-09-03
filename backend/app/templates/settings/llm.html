@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}AI Models — PulseLight{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold text-gray-900 mb-6">Settings</h1>
+
+<div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+    <nav class="space-y-1">
+        <a href="/settings" class="block px-3 py-2 text-sm rounded-md hover:bg-gray-100">General</a>
+        <a href="/settings/llm" class="block px-3 py-2 text-sm rounded-md bg-gray-100 font-medium">AI Models</a>
+    </nav>
+
+    <div class="lg:col-span-3">
+        <form hx-post="/settings/llm" hx-swap="none" class="bg-white rounded-lg border border-gray-200 p-6 space-y-4">
+            <div>
+                <label for="openrouter_api_key" class="block text-sm font-medium text-gray-700">API Key</label>
+                <input type="password" name="openrouter_api_key" id="openrouter_api_key" placeholder="sk-or-..."
+                    class="mt-1 block w-full max-w-md rounded-md border border-gray-300 px-3 py-2 text-sm">
+                <p class="text-xs text-gray-400 mt-1">{% if workspace.openrouter_api_key %}Key configured{% else %}Not set{% endif %}</p>
+            </div>
+            <div>
+                <label for="openrouter_base_url" class="block text-sm font-medium text-gray-700">Base URL</label>
+                <input type="url" name="openrouter_base_url" id="openrouter_base_url"
+                    value="{{ workspace.openrouter_base_url or '' }}" placeholder="https://openrouter.ai/api/v1"
+                    class="mt-1 block w-full max-w-md rounded-md border border-gray-300 px-3 py-2 text-sm">
+            </div>
+            <div>
+                <label for="default_chatbot_model" class="block text-sm font-medium text-gray-700">Default chatbot model</label>
+                <input type="text" name="default_chatbot_model" id="default_chatbot_model"
+                    value="{{ workspace.default_chatbot_model or '' }}" placeholder="claude-haiku-4-5-20251001"
+                    class="mt-1 block w-full max-w-md rounded-md border border-gray-300 px-3 py-2 text-sm">
+            </div>
+            <div>
+                <label for="internal_model" class="block text-sm font-medium text-gray-700">Internal model (autoconfig, analysis)</label>
+                <input type="text" name="internal_model" id="internal_model"
+                    value="{{ workspace.internal_model or '' }}" placeholder="claude-haiku-4-5-20251001"
+                    class="mt-1 block w-full max-w-md rounded-md border border-gray-300 px-3 py-2 text-sm">
+            </div>
+            <div class="flex justify-end pt-2">
+                <button type="submit" class="bg-indigo-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-indigo-700">Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

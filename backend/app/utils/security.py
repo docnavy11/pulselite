@@ -1,9 +1,12 @@
+import logging
 from datetime import datetime, timedelta, timezone
 
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
@@ -40,5 +43,5 @@ def decode_token(token: str) -> dict | None:
                 payload = jwt.decode(token, settings.JWT_SECRET_KEY_PREVIOUS, algorithms=[settings.JWT_ALGORITHM])
                 return payload
             except JWTError:
-                pass
+                logger.warning("Token decode failed with both current and previous secret keys", exc_info=True)
         return None

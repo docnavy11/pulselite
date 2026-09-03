@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-gray-50">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}PulseLight{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <script src="https://unpkg.com/htmx-ext-sse@2.2.2/sse.js"></script>
+    <style>
+        [hx-swap-oob] { display: contents; }
+        .htmx-indicator { opacity: 0; transition: opacity 200ms ease-in; }
+        .htmx-request .htmx-indicator { opacity: 1; }
+        .toast { animation: slideIn 0.3s ease-out, fadeOut 0.3s ease-in 2.7s forwards; }
+        @keyframes slideIn { from { transform: translateY(-1rem); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes fadeOut { to { opacity: 0; } }
+    </style>
+</head>
+<body class="h-full" hx-ext="sse" sse-connect="/events/stream">
+    {% block body %}
+    <div class="flex h-full">
+        <!-- Sidebar -->
+        <aside class="w-56 bg-white border-r border-gray-200 flex flex-col">
+            <div class="p-4 border-b border-gray-200">
+                <h1 class="text-lg font-bold text-gray-900">PulseLight</h1>
+                {% if request.state.workspace %}
+                <p class="text-xs text-gray-500 mt-1">{{ request.state.workspace.name }}</p>
+                {% endif %}
+            </div>
+            <nav class="flex-1 p-3 space-y-1">
+                <a href="/dashboard" class="flex items-center px-3 py-2 text-sm rounded-md hover:bg-gray-100 {% if request.url.path == '/dashboard' or request.url.path == '/' %}bg-gray-100 font-medium{% endif %}">
+                    Overview
+                </a>
+                <a href="/chatbots" class="flex items-center px-3 py-2 text-sm rounded-md hover:bg-gray-100 {% if '/chatbots' in request.url.path %}bg-gray-100 font-medium{% endif %}">
+                    Chatbots
+                </a>
+                <a href="/conversations" class="flex items-center px-3 py-2 text-sm rounded-md hover:bg-gray-100 {% if '/conversations' in request.url.path %}bg-gray-100 font-medium{% endif %}">
+                    Conversations
+                </a>
+                <a href="/settings" class="flex items-center px-3 py-2 text-sm rounded-md hover:bg-gray-100 {% if '/settings' in request.url.path %}bg-gray-100 font-medium{% endif %}">
+                    Settings
+                </a>
+            </nav>
+            {% if request.state.user %}
+            <div class="p-3 border-t border-gray-200">
+                <div class="flex items-center justify-between">
+                    <span class="text-sm text-gray-700 truncate">{{ request.state.user.email }}</span>
+                    <form method="POST" action="/logout" class="inline">
+                        <button type="submit" class="text-xs text-gray-400 hover:text-gray-600">Logout</button>
+                    </form>
+                </div>
+            </div>
+            {% endif %}
+        </aside>
+
+        <!-- Main content -->
+        <main class="flex-1 overflow-y-auto">
+            <div class="max-w-5xl mx-auto px-6 py-8">
+                {% block content %}{% endblock %}
+            </div>
+        </main>
+    </div>
+    {% endblock %}
+
+    <!-- Toast container -->
+    <div id="toasts" class="fixed top-4 right-4 z-50 space-y-2" sse-swap="toast" hx-swap="afterbegin"></div>
+</body>
+</html>

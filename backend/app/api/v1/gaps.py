@@ -23,7 +23,7 @@ async def list_gap_clusters(
     status_filter: str | None = None,
     chatbot_id: uuid.UUID | None = None,
     limit: int = Query(default=50, ge=1, le=500),
-    offset: int = Query(default=0, ge=0),
+    offset: int = Query(default=0, ge=0, le=10_000),
     db: AsyncSession = Depends(get_db),
     current_user: Agent = Depends(get_current_user),
 ):

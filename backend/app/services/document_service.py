@@ -37,9 +37,19 @@ async def create_document_from_upload(
     file_id = str(uuid.uuid4())
     file_path = os.path.join(UPLOAD_DIR, f"{file_id}{ext}")
 
-    content = await file.read()
-    if len(content) > 50 * 1024 * 1024:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File too large (max 50MB)")
+    # Read in chunks to avoid OOM on large uploads
+    chunks = []
+    total_size = 0
+    max_size = 50 * 1024 * 1024  # 50MB
+    while True:
+        chunk = await file.read(1024 * 1024)  # 1MB chunks
+        if not chunk:
+            break
+        total_size += len(chunk)
+        if total_size > max_size:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File too large (max 50MB)")
+        chunks.append(chunk)
+    content = b"".join(chunks)
     with open(file_path, "wb") as f:
         f.write(content)
 
@@ -55,12 +65,21 @@ async def create_document_from_upload(
     return doc
 
 
-async def list_documents(db: AsyncSession, workspace_id: uuid.UUID, knowledge_base_id: uuid.UUID) -> list[Document]:
+async def list_documents(
+    db: AsyncSession,
+    workspace_id: uuid.UUID,
+    knowledge_base_id: uuid.UUID,
+    limit: int = 200,
+    offset: int = 0,
+) -> list[Document]:
     result = await db.execute(
-        select(Document).where(
+        select(Document)
+        .where(
             Document.workspace_id == workspace_id,
             Document.knowledge_base_id == knowledge_base_id,
         )
+        .limit(limit)
+        .offset(offset)
     )
     return list(result.scalars().all())
 

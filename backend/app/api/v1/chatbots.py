@@ -1,8 +1,9 @@
+import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -16,6 +17,8 @@ from app.config import settings as app_settings
 from app.services import chatbot_service
 from app.services.audit_service import record_audit_event
 from app.services.encryption import encrypt_api_key
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/workspaces/{workspace_id}/chatbots", tags=["chatbots"])
 
@@ -311,14 +314,16 @@ async def run_autoconfig(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=msg)
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=msg)
     except RuntimeError as e:
+        logger.error("AI configuration failed for chatbot: %s", e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"AI configuration failed: {e}. Please try again.",
+            detail="AI configuration failed. Please try again.",
         )
     except Exception as e:
+        logger.error("Unexpected error during chatbot configuration: %s", e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error during configuration: {e}",
+            detail="Unexpected error during configuration. Please try again.",
         )
 
     return AutoConfigResponse(

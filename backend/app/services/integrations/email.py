@@ -41,8 +41,8 @@ def send_email(config: dict, subject: str, html: str) -> bool:
             return _send_smtp(config, subject, html, from_email, to_email)
         else:
             return _send_resend(config, subject, html, from_email, to_email)
-    except Exception as e:
-        logger.error(f"Email send failed ({provider}): {e}")
+    except Exception:
+        logger.error("Email send failed (%s)", provider, exc_info=True)
         return False
 
 

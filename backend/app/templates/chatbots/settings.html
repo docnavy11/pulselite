@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Settings — {{ chatbot.name }} — PulseLight{% endblock %}
+{% block content %}
+<div class="mb-6">
+    <a href="/chatbots/{{ chatbot.id }}" class="text-sm text-gray-500 hover:text-gray-700">&larr; {{ chatbot.name }}</a>
+    <h1 class="text-2xl font-bold text-gray-900 mt-1">Chatbot Settings</h1>
+</div>
+
+<nav class="flex gap-4 border-b border-gray-200 mb-6">
+    <a href="/chatbots/{{ chatbot.id }}" class="pb-2 text-sm text-gray-500 hover:text-gray-700 border-b-2 border-transparent">Overview</a>
+    <a href="/chatbots/{{ chatbot.id }}/sources" class="pb-2 text-sm text-gray-500 hover:text-gray-700 border-b-2 border-transparent">Sources</a>
+    <a href="/chatbots/{{ chatbot.id }}/deploy" class="pb-2 text-sm text-gray-500 hover:text-gray-700 border-b-2 border-transparent">Deploy</a>
+    <a href="/chatbots/{{ chatbot.id }}/settings" class="pb-2 text-sm font-medium border-b-2 border-indigo-600 text-indigo-600">Settings</a>
+</nav>
+
+<form hx-put="/chatbots/{{ chatbot.id }}" hx-swap="none" class="bg-white rounded-lg border border-gray-200 p-6 max-w-lg space-y-4">
+    <div>
+        <label for="name" class="block text-sm font-medium text-gray-700">Name</label>
+        <input type="text" name="name" id="name" value="{{ chatbot.name }}"
+            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm">
+    </div>
+    <div>
+        <label for="display_name" class="block text-sm font-medium text-gray-700">Display name</label>
+        <input type="text" name="display_name" id="display_name" value="{{ chatbot.display_name or '' }}"
+            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm">
+    </div>
+    <div>
+        <label for="tone" class="block text-sm font-medium text-gray-700">Tone</label>
+        <select name="tone" id="tone" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm">
+            {% for t in ["professional", "friendly", "casual", "formal"] %}
+            <option value="{{ t }}" {% if chatbot.tone == t %}selected{% endif %}>{{ t|capitalize }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <label for="language" class="block text-sm font-medium text-gray-700">Language</label>
+        <input type="text" name="language" id="language" value="{{ chatbot.language }}"
+            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm">
+    </div>
+    <div>
+        <label for="welcome_message" class="block text-sm font-medium text-gray-700">Welcome message</label>
+        <textarea name="welcome_message" id="welcome_message" rows="2"
+            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm">{{ chatbot.welcome_message or '' }}</textarea>
+    </div>
+    <div>
+        <label for="system_prompt" class="block text-sm font-medium text-gray-700">System prompt</label>
+        <textarea name="system_prompt" id="system_prompt" rows="5"
+            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm">{{ chatbot.system_prompt or '' }}</textarea>
+    </div>
+    <div>
+        <label for="fallback_message" class="block text-sm font-medium text-gray-700">Fallback message</label>
+        <textarea name="fallback_message" id="fallback_message" rows="2"
+            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm">{{ chatbot.fallback_message or '' }}</textarea>
+    </div>
+    <div class="flex justify-end pt-2">
+        <button type="submit" class="bg-indigo-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-indigo-700">
+            Save changes
+        </button>
+    </div>
+</form>
+{% endblock %}

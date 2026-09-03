@@ -10,7 +10,7 @@ from cryptography.fernet import InvalidToken
 
 async def _refresh_access_token(client_id: str, client_secret: str, refresh_token: str) -> str:
     """Use a refresh token to obtain a new access token from Google."""
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=15.0) as client:
         resp = await client.post(
             "https://oauth2.googleapis.com/token",
             data={

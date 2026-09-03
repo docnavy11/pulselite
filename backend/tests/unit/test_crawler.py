@@ -1,8 +1,15 @@
 import pytest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from app.services.crawler import DiscoveredUrl, _matches_paths, _normalize, _same_domain, discover_urls
 from app.services.fetcher import FetchResult
+
+# Patch SSRF validation to a no-op for all tests in this module — test URLs
+# (e.g. https://a.com) won't resolve in the test environment.
+_no_ssrf = patch(
+    "app.services.crawler.async_validate_url_not_private",
+    new_callable=AsyncMock,
+)
 
 
 def _make_fetch_result(url: str, html: str = "", status: int = 200) -> FetchResult:
@@ -78,7 +85,7 @@ async def test_discover_uses_sitemap_when_available():
                                theme_color=None, status_code=200, used_playwright=False)
         return _make_fetch_result(url)
 
-    with patch("app.services.crawler.fetch", side_effect=mock_fetch):
+    with _no_ssrf, patch("app.services.crawler.fetch", side_effect=mock_fetch):
         urls = await discover_urls("https://a.com")
 
     assert len(urls) == 4
@@ -99,7 +106,7 @@ async def test_sitemap_not_found_falls_back_to_bfs():
         return FetchResult(url=url, html=page_html, text="content", title=None,
                            theme_color=None, status_code=200, used_playwright=False)
 
-    with patch("app.services.crawler.fetch", side_effect=mock_fetch):
+    with _no_ssrf, patch("app.services.crawler.fetch", side_effect=mock_fetch):
         urls = await discover_urls("https://a.com")
 
     assert any("a.com" in d.url for d in urls)
@@ -119,7 +126,7 @@ async def test_bfs_drops_off_domain_links():
         return FetchResult(url=url, html=page_html, text="content", title=None,
                            theme_color=None, status_code=200, used_playwright=False)
 
-    with patch("app.services.crawler.fetch", side_effect=mock_fetch):
+    with _no_ssrf, patch("app.services.crawler.fetch", side_effect=mock_fetch):
         urls = await discover_urls("https://a.com")
 
     assert all("other.com" not in d.url for d in urls)
@@ -139,7 +146,7 @@ async def test_bfs_drops_urls_with_query_strings():
         return FetchResult(url=url, html=page_html, text="content", title=None,
                            theme_color=None, status_code=200, used_playwright=False)
 
-    with patch("app.services.crawler.fetch", side_effect=mock_fetch):
+    with _no_ssrf, patch("app.services.crawler.fetch", side_effect=mock_fetch):
         urls = await discover_urls("https://a.com")
 
     assert not any("foo=bar" in d.url for d in urls)
@@ -162,7 +169,7 @@ async def test_sitemap_deduplicates_urls():
                                theme_color=None, status_code=200, used_playwright=False)
         return _make_fetch_result(url)
 
-    with patch("app.services.crawler.fetch", side_effect=mock_fetch):
+    with _no_ssrf, patch("app.services.crawler.fetch", side_effect=mock_fetch):
         urls = await discover_urls("https://a.com")
 
     assert len(urls) == 3
@@ -191,7 +198,7 @@ async def test_sitemap_index_recurses_into_child_sitemaps():
                                theme_color=None, status_code=200, used_playwright=False)
         return _make_fetch_result(url)
 
-    with patch("app.services.crawler.fetch", side_effect=mock_fetch):
+    with _no_ssrf, patch("app.services.crawler.fetch", side_effect=mock_fetch):
         urls = await discover_urls("https://a.com")
 
     assert len(urls) == 3
@@ -214,7 +221,7 @@ async def test_include_paths_filters_sitemap_urls():
                                theme_color=None, status_code=200, used_playwright=False)
         return _make_fetch_result(url)
 
-    with patch("app.services.crawler.fetch", side_effect=mock_fetch):
+    with _no_ssrf, patch("app.services.crawler.fetch", side_effect=mock_fetch):
         urls = await discover_urls("https://a.com", include_paths=["/blog"])
 
     assert all("/blog" in d.url for d in urls)
@@ -233,7 +240,7 @@ async def test_bfs_results_include_prefetched_content():
         return FetchResult(url=url, html=page_html, text="Hello world content here", title="Home",
                            theme_color=None, status_code=200, used_playwright=False)
 
-    with patch("app.services.crawler.fetch", side_effect=mock_fetch):
+    with _no_ssrf, patch("app.services.crawler.fetch", side_effect=mock_fetch):
         urls = await discover_urls("https://a.com")
 
     root = next(d for d in urls if d.url == "https://a.com/")
@@ -257,7 +264,7 @@ async def test_sitemap_results_have_no_prefetched_content():
                                theme_color=None, status_code=200, used_playwright=False)
         return _make_fetch_result(url)
 
-    with patch("app.services.crawler.fetch", side_effect=mock_fetch):
+    with _no_ssrf, patch("app.services.crawler.fetch", side_effect=mock_fetch):
         urls = await discover_urls("https://a.com")
 
     assert all(d.prefetched_text is None for d in urls)
@@ -279,7 +286,7 @@ async def test_exclude_paths_filters_sitemap_urls():
                                theme_color=None, status_code=200, used_playwright=False)
         return _make_fetch_result(url)
 
-    with patch("app.services.crawler.fetch", side_effect=mock_fetch):
+    with _no_ssrf, patch("app.services.crawler.fetch", side_effect=mock_fetch):
         urls = await discover_urls("https://a.com", exclude_paths=["/admin"])
 
     assert not any("/admin" in d.url for d in urls)

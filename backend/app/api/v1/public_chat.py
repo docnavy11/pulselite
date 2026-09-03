@@ -1,9 +1,9 @@
 import json
-import re
 import uuid
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from sqlalchemy import select
@@ -48,7 +48,7 @@ class LeadCapture(BaseModel):
 class PublicChatRequest(BaseModel):
     chatbot_id: uuid.UUID
     session_id: str
-    message: str
+    message: str = Field(..., max_length=32_000)
     conversation_id: uuid.UUID | None = None
 
     @field_validator("session_id")
@@ -59,6 +59,7 @@ class PublicChatRequest(BaseModel):
 
 @router.post("/public/chat")
 @limiter.limit("20/minute")
+@limiter.limit("60/minute", key_func=get_remote_address)
 async def public_chat(
     request: Request,
     body: PublicChatRequest,
@@ -79,10 +80,20 @@ async def public_chat(
     widget_cfg = chatbot.widget_config or {}
     parsed_cfg = WidgetConfig(**widget_cfg) if widget_cfg else WidgetConfig()
     allowed = parsed_cfg.allowed_domains
-    if allowed:
-        origin = request.headers.get("origin", "")
-        hostname = re.sub(r"^https?://", "", origin).split(":")[0].split("/")[0]
-        if not any(hostname == d.strip() or hostname.endswith("." + d.strip()) for d in allowed if d.strip()):
+    # Filter to only non-empty domain entries
+    allowed_cleaned = [d.strip() for d in (allowed or []) if d.strip()]
+    origin = request.headers.get("origin")
+    if allowed_cleaned:
+        if not origin:
+            raise HTTPException(status_code=403, detail="Origin header required")
+        try:
+            parsed_origin = urlparse(origin)
+            hostname = parsed_origin.hostname
+        except Exception:
+            hostname = None
+        if not hostname:
+            raise HTTPException(status_code=403, detail="Origin not allowed")
+        if not any(hostname == d or hostname.endswith("." + d) for d in allowed_cleaned):
             raise HTTPException(status_code=403, detail="Origin not allowed")
 
     workspace_id = chatbot.workspace_id
@@ -90,25 +101,28 @@ async def public_chat(
     contact = await _get_or_create_contact(db, workspace_id, body.session_id)
 
     async def event_stream():
-        async for event in handle_message(
-            db,
-            workspace_id,
-            chatbot,
-            body.message,
-            conversation_id=body.conversation_id,
-            contact_id=contact.id,
-        ):
-            chat_event = ChatEvent(
-                type=event.type,
-                data=event.data,
-                confidence_score=event.confidence_score,
-                confidence_avg=event.confidence_avg,
-                escalated=event.escalated,
-                conversation_id=event.conversation_id,
-                message_id=event.message_id,
-                sources=event.sources or [],
-            )
-            yield {"event": event.type, "data": chat_event.model_dump_json()}
+        try:
+            async for event in handle_message(
+                db,
+                workspace_id,
+                chatbot,
+                body.message,
+                conversation_id=body.conversation_id,
+                contact_id=contact.id,
+            ):
+                chat_event = ChatEvent(
+                    type=event.type,
+                    data=event.data,
+                    confidence_score=event.confidence_score,
+                    confidence_avg=event.confidence_avg,
+                    escalated=event.escalated,
+                    conversation_id=event.conversation_id,
+                    message_id=event.message_id,
+                    sources=event.sources or [],
+                )
+                yield {"event": event.type, "data": chat_event.model_dump_json()}
+        except Exception:
+            yield {"event": "error", "data": json.dumps({"type": "error", "data": "Stream interrupted"})}
 
     return EventSourceResponse(event_stream())
 

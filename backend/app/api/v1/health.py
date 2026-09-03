@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime, timezone
 
 import redis.asyncio as aioredis
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,13 +14,47 @@ from app.dependencies import get_workspace_admin
 from app.models.knowledge import Chatbot, Chunk, Document
 from app.models.organizational import Workspace
 from app.services.system_info import get_python_version, get_uptime_seconds
+from app.api.v1.public_chat import limiter
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["health"])
 
 
+@router.get("/test-chat-sse")
+async def test_chat_sse():
+    """Test actual handle_message inside EventSourceResponse."""
+    import sys
+    from sse_starlette.sse import EventSourceResponse
+    from app.database import async_session_factory
+    from app.models.knowledge import Chatbot
+    from app.services.resolution_service import handle_message
+
+    # Collect ALL events first (non-streaming), then yield them.
+    # This tests if handle_message works at all inside an endpoint.
+    print("[TEST-CHAT] collecting events...", file=sys.stderr, flush=True)
+    events = []
+    async with async_session_factory() as db:
+        bot = (await db.execute(select(Chatbot).limit(1))).scalar_one()
+        print(f"[TEST-CHAT] chatbot={bot.name}", file=sys.stderr, flush=True)
+        async for event in handle_message(db, bot.workspace_id, bot, "wat zijn de stages"):
+            events.append(event)
+            if len(events) <= 3:
+                print(f"[TEST-CHAT] event {len(events)}: {event.type}", file=sys.stderr, flush=True)
+        await db.commit()
+    print(f"[TEST-CHAT] collected {len(events)} events", file=sys.stderr, flush=True)
+
+    async def gen():
+        for event in events:
+            yield f"event: {event.type}\ndata: test\n\n"
+
+    from fastapi.responses import StreamingResponse as SR
+    return SR(gen(), media_type="text/event-stream",
+              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
 @router.get("/health")
-async def health_check(db: AsyncSession = Depends(get_db)):
+@limiter.limit("60/minute")
+async def health_check(request: Request, db: AsyncSession = Depends(get_db)):
     checks: dict[str, str] = {}
     healthy = True
 
@@ -45,6 +79,18 @@ async def health_check(db: AsyncSession = Depends(get_db)):
         checks["redis_error"] = "Redis connection failed. Check server logs for details."
         logger.error("Health check: redis unreachable at %s:%s — %s", settings.REDIS_HOST, settings.REDIS_PORT, exc)
         healthy = False
+
+    # Celery worker connectivity
+    try:
+        r = aioredis.from_url(settings.REDIS_URL, socket_connect_timeout=3)
+        worker_keys = await r.keys("celery-task-meta-*")
+        # Check if celery heartbeat exists (inspect.ping writes to Redis)
+        celery_active = await r.exists("unacked_mutex")
+        await r.aclose()
+        checks["celery"] = "connected" if celery_active or worker_keys else "unknown"
+    except Exception as exc:
+        checks["celery"] = "unknown"
+        logger.warning("Health check: could not verify Celery status — %s", exc)
 
     # AI configuration (advisory — not a hard failure)
     ai_configured = bool(settings.AI_API_KEY)

@@ -1,4 +1,5 @@
 # backend/app/services/copilot/executor.py
+import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -48,7 +49,7 @@ async def execute_tool(
         try:
             await db.rollback()
         except Exception:
-            pass
+            logging.getLogger(__name__).warning("Rollback failed during tool execution", exc_info=True)
         return {"error": str(exc)}
 
 

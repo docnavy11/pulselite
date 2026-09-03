@@ -3,6 +3,7 @@ import { ExternalLink, Copy, Check, RefreshCw, Clock, CheckCircle, AlertCircle, 
 import { Spinner } from "@/components/ui/Spinner";
 import { Badge } from "@/components/ui/Badge";
 import { getDocumentContent } from "@/lib/api-functions";
+import { copyToClipboard } from "@/components/ui/CopyButton";
 import type { DocumentContentResponse } from "@/lib/types";
 
 const statusVariant: Record<string, "default" | "success" | "warning" | "danger"> = {
@@ -55,7 +56,7 @@ export function DocumentContentPanel({ workspaceId, documentId, refreshKey }: Pr
 
   async function handleCopy() {
     if (!data?.raw_content) return;
-    await navigator.clipboard.writeText(data.raw_content);
+    await copyToClipboard(data.raw_content);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }

@@ -5,6 +5,7 @@ Revises: 2026_03_13_document_content_hash
 Create Date: 2026-03-13
 """
 from alembic import op
+import sqlalchemy as sa
 
 # revision identifiers
 revision = "ff9944a786c6"
@@ -14,11 +15,25 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # HNSW index requires CREATE INDEX CONCURRENTLY which cannot run inside a transaction.
-    # End the implicit transaction that Alembic opens.
-    op.execute("COMMIT")
+    # =========================================================================
+    # WARNING — PRODUCTION DEPLOYMENT WITH LARGE TABLES
+    # =========================================================================
+    # This migration uses non-concurrent index creation because Alembic runs
+    # inside a transaction, and CREATE INDEX CONCURRENTLY cannot run within a
+    # transaction block.
+    #
+    # For large production tables (>100k rows), non-concurrent index creation
+    # will LOCK THE TABLE for the duration of the build, potentially causing
+    # downtime. In that case, skip this migration and create the index manually:
+    #
+    #   CREATE INDEX CONCURRENTLY idx_chunks_embedding_hnsw
+    #   ON chunks USING hnsw (embedding vector_cosine_ops)
+    #   WITH (m = 16, ef_construction = 64);
+    #
+    # Then mark this migration as applied: alembic stamp ff9944a786c6
+    # =========================================================================
     op.execute(
-        "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_chunks_embedding_hnsw "
+        "CREATE INDEX IF NOT EXISTS idx_chunks_embedding_hnsw "
         "ON chunks USING hnsw (embedding vector_cosine_ops) "
         "WITH (m = 16, ef_construction = 64)"
     )

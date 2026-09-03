@@ -1,6 +1,22 @@
 import { useState } from "react";
 import { clsx } from "clsx";
 
+/** Clipboard helper that works on HTTP (non-secure) contexts too. */
+export async function copyToClipboard(text: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    return navigator.clipboard.writeText(text);
+  }
+  // Fallback for non-secure contexts (http://)
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.position = "fixed";
+  ta.style.opacity = "0";
+  document.body.appendChild(ta);
+  ta.select();
+  document.execCommand("copy");
+  document.body.removeChild(ta);
+}
+
 interface CopyButtonProps {
   value: string;
   className?: string;
@@ -12,11 +28,11 @@ export function CopyButton({ value, className, label = "Copy" }: CopyButtonProps
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(value);
+      await copyToClipboard(value);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      // fallback
+      // ignore
     }
   };
 

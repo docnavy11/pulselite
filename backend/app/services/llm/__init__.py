@@ -8,7 +8,9 @@ from app.services.llm.anthropic_client import AnthropicLLMClient
 from app.services.llm.google_client import GoogleLLMClient
 from app.services.llm.openrouter_client import OpenRouterLLMClient
 
-DEFAULT_INTERNAL_MODEL = "claude-haiku-4-5-20251001"
+from app.config import settings
+
+DEFAULT_INTERNAL_MODEL = settings.INTERNAL_MODEL or "claude-haiku-4-5-20251001"
 
 
 def get_llm_client(provider: str, api_key: str | None = None, base_url: str | None = None) -> BaseLLMClient:

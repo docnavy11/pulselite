@@ -77,7 +77,7 @@ async def run_ingestion(db: AsyncSession, document_id: uuid.UUID) -> None:
 
         t0 = datetime.now(timezone.utc)
         try:
-            urls = extract_urls_from_sitemap(document.source_url)
+            urls = await extract_urls_from_sitemap(document.source_url)
             _record("extract_sources", "ok", t0, detail=f"{len(urls)} sources discovered")
         except ValueError as exc:
             logger.error(f"Sitemap extraction failed for {document.source_url}: {exc}")

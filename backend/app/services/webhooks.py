@@ -1,5 +1,4 @@
-"""Outbound webhook delivery service."""
-
+"""Outbound webhook delivery service — uses background runner instead of Celery."""
 import hashlib
 import hmac
 import logging
@@ -12,59 +11,33 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import async_session_factory
 from app.models.organizational import WorkspaceWebhook
 from app.models.webhook_delivery import WebhookDelivery
+from app.background.runner import enqueue
 
 logger = logging.getLogger(__name__)
 
-# Lazy import to avoid circular dependency — set after celery_app is loaded
-deliver_webhook_task = None
-
-
-def _get_deliver_task():
-    global deliver_webhook_task
-    if deliver_webhook_task is None:
-        from app.workers.tasks.deliver_webhook import deliver_webhook
-        deliver_webhook_task = deliver_webhook
-    return deliver_webhook_task
-
 
 async def fire_event(
-    workspace_id: uuid.UUID,
-    event_type: str,
-    payload: dict,
+    workspace_id: uuid.UUID, event_type: str, payload: dict,
     db_session: AsyncSession | None = None,
 ) -> None:
-    """Create WebhookDelivery rows for matching webhooks and dispatch Celery tasks."""
+    pending_ids = []
 
-    _pending_delivery_ids: list[uuid.UUID] = []
-
-    async def _inner(session: AsyncSession) -> None:
+    async def _inner(session):
         result = await session.execute(
-            select(WorkspaceWebhook).where(
-                WorkspaceWebhook.workspace_id == workspace_id,
-                WorkspaceWebhook.is_active == True,  # noqa: E712
-            )
+            select(WorkspaceWebhook).where(WorkspaceWebhook.workspace_id == workspace_id, WorkspaceWebhook.is_active == True)
         )
         hooks = result.scalars().all()
-
         for hook in hooks:
             if event_type not in (hook.event_types or []):
                 continue
             delivery = WebhookDelivery(
-                id=uuid.uuid4(),
-                workspace_id=workspace_id,
-                webhook_id=hook.id,
-                event_type=event_type,
-                payload={
-                    "event": event_type,
-                    "workspace_id": str(workspace_id),
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                    "data": payload,
-                },
+                id=uuid.uuid4(), workspace_id=workspace_id, webhook_id=hook.id, event_type=event_type,
+                payload={"event": event_type, "workspace_id": str(workspace_id), "timestamp": datetime.now(timezone.utc).isoformat(), "data": payload},
                 status="pending",
             )
             session.add(delivery)
             await session.flush()
-            _pending_delivery_ids.append(delivery.id)
+            pending_ids.append(delivery.id)
 
     if db_session is not None:
         await _inner(db_session)
@@ -73,12 +46,46 @@ async def fire_event(
             await _inner(session)
             await session.commit()
 
-    # Dispatch tasks AFTER commit — workers read from DB (see CLAUDE.md crawl pipeline note).
-    task = _get_deliver_task()
-    for did in _pending_delivery_ids:
-        task.delay(str(did))
+    for did in pending_ids:
+        enqueue(_deliver_one(did), name=f"webhook:{did}")
+
+
+async def _deliver_one(delivery_id: uuid.UUID):
+    """Deliver a single webhook with retry logic."""
+    import httpx
+    from app.database import async_session_factory
+
+    async with async_session_factory() as db:
+        result = await db.execute(
+            select(WebhookDelivery, WorkspaceWebhook)
+            .join(WorkspaceWebhook, WebhookDelivery.webhook_id == WorkspaceWebhook.id)
+            .where(WebhookDelivery.id == delivery_id)
+        )
+        row = result.one_or_none()
+        if not row:
+            return
+        delivery, webhook = row
+
+        import json
+        body = json.dumps(delivery.payload, sort_keys=True, separators=(",", ":"))
+        headers = {"Content-Type": "application/json"}
+        if webhook.secret:
+            sig = hmac.new(webhook.secret.encode(), body.encode(), hashlib.sha256).hexdigest()
+            headers["X-PulseLite-Signature"] = f"sha256={sig}"
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                r = await client.post(webhook.url, content=body, headers=headers)
+            delivery.last_status_code = r.status_code
+            delivery.status = "delivered" if r.is_success else "failed"
+            delivery.attempts += 1
+        except Exception as exc:
+            delivery.last_error = str(exc)[:500]
+            delivery.status = "failed"
+            delivery.attempts += 1
+
+        await db.commit()
 
 
 def build_signature(secret: str, body: str) -> str:
-    """Compute HMAC-SHA256 signature for webhook payload."""
     return f"sha256={hmac.new(secret.encode(), body.encode(), hashlib.sha256).hexdigest()}"

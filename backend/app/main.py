@@ -1,344 +1,170 @@
+"""PulseLight v2 — FastAPI app with Jinja2 + HTMX, no React/Celery/Redis."""
 import logging
-import time
+from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import Response
-from slowapi import _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from sqlalchemy import select
 
-from app.api.v1 import (
-    actions,
-    articles,
-    audit,
-    auth,
-    billing,
-    chat,
-    chatbots,
-    config as config_router,
-    copilot,
-    crawl,
-    dashboard,
-    documents,
-    gaps,
-    gdpr,
-    health,
-    integrations,
-    intelligence,
-    invites,
-    knowledge_bases,
-    logs,
-    oauth,
-    onboarding,
-    public_chat,
-    qa,
-    two_fa,
-    webhooks,
-    widget_config,
-    workspaces,
-)
-from app.api.v1 import realtime as realtime_api
-from app.api.v1.public_chat import limiter
 from app.config import settings
+from app.database import get_db, async_session_factory
+from app.models.organizational import Agent, Workspace, WorkspaceMembership
+from app.models.session import Session
 
-import socketio as socketio_lib
-from app.utils.security import decode_token
-from app.services.realtime import mark_api_process
+logger = logging.getLogger(__name__)
 
-mark_api_process()
+# Configure logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
-# Socket.IO server — in-memory manager (single-process deployment).
-# Worker events reach clients via the internal HTTP emit endpoint.
-sio = socketio_lib.AsyncServer(
-    async_mode="asgi",
-    cors_allowed_origins=settings.cors_origins,
-    logger=False,
-    engineio_logger=False,
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup and shutdown hooks."""
+    # Preload embedding model
+    try:
+        from app.services.ingestion.embedder import _get_model
+        _get_model()
+        logger.info("Embedding model preloaded")
+    except Exception:
+        logger.warning("Failed to preload embedding model", exc_info=True)
+
+    # Bootstrap admin user
+    try:
+        from app.services.bootstrap import bootstrap_admin
+        await bootstrap_admin()
+    except Exception:
+        logger.warning("Admin bootstrap failed", exc_info=True)
+
+    # Start background job worker
+    from app.background.runner import start_worker, stop_worker
+    start_worker()
+
+    # Start scheduler
+    from app.background.scheduler import setup_scheduler
+    setup_scheduler()
+
+    # Register job handlers (import triggers @register_job decorators)
+    import app.background.jobs  # noqa: F401
+
+    logger.info("PulseLight v2 started")
+    yield
+
+    # Shutdown
+    stop_worker()
+    from app.background.scheduler import scheduler
+    scheduler.shutdown(wait=False)
+    logger.info("PulseLight v2 stopped")
+
+
+app = FastAPI(title="PulseLight", lifespan=lifespan, docs_url="/api/docs", redoc_url=None)
+
+# Templates
+templates = Jinja2Templates(directory="app/templates")
+app.state.templates = templates
+
+# Static files
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
+# CORS (for widget script on external sites)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
-async def _sio_connect(sid: str, environ: dict, auth_data: dict | None) -> None:
-    """Authenticate Socket.IO connections via JWT."""
-    token = auth_data.get("token") if auth_data else None
-    if not token:
-        raise socketio_lib.exceptions.ConnectionRefusedError("Missing token")
-    payload = decode_token(token)
-    if payload is None or payload.get("type") != "access":
-        raise socketio_lib.exceptions.ConnectionRefusedError("Invalid token")
-    await sio.save_session(sid, {"user_id": payload["sub"]})
+# --- Session middleware ---
 
-
-sio.on("connect", _sio_connect)
-
-
-@sio.event
-async def join_workspace(sid: str, data: dict) -> None:
-    """Join a workspace room after verifying membership."""
-    import uuid
-    from sqlalchemy import select
-    from app.database import async_session_factory
-    from app.models.organizational import WorkspaceMembership
-
-    workspace_id = data.get("workspace_id")
-    if not workspace_id:
-        return
-    session_data = await sio.get_session(sid)
-    user_id = session_data.get("user_id")
-    if not user_id:
-        return
-    # Verify workspace membership
-    async with async_session_factory() as db:
-        result = await db.execute(
-            select(WorkspaceMembership).where(
-                WorkspaceMembership.workspace_id == uuid.UUID(str(workspace_id)),
-                WorkspaceMembership.agent_id == uuid.UUID(str(user_id)),
-            )
-        )
-        if result.scalar_one_or_none() is None:
-            return  # silently reject — not a member
-    await sio.enter_room(sid, str(workspace_id))
-
-
-@sio.event
-async def leave_workspace(sid: str, data: dict) -> None:
-    workspace_id = data.get("workspace_id")
-    if workspace_id:
-        await sio.leave_room(sid, str(workspace_id))
-
-
-_request_logger = logging.getLogger("pulse.requests")
-
-SECURITY_HEADERS = {
-    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
-    "X-Content-Type-Options": "nosniff",
-    "X-Frame-Options": "DENY",
-    "X-XSS-Protection": "1; mode=block",
-    "Referrer-Policy": "strict-origin-when-cross-origin",
-    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+# Public paths that don't require authentication
+_PUBLIC_PATHS = {
+    "/login", "/register", "/auth/google", "/auth/google/callback",
+    "/api/health", "/api/config/deployment", "/api/chat", "/api/widget",
+    "/static", "/favicon.ico",
 }
 
 
-class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    """Adds security headers to every response."""
-
-    async def dispatch(self, request: Request, call_next):
-        response: Response = await call_next(request)
-        for header, value in SECURITY_HEADERS.items():
-            response.headers[header] = value
-        return response
+def _is_public(path: str) -> bool:
+    for public in _PUBLIC_PATHS:
+        if path.startswith(public):
+            return True
+    return False
 
 
-class RequestLoggingMiddleware(BaseHTTPMiddleware):
-    """Logs method, path, status code, and duration for every request."""
+@app.middleware("http")
+async def session_middleware(request: Request, call_next):
+    """Load user and workspace from session cookie. Redirect to /login if not authenticated."""
+    request.state.user = None
+    request.state.workspace = None
 
-    async def dispatch(self, request: Request, call_next):
-        start = time.perf_counter()
-        response: Response = await call_next(request)
-        duration_ms = (time.perf_counter() - start) * 1000
-        _request_logger.info(
-            "%s %s %d %.1fms",
-            request.method,
-            request.url.path,
-            response.status_code,
-            duration_ms,
+    if _is_public(request.url.path):
+        return await call_next(request)
+
+    session_id = request.cookies.get("session_id")
+    if not session_id:
+        if request.headers.get("HX-Request"):
+            from starlette.responses import Response
+            response = Response(status_code=401)
+            response.headers["HX-Redirect"] = "/login"
+            return response
+        return RedirectResponse("/login")
+
+    async with async_session_factory() as db:
+        from datetime import datetime, timezone
+        session_result = await db.execute(
+            select(Session).where(Session.id == session_id, Session.expires_at > datetime.now(timezone.utc))
         )
-        return response
+        session = session_result.scalar_one_or_none()
+        if not session:
+            response = RedirectResponse("/login")
+            response.delete_cookie("session_id")
+            return response
+
+        user_result = await db.execute(select(Agent).where(Agent.id == session.user_id))
+        user = user_result.scalar_one_or_none()
+        if not user:
+            response = RedirectResponse("/login")
+            response.delete_cookie("session_id")
+            return response
+
+        workspace_result = await db.execute(select(Workspace).where(Workspace.id == session.workspace_id))
+        workspace = workspace_result.scalar_one_or_none()
+
+        request.state.user = user
+        request.state.workspace = workspace
+
+    return await call_next(request)
 
 
-def _run_preflight_checks(logger) -> list[str]:
-    """Validate configuration at startup and log actionable warnings. Returns list of warnings."""
-    warnings: list[str] = []
+# --- Security headers ---
 
-    # Security keys
-    if "change-in-production" in settings.SECRET_KEY:
-        msg = "SECRET_KEY is using the default dev value. Generate a secure key for production: python3 -c \"import secrets; print(secrets.token_urlsafe(48))\""
-        logger.warning(msg)
-        warnings.append(msg)
-
-    if "change-in-production" in settings.JWT_SECRET_KEY:
-        msg = "JWT_SECRET_KEY is using the default dev value. Generate a secure key for production."
-        logger.warning(msg)
-        warnings.append(msg)
-
-    # Fernet key
-    if not settings.FERNET_KEY:
-        msg = "FERNET_KEY is not set. Encrypted API key storage will fail. Generate one: python3 -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
-        logger.error(msg)
-        warnings.append(msg)
-    else:
-        try:
-            from cryptography.fernet import Fernet
-            Fernet(settings.FERNET_KEY.encode() if isinstance(settings.FERNET_KEY, str) else settings.FERNET_KEY)
-        except Exception:
-            msg = "FERNET_KEY is invalid (not a valid Fernet key). Encrypted API key storage will fail. Generate a new one: python3 -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
-            logger.error(msg)
-            warnings.append(msg)
-
-    # Admin account
-    if not settings.ADMIN_EMAIL or not settings.ADMIN_PASSWORD:
-        msg = "ADMIN_EMAIL/ADMIN_PASSWORD not set. No admin account will be created on first startup. Set these in .env to enable automatic admin bootstrapping."
-        logger.warning(msg)
-        warnings.append(msg)
-
-    # CORS origins check
-    if settings.CLOUD_MODE and all("localhost" in origin for origin in settings.cors_origins):
-        msg = "CORS origins only contain localhost URLs. Set FRONTEND_URL for production."
-        logger.warning(msg)
-        warnings.append(msg)
-
-    # Redis password check
-    if not settings.REDIS_PASSWORD:
-        msg = "Redis has no password configured. Set REDIS_PASSWORD for production deployments."
-        logger.warning(msg)
-        warnings.append(msg)
-
-    # Default database credentials check
-    default_passwords = {"pulse_dev_password", "password", "postgres"}
-    if settings.POSTGRES_PASSWORD in default_passwords:
-        msg = "Using default database password. Set a strong POSTGRES_PASSWORD for production."
-        logger.warning(msg)
-        warnings.append(msg)
-
-    # Frontend URL check
-    if "localhost" in settings.FRONTEND_URL:
-        msg = "FRONTEND_URL is set to localhost. Update for production deployment."
-        logger.info(msg)
-        warnings.append(msg)
-
-    # AI configuration
-    if not settings.AI_API_KEY:
-        msg = "AI_API_KEY is not set. Chatbots will not work until you configure an AI provider (in .env or Settings > AI Models in the UI)."
-        logger.warning(msg)
-        warnings.append(msg)
-    elif not settings.AI_BASE_URL:
-        msg = "AI_API_KEY is set but AI_BASE_URL is empty. You must also set AI_BASE_URL (e.g. https://openrouter.ai/api/v1) for the AI provider to work."
-        logger.warning(msg)
-        warnings.append(msg)
-
-    return warnings
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
 
 
-def create_app() -> FastAPI:
-    application = FastAPI(title="Pulselite API", version="0.1.0", docs_url="/api/docs", redoc_url="/api/redoc")
+# --- Register routers ---
 
-    application.state.limiter = limiter
-    application.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+from app.routes.auth import router as auth_router
+from app.routes.chatbots import router as chatbots_router
+from app.routes.conversations import router as conversations_router
+from app.routes.dashboard import router as dashboard_router
+from app.routes.api import router as api_router
+from app.routes.events import router as events_router
+from app.routes.settings import router as settings_router
 
-    # Middleware ordering: Starlette wraps in reverse — last added is outermost.
-    # Desired order (outermost → innermost): SecurityHeaders → RequestLogging → CORS
-    application.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.cors_origins,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-    application.add_middleware(RequestLoggingMiddleware)
-    application.add_middleware(SecurityHeadersMiddleware)
-
-    # Authenticated routes
-    application.include_router(auth.router, prefix="/api/v1")
-    application.include_router(two_fa.router, prefix="/api/v1")
-    application.include_router(workspaces.router, prefix="/api/v1")
-    application.include_router(health.router, prefix="/api/v1")
-    application.include_router(chatbots.router, prefix="/api/v1")
-    application.include_router(actions.router, prefix="/api/v1")
-    application.include_router(knowledge_bases.router, prefix="/api/v1")
-    application.include_router(documents.router, prefix="/api/v1")
-    application.include_router(articles.router, prefix="/api/v1")
-    application.include_router(crawl.router, prefix="/api/v1")
-    application.include_router(logs.router, prefix="/api/v1")
-    application.include_router(audit.router, prefix="/api/v1")
-    application.include_router(chat.router, prefix="/api/v1")
-    application.include_router(intelligence.router, prefix="/api/v1")
-    application.include_router(gaps.router, prefix="/api/v1")
-    application.include_router(dashboard.router, prefix="/api/v1")
-    application.include_router(integrations.router, prefix="/api/v1")
-    application.include_router(billing.router, prefix="/api/v1")
-    application.include_router(onboarding.router, prefix="/api/v1")
-    application.include_router(gdpr.router, prefix="/api/v1")
-    application.include_router(invites.router, prefix="/api/v1")
-    application.include_router(webhooks.router, prefix="/api/v1")
-    application.include_router(copilot.router, prefix="/api/v1")
-    application.include_router(qa.router, prefix="/api/v1")
-    application.include_router(realtime_api.router, prefix="/api/v1")
-
-    # Public routes (no auth required)
-    application.include_router(config_router.router, prefix="/api/v1")
-    application.include_router(widget_config.router, prefix="/api/v1")
-    application.include_router(public_chat.router, prefix="/api/v1")
-    application.include_router(oauth.router, prefix="/api/v1")
-
-    # Internal endpoint for workers to emit Socket.IO events.
-    # Workers call this via HTTP — the only reliable cross-process path.
-    @application.post("/api/internal/emit")
-    async def internal_emit(request: Request):
-        secret = request.headers.get("X-Internal-Secret")
-        if secret != settings.SECRET_KEY:
-            raise HTTPException(status_code=403, detail="Unauthorized")
-        body = await request.json()
-        await sio.emit(
-            body["event"],
-            body["data"],
-            room=body.get("room"),
-        )
-        return {"ok": True}
-
-    @application.on_event("startup")
-    async def _startup():
-        from app.logging_config import setup_logging
-        setup_logging()
-
-        _logger = logging.getLogger("pulse.startup")
-
-        from app.services.plan_service import load_plan_tiers
-        from app.services.bootstrap import bootstrap_admin
-
-        # Pre-flight: validate critical config before anything else
-        _preflight_warnings = _run_preflight_checks(_logger)
-
-        try:
-            await bootstrap_admin()
-        except Exception as exc:
-            _logger.error(
-                "Failed to bootstrap admin user: %s. "
-                "Check your database connection (POSTGRES_HOST, POSTGRES_PORT, POSTGRES_USER, POSTGRES_PASSWORD) "
-                "and ensure migrations have been run (make migrate).",
-                exc,
-            )
-
-        try:
-            await load_plan_tiers()
-        except Exception as exc:
-            _logger.warning("Failed to load plan tiers: %s — billing features may not work.", exc)
-
-        # Print summary
-        if _preflight_warnings:
-            _logger.warning(
-                "Startup completed with %d warning(s) — review messages above.",
-                len(_preflight_warnings),
-            )
-        else:
-            _logger.info("Startup completed — all pre-flight checks passed.")
-
-    @application.on_event("shutdown")
-    async def _shutdown():
-        from app.database import engine as db_engine
-
-        _logger = logging.getLogger("pulse.shutdown")
-        _logger.info("Application shutting down gracefully")
-        await db_engine.dispose()
-
-    # Light mode: serve built frontend as static files (must be LAST)
-    if settings.serve_frontend:
-        from app.static_files import mount_frontend
-        mount_frontend(application)
-
-    return application
-
-
-app = create_app()
-
-# Combined ASGI app — Socket.IO handles /socket.io, FastAPI handles everything else
-combined_app = socketio_lib.ASGIApp(sio, other_asgi_app=app)
+app.include_router(auth_router)
+app.include_router(chatbots_router)
+app.include_router(conversations_router)
+app.include_router(dashboard_router)
+app.include_router(api_router)
+app.include_router(events_router)
+app.include_router(settings_router)

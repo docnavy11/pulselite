@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Spinner } from "@/components/ui/Spinner";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { copyToClipboard } from "@/components/ui/CopyButton";
 import { createChatbot, startCrawl, getChatbot, getCrawlStatus, updateChatbot } from "@/lib/api-functions";
 import { useSocketEvent, getSocket } from "@/lib/socket";
 import type { Chatbot, CrawlStatusResponse, CrawlProgressEvent, CrawlCompletedEvent, ChatbotStatusEvent } from "@/lib/types";
@@ -24,7 +25,7 @@ function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <button
-      onClick={async () => { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+      onClick={async () => { await copyToClipboard(text); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
       className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-gray-500 hover:bg-gray-100 transition-all duration-200"
     >
       {copied ? <><Check className="h-3.5 w-3.5 text-green-500" />Copied</> : <><Copy className="h-3.5 w-3.5" />Copy</>}

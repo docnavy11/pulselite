@@ -262,7 +262,7 @@ def _build_report_html(stats: dict, sections: dict, frequency: str, app_url: str
     """Build the HTML email body with only enabled sections."""
     period_label = _PERIOD_LABELS.get(frequency, "Weekly")
     parts = [
-        f'<div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 600px; margin: 0 auto;">',
+        '<div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 600px; margin: 0 auto;">',
         f'<h2 style="color: #1a1a1a;">Pulse {period_label} Report</h2>',
     ]
 

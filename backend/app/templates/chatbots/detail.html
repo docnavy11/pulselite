@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}{{ chatbot.name }} — PulseLight{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+    <div>
+        <a href="/chatbots" class="text-sm text-gray-500 hover:text-gray-700">&larr; Chatbots</a>
+        <h1 class="text-2xl font-bold text-gray-900 mt-1">{{ chatbot.name }}</h1>
+    </div>
+    <div class="flex gap-2">
+        {% include "components/status_badge.html" with context %}
+    </div>
+</div>
+
+<!-- Sub-navigation -->
+<nav class="flex gap-4 border-b border-gray-200 mb-6">
+    <a href="/chatbots/{{ chatbot.id }}" class="pb-2 text-sm font-medium border-b-2 border-indigo-600 text-indigo-600">Overview</a>
+    <a href="/chatbots/{{ chatbot.id }}/sources" class="pb-2 text-sm text-gray-500 hover:text-gray-700 border-b-2 border-transparent">Sources</a>
+    <a href="/chatbots/{{ chatbot.id }}/deploy" class="pb-2 text-sm text-gray-500 hover:text-gray-700 border-b-2 border-transparent">Deploy</a>
+    <a href="/chatbots/{{ chatbot.id }}/settings" class="pb-2 text-sm text-gray-500 hover:text-gray-700 border-b-2 border-transparent">Settings</a>
+</nav>
+
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div class="bg-white rounded-lg border border-gray-200 p-5">
+        <p class="text-sm text-gray-500">Documents</p>
+        <p class="text-2xl font-bold text-gray-900 mt-1">{{ doc_count }}</p>
+    </div>
+    <div class="bg-white rounded-lg border border-gray-200 p-5">
+        <p class="text-sm text-gray-500">Model</p>
+        <p class="text-sm font-medium text-gray-900 mt-1">{{ chatbot.llm_model }}</p>
+    </div>
+    <div class="bg-white rounded-lg border border-gray-200 p-5">
+        <p class="text-sm text-gray-500">Tone</p>
+        <p class="text-sm font-medium text-gray-900 mt-1 capitalize">{{ chatbot.tone }}</p>
+    </div>
+</div>
+
+{% if chatbot.welcome_message %}
+<div class="mt-6 bg-white rounded-lg border border-gray-200 p-5">
+    <h3 class="text-sm font-medium text-gray-700 mb-2">Welcome message</h3>
+    <p class="text-sm text-gray-600">{{ chatbot.welcome_message }}</p>
+</div>
+{% endif %}
+
+{% if chatbot.system_prompt %}
+<div class="mt-4 bg-white rounded-lg border border-gray-200 p-5">
+    <h3 class="text-sm font-medium text-gray-700 mb-2">System prompt</h3>
+    <p class="text-sm text-gray-600 whitespace-pre-wrap">{{ chatbot.system_prompt }}</p>
+</div>
+{% endif %}
+{% endblock %}

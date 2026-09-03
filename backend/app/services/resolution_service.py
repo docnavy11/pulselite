@@ -84,8 +84,11 @@ async def handle_message(
     # Load workspace OpenRouter key + base URL if configured
     openrouter_key: str | None = None
     openrouter_base_url: str | None = None
+    import sys; print(f"[HM] before ws query", file=sys.stderr, flush=True)
     ws_result = await db.execute(select(Workspace).where(Workspace.id == workspace_id))
+    print(f"[HM] ws query done", file=sys.stderr, flush=True)
     ws = ws_result.scalar_one_or_none()
+    print(f"[HM] ws={ws is not None}", file=sys.stderr, flush=True)
     if ws:
         openrouter_base_url = ws.openrouter_base_url
         if ws.openrouter_api_key:
@@ -102,9 +105,11 @@ async def handle_message(
         if conversation_id is None:
             await check_conversation_cap(ws, db)
 
+    print(f"[HM] cloud={is_cloud()}, creating conv...", file=sys.stderr, flush=True)
     if conversation_id is None:
         conversation = await conversation_service.create_conversation(db, workspace_id, chatbot.id, contact_id)
         conversation_id = conversation.id
+        print(f"[HM] conv={conversation_id}", file=sys.stderr, flush=True)
         asyncio.create_task(fire_event(
             workspace_id,
             "conversation.created",

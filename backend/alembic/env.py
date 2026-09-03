@@ -19,7 +19,7 @@ else:
     db = os.environ.get("POSTGRES_DB", "pulse")
     user = os.environ.get("POSTGRES_USER", "pulse")
     password = os.environ.get("POSTGRES_PASSWORD", "pulse_dev_password")
-    config.set_main_option("sqlalchemy.url", f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{db}")
+    config.set_main_option("sqlalchemy.url", f"postgresql+psycopg://{user}:{password}@{host}:{port}/{db}")
 
 target_metadata = Base.metadata
 

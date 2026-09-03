@@ -1,5 +1,6 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 
 from app.services.ingestion.extractors.sitemap_extractor import extract_urls_from_sitemap
@@ -21,50 +22,80 @@ def _mock_response(text: str):
     mock = MagicMock()
     mock.text = text
     mock.raise_for_status = MagicMock()
+    mock.status_code = 200
     return mock
 
 
-def test_extract_urls_from_urlset():
-    with patch("httpx.get", return_value=_mock_response(URLSET_XML)):
-        urls = extract_urls_from_sitemap("https://example.com/sitemap.xml")
+@pytest.mark.asyncio
+async def test_extract_urls_from_urlset():
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(return_value=_mock_response(URLSET_XML))
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    with patch("app.services.ingestion.extractors.sitemap_extractor.httpx.AsyncClient", return_value=mock_client):
+        urls = await extract_urls_from_sitemap("https://example.com/sitemap.xml")
     assert len(urls) == 3
     assert "https://example.com/about" in urls
     assert "https://example.com/pricing" in urls
 
 
-def test_extract_urls_respects_max_urls():
-    with patch("httpx.get", return_value=_mock_response(URLSET_XML)):
-        urls = extract_urls_from_sitemap("https://example.com/sitemap.xml", max_urls=2)
+@pytest.mark.asyncio
+async def test_extract_urls_respects_max_urls():
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(return_value=_mock_response(URLSET_XML))
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    with patch("app.services.ingestion.extractors.sitemap_extractor.httpx.AsyncClient", return_value=mock_client):
+        urls = await extract_urls_from_sitemap("https://example.com/sitemap.xml", max_urls=2)
     assert len(urls) == 2
 
 
-def test_extract_urls_from_sitemap_index():
+@pytest.mark.asyncio
+async def test_extract_urls_from_sitemap_index():
     responses = [_mock_response(INDEX_XML), _mock_response(URLSET_XML)]
-    with patch("httpx.get", side_effect=responses):
-        urls = extract_urls_from_sitemap("https://example.com/sitemap-index.xml")
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(side_effect=responses)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    with patch("app.services.ingestion.extractors.sitemap_extractor.httpx.AsyncClient", return_value=mock_client):
+        urls = await extract_urls_from_sitemap("https://example.com/sitemap-index.xml")
     assert len(urls) == 3
 
 
-def test_extract_urls_raises_on_http_error():
-    import httpx
-    with patch("httpx.get", side_effect=httpx.HTTPError("timeout")):
+@pytest.mark.asyncio
+async def test_extract_urls_raises_on_http_error():
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(side_effect=httpx.HTTPError("timeout"))
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    with patch("app.services.ingestion.extractors.sitemap_extractor.httpx.AsyncClient", return_value=mock_client):
         with pytest.raises(ValueError, match="Failed to fetch sitemap"):
-            extract_urls_from_sitemap("https://example.com/sitemap.xml")
+            await extract_urls_from_sitemap("https://example.com/sitemap.xml")
 
 
-def test_extract_urls_raises_on_invalid_xml():
-    with patch("httpx.get", return_value=_mock_response("not xml")):
+@pytest.mark.asyncio
+async def test_extract_urls_raises_on_invalid_xml():
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(return_value=_mock_response("not xml"))
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    with patch("app.services.ingestion.extractors.sitemap_extractor.httpx.AsyncClient", return_value=mock_client):
         with pytest.raises(ValueError, match="Invalid XML"):
-            extract_urls_from_sitemap("https://example.com/sitemap.xml")
+            await extract_urls_from_sitemap("https://example.com/sitemap.xml")
 
 
-def test_extract_urls_no_infinite_loop_on_cycle():
+@pytest.mark.asyncio
+async def test_extract_urls_no_infinite_loop_on_cycle():
     """A sitemap that points to itself should not recurse infinitely."""
     self_referential = """<?xml version="1.0" encoding="UTF-8"?>
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <sitemap><loc>https://example.com/sitemap.xml</loc></sitemap>
 </sitemapindex>"""
-    with patch("httpx.get", return_value=_mock_response(self_referential)):
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(return_value=_mock_response(self_referential))
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    with patch("app.services.ingestion.extractors.sitemap_extractor.httpx.AsyncClient", return_value=mock_client):
         # Should return empty (cycle detected) without raising RecursionError
-        urls = extract_urls_from_sitemap("https://example.com/sitemap.xml")
+        urls = await extract_urls_from_sitemap("https://example.com/sitemap.xml")
     assert urls == []

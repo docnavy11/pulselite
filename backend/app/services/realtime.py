@@ -196,22 +196,39 @@ async def _log_task_event(
 
 _STATE_TTL = 3600  # 1 hour
 
+# ── Pooled Redis connection ─────────────────────────────────────────────────
+_redis_pool: aioredis.Redis | None = None
 
-def _redis_client() -> aioredis.Redis:
-    """Create a fresh Redis client. Safe across event loops."""
-    return aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+
+def _get_redis_pool() -> aioredis.Redis:
+    """Return a shared, connection-pooled Redis client.
+
+    The underlying redis-py client manages a connection pool internally,
+    so creating one instance and reusing it avoids per-call overhead.
+    A new instance is created if the pool has not been initialised yet
+    (e.g. after a fork in Celery workers or a new event loop).
+    """
+    global _redis_pool
+    if _redis_pool is None:
+        _redis_pool = aioredis.from_url(
+            settings.REDIS_URL,
+            decode_responses=True,
+            socket_connect_timeout=3,
+            max_connections=10,
+        )
+    return _redis_pool
 
 
 async def _safe_redis(coro_fn):
     """Execute a Redis operation, silently swallowing errors."""
     try:
-        r = _redis_client()
-        try:
-            return await coro_fn(r)
-        finally:
-            await r.aclose()
+        r = _get_redis_pool()
+        return await coro_fn(r)
     except Exception:
         logger.warning("Redis state operation failed", exc_info=True)
+        # Reset pool on connection errors so next call gets a fresh one
+        global _redis_pool
+        _redis_pool = None
         return None
 
 

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Deploy — {{ chatbot.name }} — PulseLight{% endblock %}
+{% block content %}
+<div class="mb-6">
+    <a href="/chatbots/{{ chatbot.id }}" class="text-sm text-gray-500 hover:text-gray-700">&larr; {{ chatbot.name }}</a>
+    <h1 class="text-2xl font-bold text-gray-900 mt-1">Deploy Widget</h1>
+</div>
+
+<nav class="flex gap-4 border-b border-gray-200 mb-6">
+    <a href="/chatbots/{{ chatbot.id }}" class="pb-2 text-sm text-gray-500 hover:text-gray-700 border-b-2 border-transparent">Overview</a>
+    <a href="/chatbots/{{ chatbot.id }}/sources" class="pb-2 text-sm text-gray-500 hover:text-gray-700 border-b-2 border-transparent">Sources</a>
+    <a href="/chatbots/{{ chatbot.id }}/deploy" class="pb-2 text-sm font-medium border-b-2 border-indigo-600 text-indigo-600">Deploy</a>
+    <a href="/chatbots/{{ chatbot.id }}/settings" class="pb-2 text-sm text-gray-500 hover:text-gray-700 border-b-2 border-transparent">Settings</a>
+</nav>
+
+<div class="bg-white rounded-lg border border-gray-200 p-6 max-w-2xl">
+    <h3 class="text-sm font-medium text-gray-700 mb-3">Embed code</h3>
+    <p class="text-sm text-gray-500 mb-4">Paste this snippet before the closing <code>&lt;/body&gt;</code> tag on your website.</p>
+    <div class="bg-gray-900 rounded-lg p-4 overflow-x-auto">
+        <code class="text-sm text-green-400 whitespace-pre">&lt;script src="{{ base_url }}/static/widget/pulselight.js" data-chatbot-id="{{ chatbot.id }}"&gt;&lt;/script&gt;</code>
+    </div>
+</div>
+{% endblock %}

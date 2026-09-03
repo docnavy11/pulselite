@@ -29,12 +29,6 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             try:
                 await session.rollback()
             except Exception:
-                # Rollback failed — asyncpg connection is stuck (e.g. an async
-                # operation was interrupted mid-await by a client disconnect).
-                # Dispose the pool so the bad connection is dropped rather than
-                # recycled to the next request.
-                logger.warning(
-                    "Session rollback failed; disposing connection pool to evict bad connection"
-                )
+                logger.warning("Session rollback failed; disposing connection pool")
                 engine.sync_engine.dispose()
             raise

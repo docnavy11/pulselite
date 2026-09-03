@@ -5,6 +5,7 @@ import { Copy, Check } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { Highlight, themes } from "prism-react-renderer";
 import { Card, CardContent } from "@/components/ui/Card";
+import { copyToClipboard } from "@/components/ui/CopyButton";
 
 
 const APP_URL = import.meta.env.VITE_APP_URL || "http://localhost:3001";
@@ -17,7 +18,7 @@ function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
 
   async function handleCopy() {
-    await navigator.clipboard.writeText(text);
+    await copyToClipboard(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }

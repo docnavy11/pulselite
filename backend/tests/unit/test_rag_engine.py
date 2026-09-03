@@ -182,11 +182,11 @@ class TestProcessQuery:
             mock_esc.side_effect = [True, False]
 
             items = []
-            async for item in process_query(db, "test query", _make_chatbot()):
+            async for item in process_query(db, "test query", _make_chatbot(use_reranking=True)):
                 items.append(item)
 
-        # Rerank was called on merged chunks (always reranks on retry)
-        mock_rerank.assert_called_once()
+        # Rerank called twice: once on initial search, once on retry with merged chunks
+        assert mock_rerank.call_count == 2
         # RAGResult should reflect retry success
         rag_results = [i for i in items if isinstance(i, RAGResult)]
         assert rag_results[0].retried is True
@@ -311,7 +311,7 @@ class TestProcessQuery:
             mock_rerank.return_value = [(shared_chunk, 0.9), (unique_chunk, 0.7)]
 
             items = []
-            async for item in process_query(db, "test", _make_chatbot()):
+            async for item in process_query(db, "test", _make_chatbot(use_reranking=True)):
                 items.append(item)
 
         # rerank should receive exactly 2 chunks (deduplicated), not 3

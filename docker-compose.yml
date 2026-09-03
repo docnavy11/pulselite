@@ -2,143 +2,53 @@ services:
   postgres:
     image: pgvector/pgvector:pg16
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-pulse}
-      POSTGRES_USER: ${POSTGRES_USER:-pulse}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pulse_dev_password}
+      POSTGRES_USER: pulse
+      POSTGRES_PASSWORD: pulse_dev_password
+      POSTGRES_DB: pulse
     ports:
-      - "5433:5432"
+      - "3055:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
       - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pulse}"]
+      test: ["CMD-SHELL", "pg_isready -U pulse"]
       interval: 5s
-      timeout: 5s
+      timeout: 3s
       retries: 5
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-          cpus: '2.0'
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    command: redis-server --appendonly yes --appendfsync everysec
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.5'
 
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-      target: dev
     ports:
       - "8000:8000"
-    env_file:
-      - .env
     environment:
-      - POSTGRES_HOST=postgres
-      - REDIS_HOST=redis
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: pulse
+      POSTGRES_USER: pulse
+      POSTGRES_PASSWORD: pulse_dev_password
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-production}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-jwt-secret-change-in-production}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-test@pulse.dev}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-test}
+      FERNET_KEY: ${FERNET_KEY:-}
+      AI_BASE_URL: ${AI_BASE_URL:-}
+      AI_API_KEY: ${AI_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      CLOUD_MODE: ${CLOUD_MODE:-false}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
     volumes:
       - ./backend:/app
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_healthy
-    command: uvicorn app.main:combined_app --host 0.0.0.0 --port 8000 --reload
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: '1.0'
-
-  celery_worker:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-      target: dev
-    env_file:
-      - .env
-    environment:
-      - POSTGRES_HOST=postgres
-      - REDIS_HOST=redis
-    volumes:
-      - ./backend:/app
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    command: celery -A app.workers.celery_app worker --loglevel=info
-    healthcheck:
-      test: ["CMD-SHELL", "celery -A app.workers.celery_app inspect ping --timeout 10 || exit 1"]
-      interval: 30s
-      timeout: 15s
-      retries: 3
-      start_period: 30s
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-          cpus: '2.0'
-
-  celery_beat:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-      target: dev
-    env_file:
-      - .env
-    environment:
-      - POSTGRES_HOST=postgres
-      - REDIS_HOST=redis
-    volumes:
-      - ./backend:/app
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    command: celery -A app.workers.celery_app beat --loglevel=info
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    ports:
-      - "${FRONTEND_PORT:-3001}:3000"
-    env_file:
-      - .env
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    depends_on:
-      - backend
-    command: npm run dev
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 volumes:
-  postgres_data:
-  redis_data:
+  pgdata:

@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Chatbots — PulseLight{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-bold text-gray-900">Chatbots</h1>
+    <a href="/chatbots/new" class="bg-indigo-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-indigo-700">
+        New chatbot
+    </a>
+</div>
+
+{% if chatbots %}
+<div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
+    <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+            <tr>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
+                <th class="px-6 py-3"></th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200">
+            {% for bot in chatbots %}
+            <tr id="chatbot-{{ bot.id }}">
+                <td class="px-6 py-4">
+                    <a href="/chatbots/{{ bot.id }}" class="text-sm font-medium text-indigo-600 hover:text-indigo-500">{{ bot.name }}</a>
+                </td>
+                <td class="px-6 py-4">
+                    {% include "components/status_badge.html" with context %}
+                </td>
+                <td class="px-6 py-4 text-sm text-gray-500">{{ bot.created_at.strftime('%b %d, %Y') }}</td>
+                <td class="px-6 py-4 text-right">
+                    <button hx-delete="/chatbots/{{ bot.id }}" hx-target="closest tr" hx-swap="outerHTML swap:0.2s"
+                            hx-confirm="Delete {{ bot.name }}?"
+                            class="text-sm text-red-600 hover:text-red-500">Delete</button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="text-center py-12 bg-white rounded-lg border border-gray-200">
+    <p class="text-gray-500">No chatbots yet.</p>
+    <a href="/chatbots/new" class="text-indigo-600 hover:text-indigo-500 text-sm mt-2 inline-block">Create your first chatbot</a>
+</div>
+{% endif %}
+{% endblock %}

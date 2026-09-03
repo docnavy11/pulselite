@@ -1,5 +1,6 @@
 from collections.abc import AsyncGenerator
 
+import httpx
 from openai import AsyncOpenAI
 
 from app.config import settings
@@ -12,6 +13,7 @@ class OpenAILLMClient(BaseLLMClient):
         resolved_base_url = base_url or settings.AI_BASE_URL
         if resolved_base_url:
             kwargs["base_url"] = resolved_base_url
+        kwargs["timeout"] = httpx.Timeout(60.0)
         self._client = AsyncOpenAI(**kwargs)
 
     async def stream_generate(

@@ -5,7 +5,6 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.knowledge import Chunk
-from app.services.ingestion.embedder import _get_model
 
 DENSE_CANDIDATES = 20
 SPARSE_CANDIDATES = 20
@@ -65,7 +64,10 @@ async def hybrid_search(
 ) -> list[Chunk]:
     query_embedding = await _embed_query(query_text)
 
-    dense_results = await dense_search(db, workspace_id, knowledge_base_id, query_embedding)
+    if query_embedding is not None:
+        dense_results = await dense_search(db, workspace_id, knowledge_base_id, query_embedding)
+    else:
+        dense_results = []
     sparse_results = await sparse_search(db, workspace_id, knowledge_base_id, query_text)
 
     return _reciprocal_rank_fusion(dense_results, sparse_results, top_k)
@@ -93,9 +95,16 @@ def _reciprocal_rank_fusion(
     return [chunk_map[cid] for cid in sorted_ids]
 
 
-async def _embed_query(query: str) -> list[float]:
+async def _embed_query(query: str) -> list[float] | None:
+    """Embed query for dense search. Model is preloaded before uvicorn starts.
+
+    Runs synchronously (no thread) because ONNX Runtime's internal threads
+    can hold the GIL and interfere with subsequent asyncio.to_thread calls.
+    The embedding itself is fast (~10ms) so blocking is acceptable.
+    """
+    from app.services.ingestion.embedder import _get_model
     model = _get_model()
-    embeddings = await asyncio.to_thread(
-        lambda: list(model.embed([query]))
-    )
-    return embeddings[0].tolist()
+    if model is None:
+        return None
+    result = list(model.embed([query]))
+    return result[0].tolist()

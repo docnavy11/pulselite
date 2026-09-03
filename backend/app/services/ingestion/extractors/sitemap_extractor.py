@@ -15,7 +15,7 @@ def _validate_url_scheme(url: str) -> None:
         raise ValueError(f"Disallowed URL scheme '{parsed.scheme}' in sitemap URL: {url}")
 
 
-def extract_urls_from_sitemap(
+async def extract_urls_from_sitemap(
     sitemap_url: str,
     max_urls: int = 200,
     _visited: set[str] | None = None,
@@ -31,8 +31,9 @@ def extract_urls_from_sitemap(
     _visited.add(sitemap_url)
 
     try:
-        response = httpx.get(sitemap_url, follow_redirects=True, timeout=30)
-        response.raise_for_status()
+        async with httpx.AsyncClient(timeout=30.0, max_redirects=5) as client:
+            response = await client.get(sitemap_url, follow_redirects=True)
+            response.raise_for_status()
     except httpx.HTTPError as e:
         raise ValueError(f"Failed to fetch sitemap {sitemap_url}: {e}") from e
 
@@ -48,7 +49,7 @@ def extract_urls_from_sitemap(
     for sitemap_tag in root.findall("sm:sitemap", ns):
         loc = sitemap_tag.find("sm:loc", ns)
         if loc is not None and loc.text:
-            child_urls = extract_urls_from_sitemap(loc.text.strip(), max_urls - len(urls), _visited)
+            child_urls = await extract_urls_from_sitemap(loc.text.strip(), max_urls - len(urls), _visited)
             urls.extend(child_urls)
             if len(urls) >= max_urls:
                 break

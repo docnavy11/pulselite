@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Settings — PulseLight{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold text-gray-900 mb-6">Settings</h1>
+
+<div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+    <!-- Settings nav -->
+    <nav class="space-y-1">
+        <a href="/settings" class="block px-3 py-2 text-sm rounded-md bg-gray-100 font-medium">General</a>
+        <a href="/settings/llm" class="block px-3 py-2 text-sm rounded-md hover:bg-gray-100">AI Models</a>
+    </nav>
+
+    <!-- General settings -->
+    <div class="lg:col-span-3">
+        <form hx-post="/settings" hx-swap="none" class="bg-white rounded-lg border border-gray-200 p-6 space-y-4">
+            <div>
+                <label for="name" class="block text-sm font-medium text-gray-700">Workspace name</label>
+                <input type="text" name="name" id="name" value="{{ workspace.name }}"
+                    class="mt-1 block w-full max-w-md rounded-md border border-gray-300 px-3 py-2 text-sm">
+            </div>
+            <div>
+                <label for="timezone" class="block text-sm font-medium text-gray-700">Timezone</label>
+                <input type="text" name="timezone" id="timezone" value="{{ workspace.timezone }}"
+                    class="mt-1 block w-full max-w-md rounded-md border border-gray-300 px-3 py-2 text-sm">
+            </div>
+            <div class="flex justify-end pt-2">
+                <button type="submit" class="bg-indigo-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-indigo-700">Save</button>
+            </div>
+        </form>
+
+        <!-- Team members -->
+        <div class="mt-8 bg-white rounded-lg border border-gray-200 p-6">
+            <h3 class="text-sm font-medium text-gray-700 mb-4">Team members</h3>
+            <div class="space-y-2">
+                {% for agent, role in members %}
+                <div class="flex items-center justify-between py-2">
+                    <div>
+                        <p class="text-sm font-medium text-gray-900">{{ agent.name }}</p>
+                        <p class="text-xs text-gray-500">{{ agent.email }}</p>
+                    </div>
+                    <span class="text-xs text-gray-500 capitalize">{{ role }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

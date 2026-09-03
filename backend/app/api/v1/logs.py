@@ -42,7 +42,7 @@ async def list_crawl_run_logs(
     workspace_id: uuid.UUID = Depends(get_workspace),
     db: AsyncSession = Depends(get_db),
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
-    offset: Annotated[int, Query(ge=0)] = 0,
+    offset: Annotated[int, Query(ge=0, le=10_000)] = 0,
 ) -> CrawlRunLogResponse:
     # Total count
     total_result = await db.execute(
@@ -113,7 +113,7 @@ async def list_document_logs(
     workspace_id: uuid.UUID = Depends(get_workspace),
     db: AsyncSession = Depends(get_db),
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
-    offset: Annotated[int, Query(ge=0)] = 0,
+    offset: Annotated[int, Query(ge=0, le=10_000)] = 0,
 ) -> DocumentLogResponse:
     # Total count
     total_result = await db.execute(
@@ -166,7 +166,7 @@ async def list_analysis_run_logs(
     workspace_id: uuid.UUID = Depends(get_workspace),
     db: AsyncSession = Depends(get_db),
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
-    offset: Annotated[int, Query(ge=0)] = 0,
+    offset: Annotated[int, Query(ge=0, le=10_000)] = 0,
 ) -> AnalysisRunLogResponse:
     """List conversation analysis runs, newest first."""
     total_result = await db.execute(
@@ -224,7 +224,7 @@ async def list_retrieval_logs(
     workspace_id: uuid.UUID = Depends(get_workspace),
     db: AsyncSession = Depends(get_db),
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
-    offset: Annotated[int, Query(ge=0)] = 0,
+    offset: Annotated[int, Query(ge=0, le=10_000)] = 0,
     chatbot_id: uuid.UUID | None = Query(default=None),
 ) -> RetrievalLogResponse:
     """List retrieval logs, newest first. Optionally filter by chatbot."""

@@ -29,11 +29,11 @@ def sanitize_css(css: str) -> str:
 
 
 class WidgetConfig(BaseModel):
-    primary_color: str = "#6366f1"
-    position: str = "bottom-right"
-    welcome_message: str = "Hi! How can I help you?"
-    avatar_url: str | None = None
-    launcher_text: str = "Chat with us"
+    primary_color: str = Field(default="#6366f1", max_length=50)
+    position: str = Field(default="bottom-right", max_length=50)
+    welcome_message: str = Field(default="Hi! How can I help you?", max_length=5_000)
+    avatar_url: str | None = Field(default=None, max_length=2_000)
+    launcher_text: str = Field(default="Chat with us", max_length=200)
     quick_replies: list[str] = []
     lead_capture_enabled: bool = False
     lead_capture_fields: list[str] = ["name", "email"]

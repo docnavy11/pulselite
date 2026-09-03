@@ -2,7 +2,7 @@ import csv
 import io
 import json
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
@@ -85,16 +85,13 @@ async def chat(
 @router.get("/workspaces/{workspace_id}/conversations/export")
 async def export_conversations_csv(
     workspace_id: uuid.UUID = Depends(get_workspace),
-    days: int = Query(90, ge=1, le=365),
     db: AsyncSession = Depends(get_db),
     current_user: Agent = Depends(get_current_user),
 ):
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     stream = await db.stream_scalars(
         select(Conversation)
-        .where(Conversation.workspace_id == workspace_id, Conversation.created_at >= cutoff)
+        .where(Conversation.workspace_id == workspace_id)
         .order_by(Conversation.created_at.desc())
-        .limit(100_000)
         .execution_options(yield_per=100)
     )
 

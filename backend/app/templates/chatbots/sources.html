@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Sources — {{ chatbot.name }} — PulseLight{% endblock %}
+{% block content %}
+<div class="mb-6">
+    <a href="/chatbots/{{ chatbot.id }}" class="text-sm text-gray-500 hover:text-gray-700">&larr; {{ chatbot.name }}</a>
+    <h1 class="text-2xl font-bold text-gray-900 mt-1">Sources</h1>
+</div>
+
+<nav class="flex gap-4 border-b border-gray-200 mb-6">
+    <a href="/chatbots/{{ chatbot.id }}" class="pb-2 text-sm text-gray-500 hover:text-gray-700 border-b-2 border-transparent">Overview</a>
+    <a href="/chatbots/{{ chatbot.id }}/sources" class="pb-2 text-sm font-medium border-b-2 border-indigo-600 text-indigo-600">Sources</a>
+    <a href="/chatbots/{{ chatbot.id }}/deploy" class="pb-2 text-sm text-gray-500 hover:text-gray-700 border-b-2 border-transparent">Deploy</a>
+    <a href="/chatbots/{{ chatbot.id }}/settings" class="pb-2 text-sm text-gray-500 hover:text-gray-700 border-b-2 border-transparent">Settings</a>
+</nav>
+
+{% if documents %}
+<div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
+    <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+            <tr>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Title</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Chunks</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200" id="documents-table">
+            {% for doc in documents %}
+            <tr id="doc-{{ doc.id }}" sse-swap="document:{{ doc.id }}">
+                <td class="px-6 py-4 text-sm">{{ doc.title or doc.source_url or 'Untitled' }}</td>
+                <td class="px-6 py-4 text-sm text-gray-500">{{ doc.source_type }}</td>
+                <td class="px-6 py-4">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
+                        {% if doc.status == 'indexed' %}bg-green-100 text-green-800
+                        {% elif doc.status == 'processing' %}bg-yellow-100 text-yellow-800
+                        {% elif doc.status == 'failed' %}bg-red-100 text-red-800
+                        {% else %}bg-gray-100 text-gray-800{% endif %}">
+                        {{ doc.status }}
+                    </span>
+                </td>
+                <td class="px-6 py-4 text-sm text-gray-500">{{ doc.chunk_count }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="text-center py-12 bg-white rounded-lg border border-gray-200">
+    <p class="text-gray-500">No documents yet. Add sources to train your chatbot.</p>
+</div>
+{% endif %}
+{% endblock %}

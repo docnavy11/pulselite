@@ -189,7 +189,7 @@ async def list_openrouter_models(
         try:
             api_key = decrypt_api_key(workspace.openrouter_api_key)
         except Exception:
-            raise HTTPException(status_code=500, detail="Failed to decrypt API key")
+            raise HTTPException(status_code=500, detail="API key configuration error. Please re-save your API key.")
     else:
         api_key = app_settings.AI_API_KEY
 

@@ -13,10 +13,12 @@ celery_app.conf.update(
     task_serializer="json",
     accept_content=["json"],
     result_serializer="json",
+    result_expires=86400,  # auto-cleanup task results after 24h
     timezone="UTC",
     enable_utc=True,
     task_track_started=True,
     task_acks_late=True,
+    task_reject_on_worker_lost=True,  # requeue tasks if worker crashes
     worker_prefetch_multiplier=1,
     task_default_queue="default",
     task_routes={

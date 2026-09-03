@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Trash2, ChevronDown, ChevronRight, RefreshCw } from "lucide-react";
+import { Trash2, ChevronDown, ChevronRight, RefreshCw, Pencil, X, Check } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
@@ -8,6 +8,7 @@ import { useWorkspaceStore } from "@/stores/workspace-store";
 import {
   getWebhooks,
   createWebhook,
+  updateWebhook,
   deleteWebhook,
   getWebhookDeliveries,
   retryWebhookDelivery,
@@ -139,6 +140,15 @@ export default function WebhooksPage() {
   const [error, setError] = useState<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
+  // Edit state
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editUrl, setEditUrl] = useState("");
+  const [editEvents, setEditEvents] = useState<string[]>([]);
+  const [editSecret, setEditSecret] = useState("");
+  const [editActive, setEditActive] = useState(true);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
   const [url, setUrl] = useState("");
   const [secret, setSecret] = useState("");
   const [selectedEvents, setSelectedEvents] = useState<string[]>([
@@ -206,8 +216,56 @@ export default function WebhooksPage() {
         next.delete(webhookId);
         return next;
       });
+      if (editingId === webhookId) setEditingId(null);
     } catch {
       // ignore
+    }
+  }
+
+  function startEditing(hook: Webhook) {
+    setEditingId(hook.id);
+    setEditUrl(hook.url);
+    setEditEvents([...hook.event_types]);
+    setEditActive(hook.is_active);
+    setEditSecret("");
+    setEditError(null);
+  }
+
+  function cancelEditing() {
+    setEditingId(null);
+    setEditError(null);
+  }
+
+  function toggleEditEvent(value: string) {
+    setEditEvents((prev) =>
+      prev.includes(value) ? prev.filter((e) => e !== value) : [...prev, value]
+    );
+  }
+
+  async function handleSaveEdit() {
+    if (!workspace || !editingId) return;
+    setEditError(null);
+    setEditSaving(true);
+    try {
+      const payload: { url?: string; event_types?: string[]; secret?: string; is_active?: boolean } = {};
+      const original = webhooks.find((h) => h.id === editingId);
+      if (original && editUrl !== original.url) payload.url = editUrl;
+      if (original && JSON.stringify(editEvents) !== JSON.stringify(original.event_types))
+        payload.event_types = editEvents;
+      if (original && editActive !== original.is_active) payload.is_active = editActive;
+      if (editSecret) payload.secret = editSecret;
+      if (Object.keys(payload).length === 0) {
+        setEditingId(null);
+        return;
+      }
+      const updated = await updateWebhook(workspace.id, editingId, payload);
+      setWebhooks((prev) => prev.map((h) => (h.id === editingId ? updated : h)));
+      setEditingId(null);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to update webhook";
+      setEditError(message);
+    } finally {
+      setEditSaving(false);
     }
   }
 
@@ -237,49 +295,130 @@ export default function WebhooksPage() {
             <div className="divide-y divide-gray-100">
               {webhooks.map((hook) => {
                 const isExpanded = expandedIds.has(hook.id);
+                const isEditing = editingId === hook.id;
                 return (
                   <div key={hook.id}>
-                    <div className="flex items-start justify-between py-3 gap-4">
-                      <button
-                        onClick={() => toggleExpanded(hook.id)}
-                        className="shrink-0 mt-0.5 text-gray-400 hover:text-gray-600 transition-colors"
-                        aria-label={isExpanded ? "Collapse deliveries" : "Expand deliveries"}
-                      >
-                        {isExpanded ? (
-                          <ChevronDown className="h-4 w-4" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4" />
-                        )}
-                      </button>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-gray-900 truncate">{hook.url}</p>
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {hook.event_types.map((et) => (
-                            <span
-                              key={et}
-                              className="inline-flex items-center rounded-full bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-700"
-                            >
-                              {et}
-                            </span>
-                          ))}
+                    {isEditing ? (
+                      <div className="py-3 space-y-3">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">
+                            Endpoint URL
+                          </label>
+                          <Input
+                            type="url"
+                            value={editUrl}
+                            onChange={(e) => setEditUrl(e.target.value)}
+                          />
                         </div>
-                        <p className="text-xs text-gray-400 mt-1">
-                          Added {new Date(hook.created_at).toLocaleDateString()}
-                          {" · "}
-                          <span className={hook.is_active ? "text-green-600" : "text-gray-400"}>
-                            {hook.is_active ? "Active" : "Inactive"}
-                          </span>
-                        </p>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">
+                            Events
+                          </label>
+                          <div className="flex flex-wrap gap-3">
+                            {ALL_EVENT_TYPES.map((et) => (
+                              <label key={et.value} className="flex items-center gap-1.5 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={editEvents.includes(et.value)}
+                                  onChange={() => toggleEditEvent(et.value)}
+                                  className="h-3.5 w-3.5 rounded border-gray-300 text-primary-500"
+                                />
+                                <span className="text-xs text-gray-700">{et.label}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">
+                            New secret (leave blank to keep current)
+                          </label>
+                          <Input
+                            type="text"
+                            placeholder="Enter new secret to replace"
+                            value={editSecret}
+                            onChange={(e) => setEditSecret(e.target.value)}
+                          />
+                        </div>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={editActive}
+                            onChange={(e) => setEditActive(e.target.checked)}
+                            className="h-3.5 w-3.5 rounded border-gray-300 text-primary-500"
+                          />
+                          <span className="text-xs font-medium text-gray-700">Active</span>
+                        </label>
+                        {editError && <p className="text-xs text-red-600">{editError}</p>}
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={handleSaveEdit}
+                            disabled={editSaving || editEvents.length === 0}
+                            className="inline-flex items-center gap-1 rounded-md bg-primary-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-700 disabled:opacity-50 transition-colors"
+                          >
+                            <Check className="h-3.5 w-3.5" />
+                            {editSaving ? "Saving…" : "Save"}
+                          </button>
+                          <button
+                            onClick={cancelEditing}
+                            className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-200 transition-colors"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                            Cancel
+                          </button>
+                        </div>
                       </div>
-                      <button
-                        onClick={() => handleDelete(hook.id)}
-                        className="text-gray-400 hover:text-red-500 transition-colors shrink-0 mt-0.5"
-                        aria-label="Delete webhook"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                    {isExpanded && workspace && (
+                    ) : (
+                      <div className="flex items-start justify-between py-3 gap-4">
+                        <button
+                          onClick={() => toggleExpanded(hook.id)}
+                          className="shrink-0 mt-0.5 text-gray-400 hover:text-gray-600 transition-colors"
+                          aria-label={isExpanded ? "Collapse deliveries" : "Expand deliveries"}
+                        >
+                          {isExpanded ? (
+                            <ChevronDown className="h-4 w-4" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4" />
+                          )}
+                        </button>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-gray-900 truncate">{hook.url}</p>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {hook.event_types.map((et) => (
+                              <span
+                                key={et}
+                                className="inline-flex items-center rounded-full bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-700"
+                              >
+                                {et}
+                              </span>
+                            ))}
+                          </div>
+                          <p className="text-xs text-gray-400 mt-1">
+                            Added {new Date(hook.created_at).toLocaleDateString()}
+                            {" · "}
+                            <span className={hook.is_active ? "text-green-600" : "text-gray-400"}>
+                              {hook.is_active ? "Active" : "Inactive"}
+                            </span>
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0 mt-0.5">
+                          <button
+                            onClick={() => startEditing(hook)}
+                            className="text-gray-400 hover:text-primary-600 transition-colors"
+                            aria-label="Edit webhook"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(hook.id)}
+                            className="text-gray-400 hover:text-red-500 transition-colors"
+                            aria-label="Delete webhook"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {isExpanded && !isEditing && workspace && (
                       <WebhookDeliveriesPanel
                         workspaceId={workspace.id}
                         webhookId={hook.id}

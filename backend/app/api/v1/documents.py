@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -50,10 +50,12 @@ async def upload_document(
 @router.get("", response_model=list[DocumentResponse])
 async def list_documents(
     knowledge_base_id: uuid.UUID,
+    limit: int = Query(200, ge=1, le=1000),
+    offset: int = Query(0, ge=0, le=10_000),
     workspace_id: uuid.UUID = Depends(get_workspace),
     db: AsyncSession = Depends(get_db),
 ):
-    return await document_service.list_documents(db, workspace_id, knowledge_base_id)
+    return await document_service.list_documents(db, workspace_id, knowledge_base_id, limit=limit, offset=offset)
 
 
 @router.delete("/{document_id}", status_code=204)

@@ -2,6 +2,8 @@
 
 import base64
 import json
+import logging
+import re
 import secrets
 import urllib.parse
 import uuid
@@ -19,6 +21,8 @@ from app.dependencies import get_current_user, get_workspace
 from app.models.integrations import IntegrationConfig
 from app.models.organizational import Agent
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/oauth", tags=["oauth"])
 
 
@@ -35,7 +39,7 @@ async def notion_authorize(
         )
 
     state = secrets.token_urlsafe(32)
-    r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+    r = aioredis.from_url(settings.REDIS_URL, decode_responses=True, socket_connect_timeout=3)
     # Store workspace_id in state so callback knows who to credit
     await r.setex(f"pulse:notion_state:{state}", 300, str(workspace_id))
     await r.close()
@@ -58,7 +62,7 @@ async def notion_callback(
     db: AsyncSession = Depends(get_db),
 ):
     """Exchange Notion OAuth code for access token and store in IntegrationConfig."""
-    r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+    r = aioredis.from_url(settings.REDIS_URL, decode_responses=True, socket_connect_timeout=3)
     workspace_id_str = await r.get(f"pulse:notion_state:{state}")
     if workspace_id_str:
         await r.delete(f"pulse:notion_state:{state}")
@@ -73,7 +77,7 @@ async def notion_callback(
     workspace_id = uuid.UUID(workspace_id_str)
 
     # Exchange code for token
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=15.0) as client:
         credentials = base64.b64encode(f"{settings.NOTION_CLIENT_ID}:{settings.NOTION_CLIENT_SECRET}".encode()).decode()
         token_resp = await client.post(
             "https://api.notion.com/v1/oauth/token",
@@ -147,7 +151,7 @@ async def slack_authorize(
         )
 
     state = secrets.token_urlsafe(32)
-    r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+    r = aioredis.from_url(settings.REDIS_URL, decode_responses=True, socket_connect_timeout=3)
     await r.setex(f"pulse:slack_state:{state}", 300, str(workspace_id))
     await r.close()
 
@@ -169,7 +173,7 @@ async def slack_callback(
     db: AsyncSession = Depends(get_db),
 ):
     """Exchange Slack OAuth code for bot token and store in IntegrationConfig."""
-    r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+    r = aioredis.from_url(settings.REDIS_URL, decode_responses=True, socket_connect_timeout=3)
     workspace_id_str = await r.get(f"pulse:slack_state:{state}")
     if workspace_id_str:
         await r.delete(f"pulse:slack_state:{state}")
@@ -183,7 +187,7 @@ async def slack_callback(
 
     workspace_id = uuid.UUID(workspace_id_str)
 
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=15.0) as client:
         token_resp = await client.post(
             "https://slack.com/api/oauth.v2.access",
             data={
@@ -196,9 +200,10 @@ async def slack_callback(
         token_data = token_resp.json()
 
     if not token_data.get("ok"):
+        logger.warning("Slack OAuth token exchange failed: %s", token_data.get("error"))
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Slack OAuth failed: {token_data.get('error')}",
+            detail="Slack OAuth failed. Please try again.",
         )
 
     bot_token = token_data.get("access_token", "")
@@ -256,8 +261,14 @@ async def zendesk_authorize(
             detail="Zendesk OAuth not configured",
         )
 
+    if not re.match(r"^[a-z0-9][a-z0-9\-]*[a-z0-9]$", subdomain):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid Zendesk subdomain",
+        )
+
     state = secrets.token_urlsafe(32)
-    r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+    r = aioredis.from_url(settings.REDIS_URL, decode_responses=True, socket_connect_timeout=3)
     # Store workspace_id and subdomain in Redis keyed by state
     await r.setex(
         f"pulse:zendesk_state:{state}",
@@ -286,7 +297,7 @@ async def zendesk_callback(
     db: AsyncSession = Depends(get_db),
 ):
     """Exchange Zendesk OAuth code for access token and store in IntegrationConfig."""
-    r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+    r = aioredis.from_url(settings.REDIS_URL, decode_responses=True, socket_connect_timeout=3)
     state_json = await r.get(f"pulse:zendesk_state:{state}")
     if state_json:
         await r.delete(f"pulse:zendesk_state:{state}")
@@ -298,12 +309,23 @@ async def zendesk_callback(
             detail="Invalid or expired OAuth state",
         )
 
-    state_data = json.loads(state_json)
+    try:
+        state_data = json.loads(state_json)
+    except (json.JSONDecodeError, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid OAuth state data",
+        )
     workspace_id = uuid.UUID(state_data["workspace_id"])
     subdomain = state_data["subdomain"]
+    if not re.match(r"^[a-z0-9][a-z0-9\-]*[a-z0-9]$", subdomain):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid Zendesk subdomain",
+        )
 
     # Exchange code for token
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=15.0) as client:
         token_resp = await client.post(
             f"https://{subdomain}.zendesk.com/oauth/tokens",
             data={
@@ -374,7 +396,7 @@ async def dropbox_authorize(
         )
 
     state = secrets.token_urlsafe(32)
-    r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+    r = aioredis.from_url(settings.REDIS_URL, decode_responses=True, socket_connect_timeout=3)
     await r.setex(f"pulse:dropbox_state:{state}", 300, str(workspace_id))
     await r.close()
 
@@ -397,7 +419,7 @@ async def dropbox_callback(
     db: AsyncSession = Depends(get_db),
 ):
     """Exchange Dropbox OAuth code for access token and store in IntegrationConfig."""
-    r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+    r = aioredis.from_url(settings.REDIS_URL, decode_responses=True, socket_connect_timeout=3)
     workspace_id_str = await r.get(f"pulse:dropbox_state:{state}")
     if workspace_id_str:
         await r.delete(f"pulse:dropbox_state:{state}")
@@ -412,7 +434,7 @@ async def dropbox_callback(
     workspace_id = uuid.UUID(workspace_id_str)
 
     # Exchange code for tokens
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=15.0) as client:
         token_resp = await client.post(
             "https://api.dropboxapi.com/oauth2/token",
             data={
@@ -485,7 +507,7 @@ async def salesforce_authorize(
         )
 
     state = secrets.token_urlsafe(32)
-    r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+    r = aioredis.from_url(settings.REDIS_URL, decode_responses=True, socket_connect_timeout=3)
     await r.setex(f"pulse:salesforce_state:{state}", 300, str(workspace_id))
     await r.close()
 
@@ -508,7 +530,7 @@ async def salesforce_callback(
     db: AsyncSession = Depends(get_db),
 ):
     """Exchange Salesforce OAuth code for access token and store in IntegrationConfig."""
-    r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+    r = aioredis.from_url(settings.REDIS_URL, decode_responses=True, socket_connect_timeout=3)
     workspace_id_str = await r.get(f"pulse:salesforce_state:{state}")
     if workspace_id_str:
         await r.delete(f"pulse:salesforce_state:{state}")
@@ -523,7 +545,7 @@ async def salesforce_callback(
     workspace_id = uuid.UUID(workspace_id_str)
 
     # Exchange code for token
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=15.0) as client:
         token_resp = await client.post(
             "https://login.salesforce.com/services/oauth2/token",
             data={
@@ -596,7 +618,7 @@ async def google_drive_authorize(
         )
 
     state = secrets.token_urlsafe(32)
-    r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+    r = aioredis.from_url(settings.REDIS_URL, decode_responses=True, socket_connect_timeout=3)
     await r.setex(f"pulse:google_state:{state}", 300, str(workspace_id))
     await r.close()
 
@@ -621,7 +643,7 @@ async def google_drive_callback(
     db: AsyncSession = Depends(get_db),
 ):
     """Exchange Google OAuth code for tokens and store in IntegrationConfig."""
-    r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+    r = aioredis.from_url(settings.REDIS_URL, decode_responses=True, socket_connect_timeout=3)
     workspace_id_str = await r.get(f"pulse:google_state:{state}")
     if workspace_id_str:
         await r.delete(f"pulse:google_state:{state}")
@@ -636,7 +658,7 @@ async def google_drive_callback(
     workspace_id = uuid.UUID(workspace_id_str)
 
     # Exchange code for tokens
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=15.0) as client:
         token_resp = await client.post(
             "https://oauth2.googleapis.com/token",
             data={

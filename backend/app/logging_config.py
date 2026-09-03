@@ -42,12 +42,24 @@ def setup_logging() -> None:
     pulse_logger.addHandler(json_handler)
     pulse_logger.propagate = False
 
+    # Also attach JSON handler to uvicorn for consistent structured logging
+    for name in ("uvicorn", "uvicorn.access", "uvicorn.error", "fastapi"):
+        third_party = logging.getLogger(name)
+        third_party.addHandler(json_handler)
+        third_party.propagate = False
+
     # Attach in-memory ring buffer for admin log viewing
     from app.services.log_buffer import LogBuffer
 
     buffer_handler = LogBuffer.get_instance()
     buffer_handler.setLevel(logging.INFO)
     logging.getLogger().addHandler(buffer_handler)
+
+    # Security event logger — login failures, auth errors, etc.
+    security_logger = logging.getLogger("security")
+    security_logger.setLevel(logging.INFO)
+    security_logger.addHandler(json_handler)
+    security_logger.propagate = False
 
     # Quieten noisy third-party loggers
     logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)

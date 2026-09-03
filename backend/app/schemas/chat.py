@@ -2,12 +2,12 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ChatRequest(BaseModel):
     chatbot_id: uuid.UUID
-    message: str
+    message: str = Field(..., max_length=32_000)
     conversation_id: uuid.UUID | None = None
     contact_id: uuid.UUID | None = None
 

@@ -7,6 +7,7 @@ import defusedxml.ElementTree as ET
 from bs4 import BeautifulSoup
 
 from app.services.fetcher import FetchResult, fetch
+from app.utils.url_validation import async_validate_url_not_private
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +19,7 @@ class DiscoveredUrl:
     prefetched_title: str | None = field(default=None)
 
 _MAX_CHILD_SITEMAPS = 20
+_MAX_DISCOVERED_URLS = 500
 
 
 def _normalize(url: str) -> str:
@@ -51,6 +53,11 @@ async def _discover_via_sitemap(
     exclude_paths: list[str],
 ) -> list[str] | None:
     sitemap_url = root_url.rstrip("/") + "/sitemap.xml"
+    try:
+        await async_validate_url_not_private(sitemap_url)
+    except ValueError:
+        logger.warning("Sitemap URL blocked by SSRF validation: %s", sitemap_url)
+        return None
     result: FetchResult = await fetch(sitemap_url)
     if result.status_code != 200 or not result.html:
         return None
@@ -69,6 +76,11 @@ async def _discover_via_sitemap(
     for sitemap_el in child_sitemap_els[:_MAX_CHILD_SITEMAPS]:
         loc_text = sitemap_el.text
         if not loc_text:
+            continue
+        try:
+            await async_validate_url_not_private(loc_text.strip())
+        except ValueError:
+            logger.warning("Child sitemap URL blocked by SSRF validation: %s", loc_text.strip())
             continue
         child = await fetch(loc_text.strip())
         if child.status_code == 200 and child.html:
@@ -106,6 +118,8 @@ async def _discover_via_bfs(
     found: list[DiscoveredUrl] = []
 
     while queue:
+        if len(found) >= _MAX_DISCOVERED_URLS:
+            break
         url, depth = queue.popleft()
         norm = _normalize(url)
         if norm in visited:
@@ -113,6 +127,12 @@ async def _discover_via_bfs(
         if not _matches_paths(norm, _inc, _exc):
             continue
         visited.add(norm)
+
+        try:
+            await async_validate_url_not_private(norm)
+        except ValueError:
+            logger.warning("BFS URL blocked by SSRF validation: %s", norm)
+            continue
 
         if depth >= max_depth:
             found.append(DiscoveredUrl(url=norm))

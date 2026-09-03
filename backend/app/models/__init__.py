@@ -1,51 +1,15 @@
 from app.models.actions import ActionEvent, ChatbotAction  # noqa: F401
-from app.models.organizational import Agent, Workspace, WorkspaceMembership
+from app.models.organizational import Agent, Workspace, WorkspaceMembership, WorkspaceWebhook  # noqa: F401
 from app.models.invites import WorkspaceInvite  # noqa: F401
-from app.models.integrations import CreditLedger, IntegrationConfig
-from app.models.contacts import Company, Contact, ContactEvent, DataAttribute, Segment
-from app.models.conversations import Conversation, ConversationTag, Message, Tag
-from app.models.knowledge import Article, ArticleCollection, Chatbot, Chunk, Document, KnowledgeBase
-from app.models.intelligence import (
-    ConversationAnalysis,
-    GapCluster,
-    GapEvent,
-    RetrievalLog,
-)
+from app.models.integrations import CreditLedger, IntegrationConfig  # noqa: F401
+from app.models.contacts import Company, Contact, ContactEvent, DataAttribute, Segment  # noqa: F401
+from app.models.conversations import Conversation, ConversationTag, Message, MessageFeedback, Tag  # noqa: F401
+from app.models.knowledge import Article, ArticleCollection, Chatbot, Chunk, CrawlJob, Document, KnowledgeBase  # noqa: F401
+from app.models.intelligence import ConversationAnalysis, GapCluster, GapEvent, RetrievalLog  # noqa: F401
 from app.models.plan_tier import PlanTier  # noqa: F401
 from app.models.qa import QAPair  # noqa: F401
 from app.models.task_log import BackgroundTaskLog  # noqa: F401
 from app.models.webhook_delivery import WebhookDelivery  # noqa: F401
-
-__all__ = [
-    "ActionEvent",
-    "Agent",
-    "Article",
-    "ChatbotAction",
-    "ArticleCollection",
-    "Chatbot",
-    "Chunk",
-    "Company",
-    "Contact",
-    "ContactEvent",
-    "Conversation",
-    "ConversationAnalysis",
-    "CreditLedger",
-    "ConversationTag",
-    "DataAttribute",
-    "Document",
-    "GapCluster",
-    "GapEvent",
-    "IntegrationConfig",
-    "KnowledgeBase",
-    "Message",
-    "PlanTier",
-    "RetrievalLog",
-    "Segment",
-    "Tag",
-    "Workspace",
-    "WorkspaceMembership",
-    "WorkspaceInvite",
-    "QAPair",
-    "BackgroundTaskLog",
-    "WebhookDelivery",
-]
+from app.models.audit_log import AuditLog  # noqa: F401
+from app.models.session import Session  # noqa: F401
+from app.models.background_job import BackgroundJob, CrawlPage  # noqa: F401

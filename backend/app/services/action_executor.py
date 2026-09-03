@@ -84,8 +84,8 @@ async def _execute_webhook(action: ChatbotAction, context: dict[str, Any]) -> st
             else:
                 r = await client.get(url, params={k: str(v) for k, v in payload.items()})
         return "ok" if r.is_success else f"error:{r.status_code}"
-    except Exception as exc:
-        logger.warning(f"Webhook action {action.id} failed: {exc}")
+    except Exception:
+        logger.warning("Webhook action %s failed", action.id, exc_info=True)
         return "error:request_failed"
 
 
@@ -109,8 +109,8 @@ async def _execute_slack(
         async with httpx.AsyncClient(timeout=10.0) as client:
             r = await client.post(webhook_url, json={"text": text})
         return "ok" if r.is_success else f"error:{r.status_code}"
-    except Exception as exc:
-        logger.warning(f"Slack action {action.id} failed: {exc}")
+    except Exception:
+        logger.warning("Slack action %s failed", action.id, exc_info=True)
         return "error:request_failed"
 
 
@@ -147,8 +147,8 @@ async def _execute_stripe_lookup(action: ChatbotAction, context: dict[str, Any],
         subs = stripe.Subscription.list(customer=customer.id, status="active", limit=1)
         plan = subs.data[0].items.data[0].price.nickname if subs.data else "none"
         return f"ok:plan={plan}"
-    except Exception as exc:
-        logger.warning(f"Stripe lookup failed: {exc}")
+    except Exception:
+        logger.warning("Stripe lookup failed", exc_info=True)
         return "error:stripe_api_failed"
 
 
@@ -186,8 +186,8 @@ async def _execute_salesforce_ticket(action: ChatbotAction, context: dict[str, A
             "SuppliedEmail": context.get("email", ""),
         })
         return "ok"
-    except Exception as exc:
-        logger.warning(f"Salesforce ticket creation failed: {exc}")
+    except Exception:
+        logger.warning("Salesforce ticket creation failed", exc_info=True)
         return "error:salesforce_api_failed"
 
 

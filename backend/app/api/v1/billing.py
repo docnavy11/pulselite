@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -185,8 +186,9 @@ async def create_checkout(
             db, workspace_id, body.plan, body.success_url, body.cancel_url, body.interval
         )
         return {"url": url}
-    except (ValueError, Exception) as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logging.getLogger("pulse.billing").warning("Checkout session creation failed: %s", e)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to create checkout session") from e
 
 
 @router.post("/workspaces/{workspace_id}/billing/portal")
@@ -201,8 +203,9 @@ async def create_portal(
     try:
         url = await billing_service.create_portal_session(db, workspace_id, body.return_url)
         return {"url": url}
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logging.getLogger("pulse.billing").warning("Portal session creation failed: %s", e)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to create billing portal session") from e
 
 
 @router.post("/billing/webhook")
@@ -255,7 +258,7 @@ async def get_credit_balance(
 async def get_credit_history(
     workspace_id: uuid.UUID = Depends(get_workspace),
     limit: int = Query(default=50, ge=1, le=200),
-    offset: int = Query(default=0, ge=0, le=100_000_000),
+    offset: int = Query(default=0, ge=0, le=10_000),
     db: AsyncSession = Depends(get_db),
     current_user: Agent = Depends(get_current_user),
     _cloud=Depends(require_cloud),

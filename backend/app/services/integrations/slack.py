@@ -82,8 +82,8 @@ async def send_escalation_alert(
 
         response = webhook.send(blocks=blocks)
         return response.status_code == 200
-    except Exception as e:
-        logger.error(f"Slack escalation alert failed: {e}")
+    except Exception:
+        logger.error("Slack escalation alert failed", exc_info=True)
         return False
 
 
@@ -121,6 +121,6 @@ async def send_weekly_digest(
 
         response = webhook.send(blocks=blocks)
         return response.status_code == 200
-    except Exception as e:
-        logger.error(f"Slack weekly digest failed: {e}")
+    except Exception:
+        logger.error("Slack weekly digest failed", exc_info=True)
         return False

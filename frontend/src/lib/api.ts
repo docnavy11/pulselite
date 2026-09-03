@@ -3,6 +3,8 @@ import { reconnectSocket } from "./socket";
 
 const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
+const DEFAULT_TIMEOUT_MS = 30_000;
+
 class ApiError extends Error {
   public detail: string;
 
@@ -96,11 +98,15 @@ class ApiClient {
 
     let response: Response;
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
       response = await fetch(url, {
         method,
         headers: this.getHeaders(),
         body: body ? JSON.stringify(body) : undefined,
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
     } catch (err) {
       // Network error — backend unreachable, CORS failure, DNS resolution failure, etc.
       const detail =
@@ -112,11 +118,15 @@ class ApiClient {
     if (response.status === 401) {
       const refreshed = await this.refreshToken();
       if (refreshed) {
+        const retryController = new AbortController();
+        const retryTimeoutId = setTimeout(() => retryController.abort(), DEFAULT_TIMEOUT_MS);
         const retryResponse = await fetch(url, {
           method,
           headers: this.getHeaders(),
           body: body ? JSON.stringify(body) : undefined,
+          signal: retryController.signal,
         });
+        clearTimeout(retryTimeoutId);
 
         if (!retryResponse.ok) {
           throw new ApiError(retryResponse.status, await retryResponse.text());
@@ -162,11 +172,15 @@ class ApiClient {
       headers["Authorization"] = `Bearer ${tokens.access_token}`;
     }
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS * 2); // 60s for file uploads
     const response = await fetch(url, {
       method: "POST",
       headers,
       body: formData,
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
 
     if (response.status === 401) {
       const refreshed = await this.refreshToken();
@@ -176,11 +190,15 @@ class ApiClient {
         if (retryTokens) {
           retryHeaders["Authorization"] = `Bearer ${retryTokens.access_token}`;
         }
+        const retryController = new AbortController();
+        const retryTimeoutId = setTimeout(() => retryController.abort(), DEFAULT_TIMEOUT_MS * 2);
         const retryResponse = await fetch(url, {
           method: "POST",
           headers: retryHeaders,
           body: formData,
+          signal: retryController.signal,
         });
+        clearTimeout(retryTimeoutId);
         if (!retryResponse.ok) {
           throw new ApiError(retryResponse.status, await retryResponse.text());
         }
