@@ -41,7 +41,7 @@ os.environ.setdefault("AI_API_KEY", "test-ai-key")
 os.environ.setdefault("AI_BASE_URL", "https://openrouter.ai/api/v1")
 
 # Import app AFTER env is set
-from app.main import create_app
+from app.main import app as fastapi_app
 from app.database import get_db
 
 
@@ -90,15 +90,19 @@ async def db(engine: AsyncEngine) -> AsyncGenerator[AsyncSession, None]:
 
 @pytest_asyncio.fixture
 async def app(db: AsyncSession):
-    """FastAPI app with get_db overridden to use the test session."""
-    application = create_app()
+    """The app, with get_db overridden to use the test session.
 
+    v2 builds the application at import time (app.main.app) instead of behind a
+    create_app() factory, so there is one instance to hand out rather than a
+    fresh one per test. The override is installed and cleared around each test,
+    which is what the fixture was actually for.
+    """
     async def override_get_db():
         yield db
 
-    application.dependency_overrides[get_db] = override_get_db
-    yield application
-    application.dependency_overrides.clear()
+    fastapi_app.dependency_overrides[get_db] = override_get_db
+    yield fastapi_app
+    fastapi_app.dependency_overrides.clear()
 
 
 # ── HTTP client ───────────────────────────────────────────────────────────────
