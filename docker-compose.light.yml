@@ -1,3 +1,8 @@
+# Pinned so the project name comes from here rather than from whatever the
+# checkout directory happens to be called. Renaming the folder would
+# otherwise create a fresh, empty pgdata volume and orphan this one.
+name: pulselite
+
 services:
   postgres:
     image: pgvector/pgvector:pg16
