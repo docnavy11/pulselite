@@ -1,4 +1,4 @@
-# Architecture Overhaul — Pulselight v2
+# Architecture Overhaul — Pulse Lite v2
 
 ## Executive summary
 
@@ -39,7 +39,7 @@ PostgreSQL + pgvector      →  keep     PostgreSQL + pgvector (the only databas
 ## 2. Project structure
 
 ```
-pulselight/
+pulselite/
 ├── backend/
 │   ├── app/
 │   │   ├── main.py                    # FastAPI app, middleware, static files, scheduler
@@ -406,7 +406,7 @@ The widget is already standalone JS embedded on customer sites. This doesn't cha
 ```
 Customer's site                        Your server
 ─────────────                          ───────────
-<script src="pulselight.js"/>   →   GET /widget/{id}/config (JSON)
+<script src="pulselite.js"/>   →   GET /widget/{id}/config (JSON)
 User types message              →   POST /api/chat (SSE stream)
                                        ├── RAG retrieval (pgvector + FTS + RRF)
                                        ├── LLM stream (OpenRouter/OpenAI/Anthropic)

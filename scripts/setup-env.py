@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Interactive .env setup wizard for PulseLight.
+Interactive .env setup wizard for Pulse Lite.
 
 Usage:
     python3 scripts/setup-env.py          # interactive setup
@@ -172,7 +172,7 @@ def write_env(values: dict[str, str]) -> None:
 
 def check_env() -> None:
     """Validate an existing .env file and report issues."""
-    header("PulseLight .env Check")
+    header("Pulse Lite .env Check")
 
     if not ENV_FILE.exists():
         err(".env file not found. Run: python3 scripts/setup-env.py")
@@ -262,7 +262,7 @@ AI_PROVIDERS = [
 
 
 def run_setup() -> None:
-    header("PulseLight Setup")
+    header("Pulse Lite Setup")
     print("This wizard will create your .env file.\n")
 
     # Load existing values if .env already exists
@@ -313,7 +313,7 @@ def run_setup() -> None:
 
     # ── Step 3: AI provider ──────────────────────────────────────────────
     step(3, total_steps, f"{BOLD}AI provider{RESET}")
-    info("PulseLight needs an OpenAI-compatible API for chatbots.\n")
+    info("Pulse Lite needs an OpenAI-compatible API for chatbots.\n")
 
     print("  Choose your AI provider:")
     for i, (key, label, url, _hint) in enumerate(AI_PROVIDERS):

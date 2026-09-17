@@ -1,6 +1,6 @@
 # Environment Variables Reference
 
-Complete reference for all PulseLight environment variables. See [`.env.example`](../.env.example) for a ready-to-copy template.
+Complete reference for all Pulse Lite environment variables. See [`.env.example`](../.env.example) for a ready-to-copy template.
 
 ## Required
 
@@ -44,7 +44,7 @@ The full Redis URL is constructed automatically as `redis://[:<password>@]<host>
 
 ## LLM / AI
 
-PulseLight uses any OpenAI-compatible API. Set these globally here, or configure per-workspace in **Settings > AI Models**.
+Pulse Lite uses any OpenAI-compatible API. Set these globally here, or configure per-workspace in **Settings > AI Models**.
 
 Fallback chain: workspace key (Settings > AI Models) -> `AI_API_KEY` env var -> chatbot won't work.
 

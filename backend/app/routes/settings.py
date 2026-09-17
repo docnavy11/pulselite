@@ -516,7 +516,7 @@ async def setup_2fa(request: Request, db: AsyncSession = Depends(get_db)):
     secret = pyotp.random_base32()
     user.totp_secret = secret
     await db.flush()
-    uri = pyotp.totp.TOTP(secret).provisioning_uri(name=user.email, issuer_name="PulseLight")
+    uri = pyotp.totp.TOTP(secret).provisioning_uri(name=user.email, issuer_name="Pulse Lite")
     return request.app.state.templates.TemplateResponse("settings/security.html", {
         "request": request, "twofa_enabled": False, "setup_uri": uri, "setup_secret": secret,
     })

@@ -247,7 +247,7 @@ On the dev server the checkout is at `/home/dev/projects/infra`.
 | How does deployment work here? | `README.md` — the `deploy.sh` + `infra/` + `dist/` convention |
 | How do I deploy, debug a 502, or restore? | `runbooks.md` |
 | Which domain does this serve, and from where? | `services.md` |
-| What is this project's state and known traps? | `projects/pulselight.md` |
+| What is this project's state and known traps? | `projects/pulselite.md` |
 | Where does everything live? | `architecture.md` |
 | What is backed up, and how do I restore it? | `backups.md` |
 | Known security gaps, and where secrets live | `security.md` |

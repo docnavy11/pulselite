@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Deploy — {{ chatbot.name }} — PulseLight{% endblock %}
+{% block title %}Deploy — {{ chatbot.name }} — Pulse Lite{% endblock %}
 {% block content %}
 <div class="mb-6">
     <a href="/chatbots/{{ chatbot.id }}" class="text-sm text-gray-500 hover:text-gray-700">&larr; {{ chatbot.name }}</a>
@@ -22,10 +22,10 @@
             <h3 class="text-sm font-semibold text-gray-900 mb-2">Embed on your website</h3>
             <p class="text-sm text-gray-500 mb-4">Paste this snippet before the closing <code class="bg-gray-100 px-1 rounded text-xs">&lt;/body&gt;</code> tag.</p>
             <div class="relative group">
-                <pre class="bg-gray-900 rounded-lg p-4 overflow-x-auto"><code class="text-sm text-green-400 font-mono">&lt;script src="{{ base_url }}/static/widget/pulselight.js"
+                <pre class="bg-gray-900 rounded-lg p-4 overflow-x-auto"><code class="text-sm text-green-400 font-mono">&lt;script src="{{ base_url }}/static/widget/pulselite.js"
   data-chatbot-id="{{ chatbot.id }}"&gt;&lt;/script&gt;</code></pre>
                 <button onclick="navigator.clipboard.writeText(this.dataset.code); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy',1500)"
-                        data-code='&lt;script src="{{ base_url }}/static/widget/pulselight.js" data-chatbot-id="{{ chatbot.id }}"&gt;&lt;/script&gt;'
+                        data-code='&lt;script src="{{ base_url }}/static/widget/pulselite.js" data-chatbot-id="{{ chatbot.id }}"&gt;&lt;/script&gt;'
                         class="absolute top-2 right-2 px-2.5 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity">
                     Copy
                 </button>

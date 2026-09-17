@@ -1,4 +1,4 @@
-"""PulseLight v2 — FastAPI app with Jinja2 + HTMX, no React/Celery/Redis."""
+"""Pulse Lite v2 — FastAPI app with Jinja2 + HTMX, no React/Celery/Redis."""
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -56,17 +56,17 @@ async def lifespan(app: FastAPI):
     # Register job handlers (import triggers @register_job decorators)
     import app.background.jobs  # noqa: F401
 
-    logger.info("PulseLight v2 started")
+    logger.info("Pulse Lite v2 started")
     yield
 
     # Shutdown
     stop_worker()
     from app.background.scheduler import scheduler
     scheduler.shutdown(wait=False)
-    logger.info("PulseLight v2 stopped")
+    logger.info("Pulse Lite v2 stopped")
 
 
-app = FastAPI(title="PulseLight", lifespan=lifespan, docs_url="/api/docs", redoc_url=None)
+app = FastAPI(title="Pulse Lite", lifespan=lifespan, docs_url="/api/docs", redoc_url=None)
 
 # Templates
 templates = Jinja2Templates(directory="app/templates")

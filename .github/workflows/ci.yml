@@ -208,11 +208,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build backend image
-        run: docker build -t pulselight-backend:ci -f backend/Dockerfile --target api backend/
+        run: docker build -t pulselite-backend:ci -f backend/Dockerfile --target api backend/
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: 'pulselight-backend:ci'
+          image-ref: 'pulselite-backend:ci'
           format: 'table'
           exit-code: '0'
           severity: 'CRITICAL,HIGH'

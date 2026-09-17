@@ -309,7 +309,7 @@ def get_llm_client(provider: str, api_key: str | None = None, base_url: str | No
 
 
 def get_internal_client() -> BaseLLMClient:
-    """Client for PulseLight's own LLM calls — autoconfig, gap analysis, judging.
+    """Client for Pulse Lite's own LLM calls — autoconfig, gap analysis, judging.
 
     Distinct from a workspace's chatbot provider, which the customer chooses and
     pays for. Defaults to the Agent SDK, which needs no key of its own.

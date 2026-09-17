@@ -1,4 +1,4 @@
-# PulseLight
+# Pulse Lite
 
 AI-powered website chatbot platform. Paste a URL, the system crawls it, auto-configures a chatbot, and gives you a `<script>` tag to embed. Primary KPI: **Autonomous Resolution Rate** — the AI resolves conversations; humans only see what it can't handle.
 
@@ -32,7 +32,7 @@ Open **http://localhost:3001** and log in with the admin credentials you set dur
 ## Architecture
 
 ```
-pulselight/
+pulselite/
 ├── backend/          FastAPI + SQLAlchemy (async) + Celery
 ├── frontend/         React 19 + Vite + react-router-dom + Zustand
 ├── widget/           Embeddable chat widget — vanilla TS, Shadow DOM (5.5kb gzipped)
@@ -79,7 +79,7 @@ make setup-check    # validate an existing .env file
 
 ### AI Provider
 
-PulseLight uses any **OpenAI-compatible API** (OpenRouter, OpenAI, Anthropic, Ollama, etc.). Configure via:
+Pulse Lite uses any **OpenAI-compatible API** (OpenRouter, OpenAI, Anthropic, Ollama, etc.). Configure via:
 
 1. **Environment** — Set `AI_API_KEY` + `AI_BASE_URL` in `.env` (applies to all workspaces)
 2. **UI** — Per-workspace in **Settings > AI Models** (overrides env)
@@ -216,7 +216,7 @@ Set `CLOUD_MODE=true` to enable SaaS features: Stripe billing, credit system, pl
 
 ## Troubleshooting
 
-PulseLight is designed to surface clear errors instead of failing silently. Here's what to check when things go wrong.
+Pulse Lite is designed to surface clear errors instead of failing silently. Here's what to check when things go wrong.
 
 ### Health Check
 

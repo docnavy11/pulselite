@@ -1,6 +1,6 @@
 # Reverse Proxy Configuration
 
-Example configurations for common reverse proxies. All examples assume PulseLight is running on the same host with default ports (backend on 8000, frontend on 3001).
+Example configurations for common reverse proxies. All examples assume Pulse Lite is running on the same host with default ports (backend on 8000, frontend on 3001).
 
 > **Important:** SSE (streaming chat) requires `proxy_buffering off` in Nginx. Socket.IO requires WebSocket upgrade headers. Both are included in the examples below.
 

@@ -68,7 +68,7 @@ app.post("/api/config/:service", (req, res) => {
   res.json(mockConfigs[service]);
 });
 
-// ── Webhook receiver (Pulselight sends here) ───────────────────────────────
+// ── Webhook receiver (Pulse Lite sends here) ───────────────────────────────
 app.all("/webhook", (req, res) => {
   const sig = req.headers["x-pulse-signature"] || null;
   const cfg = mockConfigs.generic;
@@ -238,7 +238,7 @@ app.all("*", (req, res) => {
 });
 
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`\n  🧪 Pulselight Test Server running on http://localhost:${PORT}\n`);
+  console.log(`\n  🧪 Pulse Lite Test Server running on http://localhost:${PORT}\n`);
   console.log("  Endpoints:");
   console.log("    Dashboard:    http://localhost:" + PORT + "/");
   console.log("    Webhook:      http://localhost:" + PORT + "/webhook");
