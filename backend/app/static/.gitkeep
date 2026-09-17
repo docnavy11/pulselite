@@ -1,0 +1,4 @@
+# Keeps this directory in git. app/main.py mounts app/static at import time, so
+# a checkout without it cannot even import the application - which is what
+# happened: the directories existed on the machine that wrote them and nowhere
+# else. The widget bundle that belongs in widget/ is not built yet.
