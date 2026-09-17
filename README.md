@@ -2,6 +2,34 @@
 
 AI-powered website chatbot platform. Paste a URL, the system crawls it, auto-configures a chatbot, and gives you a `<script>` tag to embed. Primary KPI: **Autonomous Resolution Rate** — the AI resolves conversations; humans only see what it can't handle.
 
+## Status — read this first
+
+**Mid-rewrite, and not production software.** `main` is the v2 HTMX rewrite
+described in [ARCHITECTURE.md](ARCHITECTURE.md): the React SPA, the JSON API
+layer and the Celery worker fleet were removed in favour of server-rendered
+Jinja2 with HTMX, asyncio background tasks and Postgres-as-queue — roughly 43K
+lines across 6 containers down to ~12K across 2.
+
+The test suite has not caught up with that. Measured on 2026-09-17:
+
+    230 passed · 245 failed · 8 skipped · 16 errors
+
+The failures are what the rewrite implies rather than surprises: ~130 are tests
+expecting a JSON body where the server now answers with a redirect to a rendered
+page, 17 parse HTML as JSON, and ~50 import `app.services.rag.*` modules the
+rewrite deleted. A further 8 files are marked skipped, each naming the module it
+needs rewriting against. Treat the suite as a to-do list, not as a signal that
+the application is broken.
+
+MIT licensed. Run it locally; nothing here has been hardened for the public
+internet.
+
+```bash
+cd backend
+POSTGRES_HOST=localhost POSTGRES_PORT=3055 pytest tests/     # from the host
+make test                                                    # or inside compose
+```
+
 ## Quick Start
 
 ```bash
@@ -306,3 +334,7 @@ Auth: JWT in `Authorization: Bearer <token>` header. Tokens obtained via `POST /
 ## License
 
 Proprietary. All rights reserved.
+
+## Licence
+
+MIT — see [LICENSE](LICENSE).

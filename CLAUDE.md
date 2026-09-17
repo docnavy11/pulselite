@@ -240,7 +240,7 @@ Key files:
 This project is covered by the infrastructure documentation in
 **[docnavy11/infra](https://github.com/docnavy11/infra)** (private). Read the
 relevant page before changing how this project is built, deployed or configured.
-On the dev server the checkout is at `/home/dev/projects/infra`.
+The infrastructure notes live in a separate, private repository.
 
 | Question | Document |
 |---|---|
@@ -265,7 +265,7 @@ On the dev server the checkout is at `/home/dev/projects/infra`.
   `service: http-0-<app-uuid>@docker` reference for Coolify apps. See
   `runbooks.md`.
 - **Directory names are not reliable.** `intools-ai` serves
-  `beteretools.linkflow.be`; `AI-readiness` serves `ai-eu-readiness.linkflow.be`;
+  `<internal host>`; `AI-readiness` serves `<internal host>`;
   `scraper` is the Video Knowledge Base. Confirm via `deploy.sh`, not the name.
 
 ### If reality does not match these docs, report it
@@ -282,7 +282,7 @@ route silently 502s for weeks, or how a token ends up in a world-readable file.
 Check this project against the documented conventions:
 
 ```bash
-/home/dev/projects/infra/check-project.sh
+<infra repo>/check-project.sh
 ```
 
 It validates version control, unpushed work, tracked secrets, the deploy

@@ -143,7 +143,7 @@
     </div>
     <div class="widget-config">
       <label>Paste shareable chat link or full URL</label>
-      <input type="text" id="widget-url" placeholder="http://dev.hetzner:3001/chat/a8dfa0e8-..." />
+      <input type="text" id="widget-url" placeholder="http://localhost:3001/chat/a8dfa0e8-..." />
       <button id="widget-load">Load</button>
     </div>
     <div class="widget-frame" id="widget-frame">
@@ -284,7 +284,7 @@ document.getElementById("widget-load").addEventListener("click", () => {
 
 // ── Connection parameters ─────────────────────────────────────────────────
 const DOCKER_HOST = "testserver:3055";   // from within Docker network
-const EXT_HOST = location.host;          // from browser (dev.hetzner:3055)
+const EXT_HOST = location.host;          // from browser (localhost:3055)
 
 const CONNECTIONS = [
   {

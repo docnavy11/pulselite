@@ -67,3 +67,10 @@ docs/superpowers/specs/.brainstorm/
 
 # Backups
 backups/
+
+# Uploaded documents. Two real files - a third-party insurance policy and a set
+# of meeting minutes naming real people - were committed here and had to be
+# purged from history before this repository could be public. Nothing a user
+# uploads belongs in git.
+backend/uploads/
+!backend/uploads/.gitkeep
