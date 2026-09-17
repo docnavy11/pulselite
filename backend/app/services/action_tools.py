@@ -5,6 +5,7 @@ Tool names encode the action UUID so we can look up the action after the LLM
 returns a tool call. Format: "pulse_<uuid_hex>" (no hyphens — OpenAI names
 must match [a-zA-Z0-9_-]{1,64}).
 """
+
 import uuid
 
 from app.models.actions import ChatbotAction
@@ -33,7 +34,7 @@ def build_tool_definitions(actions: list[ChatbotAction]) -> list[dict]:
         properties: dict = {}
         required: list[str] = []
 
-        for param in (action.parameters or []):
+        for param in action.parameters or []:
             pname = param.get("name", "")
             if not pname:
                 continue
@@ -44,16 +45,18 @@ def build_tool_definitions(actions: list[ChatbotAction]) -> list[dict]:
             if param.get("required", False):
                 required.append(pname)
 
-        tools.append({
-            "type": "function",
-            "function": {
-                "name": _tool_name(action.id),
-                "description": action.trigger_description,
-                "parameters": {
-                    "type": "object",
-                    "properties": properties,
-                    "required": required,
+        tools.append(
+            {
+                "type": "function",
+                "function": {
+                    "name": _tool_name(action.id),
+                    "description": action.trigger_description,
+                    "parameters": {
+                        "type": "object",
+                        "properties": properties,
+                        "required": required,
+                    },
                 },
-            },
-        })
+            }
+        )
     return tools

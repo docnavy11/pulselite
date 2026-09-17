@@ -1,4 +1,5 @@
 """Outbound webhook delivery service — uses background runner instead of Celery."""
+
 import hashlib
 import hmac
 import logging
@@ -8,31 +9,43 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.background.runner import enqueue
 from app.database import async_session_factory
 from app.models.organizational import WorkspaceWebhook
 from app.models.webhook_delivery import WebhookDelivery
-from app.background.runner import enqueue
 
 logger = logging.getLogger(__name__)
 
 
 async def fire_event(
-    workspace_id: uuid.UUID, event_type: str, payload: dict,
+    workspace_id: uuid.UUID,
+    event_type: str,
+    payload: dict,
     db_session: AsyncSession | None = None,
 ) -> None:
     pending_ids = []
 
     async def _inner(session):
         result = await session.execute(
-            select(WorkspaceWebhook).where(WorkspaceWebhook.workspace_id == workspace_id, WorkspaceWebhook.is_active == True)
+            select(WorkspaceWebhook).where(
+                WorkspaceWebhook.workspace_id == workspace_id, WorkspaceWebhook.is_active == True
+            )
         )
         hooks = result.scalars().all()
         for hook in hooks:
             if event_type not in (hook.event_types or []):
                 continue
             delivery = WebhookDelivery(
-                id=uuid.uuid4(), workspace_id=workspace_id, webhook_id=hook.id, event_type=event_type,
-                payload={"event": event_type, "workspace_id": str(workspace_id), "timestamp": datetime.now(timezone.utc).isoformat(), "data": payload},
+                id=uuid.uuid4(),
+                workspace_id=workspace_id,
+                webhook_id=hook.id,
+                event_type=event_type,
+                payload={
+                    "event": event_type,
+                    "workspace_id": str(workspace_id),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "data": payload,
+                },
                 status="pending",
             )
             session.add(delivery)
@@ -53,6 +66,7 @@ async def fire_event(
 async def _deliver_one(delivery_id: uuid.UUID):
     """Deliver a single webhook with retry logic."""
     import httpx
+
     from app.database import async_session_factory
 
     async with async_session_factory() as db:
@@ -67,6 +81,7 @@ async def _deliver_one(delivery_id: uuid.UUID):
         delivery, webhook = row
 
         import json
+
         body = json.dumps(delivery.payload, sort_keys=True, separators=(",", ":"))
         headers = {"Content-Type": "application/json"}
         if webhook.secret:

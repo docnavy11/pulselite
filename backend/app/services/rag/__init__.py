@@ -1,7 +1,8 @@
 """RAG pipeline — consolidates services/rag/ directory (7 files → 1)."""
+
+import json
 import logging
 import math
-import json
 import uuid
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
@@ -26,8 +27,13 @@ async def dense_search(db, workspace_id, knowledge_base_id, query_embedding, lim
     distance = Chunk.embedding.cosine_distance(query_embedding)
     result = await db.execute(
         select(Chunk, distance.label("distance"))
-        .where(Chunk.workspace_id == workspace_id, Chunk.knowledge_base_id == knowledge_base_id, Chunk.embedding.isnot(None))
-        .order_by(distance).limit(limit)
+        .where(
+            Chunk.workspace_id == workspace_id,
+            Chunk.knowledge_base_id == knowledge_base_id,
+            Chunk.embedding.isnot(None),
+        )
+        .order_by(distance)
+        .limit(limit)
     )
     return [(row[0], 1.0 - row[1]) for row in result.all()]
 
@@ -37,8 +43,13 @@ async def sparse_search(db, workspace_id, knowledge_base_id, query_text, limit=S
     rank = func.ts_rank_cd(Chunk.search_vector, ts_query)
     result = await db.execute(
         select(Chunk, rank.label("rank"))
-        .where(Chunk.workspace_id == workspace_id, Chunk.knowledge_base_id == knowledge_base_id, Chunk.search_vector.op("@@")(ts_query))
-        .order_by(rank.desc()).limit(limit)
+        .where(
+            Chunk.workspace_id == workspace_id,
+            Chunk.knowledge_base_id == knowledge_base_id,
+            Chunk.search_vector.op("@@")(ts_query),
+        )
+        .order_by(rank.desc())
+        .limit(limit)
     )
     return list(result.all())
 
@@ -65,6 +76,7 @@ def _reciprocal_rank_fusion(dense_results, sparse_results, top_k):
 
 async def _embed_query(query):
     from app.services.ingestion.embedder import _get_model
+
     model = _get_model()
     if model is None:
         return None
@@ -108,6 +120,7 @@ def rerank(query, chunks, top_k=None):
 
 # --- Confidence ---
 
+
 def compute_confidence(scored_chunks):
     if not scored_chunks:
         return 0.0, 0.0
@@ -126,8 +139,10 @@ ROLE_MAP = {"contact": "user", "agent": "assistant", "bot": "assistant", "system
 
 async def get_conversation_history(db, conversation_id, limit=10):
     result = await db.execute(
-        select(Message).where(Message.conversation_id == conversation_id, Message.message_type.in_(["incoming", "outgoing"]))
-        .order_by(Message.created_at.desc()).limit(limit)
+        select(Message)
+        .where(Message.conversation_id == conversation_id, Message.message_type.in_(["incoming", "outgoing"]))
+        .order_by(Message.created_at.desc())
+        .limit(limit)
     )
     messages = list(reversed(result.scalars().all()))
     return [{"role": ROLE_MAP.get(msg.author_type, "user"), "content": msg.content} for msg in messages if msg.content]
@@ -185,8 +200,9 @@ REFORMULATION_SYSTEM_PROMPT = (
 
 async def reformulate_queries(query, chatbot, openrouter_key=None, openrouter_base_url=None):
     try:
-        from app.services.llm import get_llm_client
         from app.services.encryption import decrypt_api_key
+        from app.services.llm import get_llm_client
+
         api_key = openrouter_key
         if api_key is None and chatbot.byoak:
             api_key = decrypt_api_key(chatbot.byoak)
@@ -194,7 +210,9 @@ async def reformulate_queries(query, chatbot, openrouter_key=None, openrouter_ba
         client = get_llm_client(provider, api_key=api_key, base_url=openrouter_base_url)
         response = await client.generate(
             messages=[{"role": "system", "content": REFORMULATION_SYSTEM_PROMPT}, {"role": "user", "content": query}],
-            model=chatbot.llm_model, temperature=0.7, max_tokens=200,
+            model=chatbot.llm_model,
+            temperature=0.7,
+            max_tokens=200,
         )
         data = json.loads(response)
         queries = data.get("queries", [])
@@ -206,9 +224,11 @@ async def reformulate_queries(query, chatbot, openrouter_key=None, openrouter_ba
 
 # --- Generator ---
 
+
 async def stream_response(messages, chatbot, openrouter_key=None, openrouter_base_url=None):
-    from app.services.llm import get_llm_client
     from app.services.encryption import decrypt_api_key
+    from app.services.llm import get_llm_client
+
     api_key = openrouter_key
     if api_key is None and chatbot.byoak:
         try:
@@ -217,11 +237,14 @@ async def stream_response(messages, chatbot, openrouter_key=None, openrouter_bas
             logger.warning("Failed to decrypt BYOK key for chatbot %s", chatbot.id)
     provider = "openrouter" if openrouter_key else chatbot.llm_provider
     client = get_llm_client(provider, api_key=api_key, base_url=openrouter_base_url)
-    async for item in client.stream_generate(messages=messages, model=chatbot.llm_model, temperature=chatbot.temperature, max_tokens=chatbot.max_tokens):
+    async for item in client.stream_generate(
+        messages=messages, model=chatbot.llm_model, temperature=chatbot.temperature, max_tokens=chatbot.max_tokens
+    ):
         yield item
 
 
 # --- RAG Engine (process_query) ---
+
 
 @dataclass
 class RAGResult:
@@ -236,8 +259,13 @@ class RAGResult:
 
 
 async def process_query(
-    db: AsyncSession, query: str, chatbot: Chatbot, conversation_id: uuid.UUID | None = None,
-    openrouter_key=None, openrouter_base_url=None, actions=None,
+    db: AsyncSession,
+    query: str,
+    chatbot: Chatbot,
+    conversation_id: uuid.UUID | None = None,
+    openrouter_key=None,
+    openrouter_base_url=None,
+    actions=None,
 ) -> AsyncGenerator[str | RAGResult | dict, None]:
     result = await db.execute(select(KnowledgeBase).where(KnowledgeBase.chatbot_id == chatbot.id).limit(1))
     kb = result.scalar_one_or_none()
@@ -251,7 +279,7 @@ async def process_query(
     if chatbot.use_reranking and candidates:
         scored_chunks = rerank(query, candidates, top_k=chatbot.retrieval_top_k)
     else:
-        scored_chunks = [(c, 0.5) for c in candidates[:chatbot.retrieval_top_k]]
+        scored_chunks = [(c, 0.5) for c in candidates[: chatbot.retrieval_top_k]]
 
     confidence_score, confidence_avg = compute_confidence(scored_chunks)
     escalated = should_escalate(confidence_score, chatbot.confidence_threshold)
@@ -276,7 +304,9 @@ async def process_query(
     retrieved_chunk_ids = [chunk.id for chunk, _ in scored_chunks]
 
     doc_ids = list({chunk.document_id for chunk, _ in scored_chunks})
-    docs_result = await db.execute(select(Document.id, Document.title, Document.source_url).where(Document.id.in_(doc_ids)))
+    docs_result = await db.execute(
+        select(Document.id, Document.title, Document.source_url).where(Document.id.in_(doc_ids))
+    )
     docs_by_id = {row[0]: {"title": row[1], "source_url": row[2]} for row in docs_result.all()}
 
     seen_docs = set()
@@ -285,13 +315,24 @@ async def process_query(
         if chunk.document_id not in seen_docs:
             doc_info = docs_by_id.get(chunk.document_id, {})
             if doc_info.get("source_url"):
-                sources.append({"index": len(sources) + 1, "title": doc_info.get("title") or f"Source {len(sources) + 1}", "url": doc_info["source_url"]})
+                sources.append(
+                    {
+                        "index": len(sources) + 1,
+                        "title": doc_info.get("title") or f"Source {len(sources) + 1}",
+                        "url": doc_info["source_url"],
+                    }
+                )
                 seen_docs.add(chunk.document_id)
 
     rag_result = RAGResult(
-        confidence_score=confidence_score, confidence_avg=confidence_avg, escalated=escalated,
-        retrieved_chunk_ids=retrieved_chunk_ids, query=query, sources=sources,
-        retried=bool(original_confidence_low and not escalated), original_confidence_low=original_confidence_low,
+        confidence_score=confidence_score,
+        confidence_avg=confidence_avg,
+        escalated=escalated,
+        retrieved_chunk_ids=retrieved_chunk_ids,
+        query=query,
+        sources=sources,
+        retried=bool(original_confidence_low and not escalated),
+        original_confidence_low=original_confidence_low,
     )
     yield rag_result
 
@@ -305,30 +346,52 @@ async def process_query(
 
     # Tool calling for actions with parameters
     if actions:
-        from app.services.action_tools import build_tool_definitions, action_id_for_tool_name
+        from app.services.action_executor import _get_workspace_slack_webhook, execute_action
         from app.services.action_service import get_action
-        from app.services.action_executor import execute_action, _get_workspace_slack_webhook
+        from app.services.action_tools import action_id_for_tool_name, build_tool_definitions
         from app.services.llm import get_llm_client as _get_client
+
         tools = build_tool_definitions(actions)
         if tools:
             provider = "openrouter" if openrouter_key else chatbot.llm_provider
             client = _get_client(provider, api_key=openrouter_key, base_url=openrouter_base_url)
-            tool_result = await client.generate_with_tools(messages=messages, model=chatbot.llm_model, tools=tools, temperature=0.0, max_tokens=200)
+            tool_result = await client.generate_with_tools(
+                messages=messages, model=chatbot.llm_model, tools=tools, temperature=0.0, max_tokens=200
+            )
             if tool_result["type"] == "tool_call":
                 action_id_str = action_id_for_tool_name(tool_result["tool_name"])
                 if action_id_str:
                     action = await get_action(db, uuid.UUID(action_id_str), chatbot.workspace_id)
                     if action:
                         slack_webhook = await _get_workspace_slack_webhook(db, chatbot.workspace_id)
-                        context = {"conversation_id": str(conversation_id) if conversation_id else "", "message": query, "response": "", **tool_result["arguments"]}
+                        context = {
+                            "conversation_id": str(conversation_id) if conversation_id else "",
+                            "message": query,
+                            "response": "",
+                            **tool_result["arguments"],
+                        }
                         status, client_payload = await execute_action(action, context, slack_webhook)
                         from app.models.actions import ActionEvent
-                        event = ActionEvent(id=uuid.uuid4(), workspace_id=chatbot.workspace_id, chatbot_id=chatbot.id, conversation_id=conversation_id, action_id=action.id, action_type=action.action_type, payload=context, status=status)
+
+                        event = ActionEvent(
+                            id=uuid.uuid4(),
+                            workspace_id=chatbot.workspace_id,
+                            chatbot_id=chatbot.id,
+                            conversation_id=conversation_id,
+                            action_id=action.id,
+                            action_type=action.action_type,
+                            payload=context,
+                            status=status,
+                        )
                         db.add(event)
                         await db.flush()
                         if client_payload:
                             yield client_payload
-                        messages.append({"role": "assistant", "content": f"Action '{action.name}' triggered successfully."})
+                        messages.append(
+                            {"role": "assistant", "content": f"Action '{action.name}' triggered successfully."}
+                        )
 
-    async for item in stream_response(messages, chatbot, openrouter_key=openrouter_key, openrouter_base_url=openrouter_base_url):
+    async for item in stream_response(
+        messages, chatbot, openrouter_key=openrouter_key, openrouter_base_url=openrouter_base_url
+    ):
         yield item

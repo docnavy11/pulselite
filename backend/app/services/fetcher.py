@@ -39,12 +39,14 @@ def _extract_theme_color(html: str) -> str | None:
     """Extract hex color from meta theme-color or --primary CSS variable."""
     m = re.search(
         r'<meta[^>]+name=["\']theme-color["\'][^>]+content=["\']([^"\']+)["\']',
-        html, re.IGNORECASE,
+        html,
+        re.IGNORECASE,
     )
     if not m:
         m = re.search(
             r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+name=["\']theme-color["\']',
-            html, re.IGNORECASE,
+            html,
+            re.IGNORECASE,
         )
     if m:
         color = m.group(1).strip()
@@ -74,7 +76,9 @@ async def _fetch_with_playwright(url: str) -> tuple[str, str]:
             await page.goto(url, timeout=30_000)
             await page.wait_for_load_state("networkidle", timeout=15_000)
             html = await page.content()
-            text = trafilatura.extract(html, include_comments=False, include_tables=True, output_format="markdown") or ""
+            text = (
+                trafilatura.extract(html, include_comments=False, include_tables=True, output_format="markdown") or ""
+            )
             return html, text
         finally:
             await browser.close()
@@ -98,14 +102,20 @@ async def fetch(url: str) -> FetchResult:
             status_code = response.status_code
             if response.status_code < 400:
                 html = response.text
-                text = trafilatura.extract(
-                    html, include_comments=False, include_tables=True, output_format="markdown"
-                ) or ""
+                text = (
+                    trafilatura.extract(html, include_comments=False, include_tables=True, output_format="markdown")
+                    or ""
+                )
     except Exception as exc:
         logger.warning("httpx fetch failed for %s: %s", url, exc)
         return FetchResult(
-            url=url, html="", text="", title=None,
-            theme_color=None, status_code=0, used_playwright=False,
+            url=url,
+            html="",
+            text="",
+            title=None,
+            theme_color=None,
+            status_code=0,
+            used_playwright=False,
         )
 
     used_playwright = False

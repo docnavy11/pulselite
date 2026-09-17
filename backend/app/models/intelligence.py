@@ -37,7 +37,9 @@ class GapEvent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     query: Mapped[str] = mapped_column(Text, nullable=False)
     confidence_score: Mapped[float] = mapped_column(Float, nullable=False)
-    gap_cluster_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("gap_clusters.id"), nullable=True)
+    gap_cluster_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("gap_clusters.id"), nullable=True
+    )
 
 
 class GapCluster(UUIDPrimaryKeyMixin, TimestampMixin, Base):

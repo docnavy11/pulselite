@@ -1,17 +1,18 @@
 """Conversation routes — two-panel layout with filters."""
+
 import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse
-from sqlalchemy import select, func
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models.conversations import Conversation, Message
-from app.models.knowledge import Chatbot
+from app.models.conversations import Conversation
 from app.models.intelligence import ConversationAnalysis
-from app.services.conversation_service import list_conversations, get_conversation, get_messages
+from app.models.knowledge import Chatbot
+from app.services.conversation_service import get_conversation, get_messages, list_conversations
 
 router = APIRouter()
 
@@ -33,14 +34,20 @@ async def conversation_list(
         date_from = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
 
     conversations = await list_conversations(
-        db, workspace.id, status_filter=status, chatbot_id=chatbot_id,
-        outcome_filter=outcome, date_from=date_from,
+        db,
+        workspace.id,
+        status_filter=status,
+        chatbot_id=chatbot_id,
+        outcome_filter=outcome,
+        date_from=date_from,
     )
 
     # Load chatbots for filter dropdown
-    chatbots = (await db.execute(
-        select(Chatbot).where(Chatbot.workspace_id == workspace.id, Chatbot.archived_at.is_(None))
-    )).scalars().all()
+    chatbots = (
+        (await db.execute(select(Chatbot).where(Chatbot.workspace_id == workspace.id, Chatbot.archived_at.is_(None))))
+        .scalars()
+        .all()
+    )
 
     # Load selected conversation detail
     selected_conv = None
@@ -57,16 +64,27 @@ async def conversation_list(
         except Exception:
             pass
 
-    return request.app.state.templates.TemplateResponse("conversations/list.html", {
-        "request": request, "conversations": conversations, "chatbots": chatbots,
-        "status_filter": status, "chatbot_filter": chatbot_id, "days_filter": days,
-        "selected": selected_conv, "messages": selected_messages, "analysis": selected_analysis,
-    })
+    return request.app.state.templates.TemplateResponse(
+        "conversations/list.html",
+        {
+            "request": request,
+            "conversations": conversations,
+            "chatbots": chatbots,
+            "status_filter": status,
+            "chatbot_filter": chatbot_id,
+            "days_filter": days,
+            "selected": selected_conv,
+            "messages": selected_messages,
+            "analysis": selected_analysis,
+        },
+    )
 
 
 @router.get("/conversations/{conversation_id}", response_class=HTMLResponse)
 async def conversation_detail(
-    request: Request, conversation_id: uuid.UUID, db: AsyncSession = Depends(get_db),
+    request: Request,
+    conversation_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
 ):
     workspace = request.state.workspace
     conversation = await get_conversation(db, conversation_id, workspace.id)
@@ -78,20 +96,33 @@ async def conversation_detail(
 
     # If HTMX request, return just the detail panel
     if request.headers.get("HX-Request"):
-        return request.app.state.templates.TemplateResponse("conversations/_detail.html", {
-            "request": request, "conversation": conversation, "messages": messages, "analysis": analysis,
-        })
+        return request.app.state.templates.TemplateResponse(
+            "conversations/_detail.html",
+            {
+                "request": request,
+                "conversation": conversation,
+                "messages": messages,
+                "analysis": analysis,
+            },
+        )
 
-    return request.app.state.templates.TemplateResponse("conversations/detail.html", {
-        "request": request, "conversation": conversation, "messages": messages, "analysis": analysis,
-    })
+    return request.app.state.templates.TemplateResponse(
+        "conversations/detail.html",
+        {
+            "request": request,
+            "conversation": conversation,
+            "messages": messages,
+            "analysis": analysis,
+        },
+    )
 
 
 @router.patch("/conversations/{conversation_id}/status", response_class=HTMLResponse)
 async def update_conversation_status(
-    request: Request, conversation_id: uuid.UUID, db: AsyncSession = Depends(get_db),
+    request: Request,
+    conversation_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
 ):
-    from fastapi import Form as FastapiForm
     workspace = request.state.workspace
     form = await request.form()
     new_status = form.get("status")

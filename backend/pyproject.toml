@@ -68,6 +68,21 @@ line-length = 120
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]
+ignore = [
+    # Long lines here are inline HTML fragments returned by HTMX endpoints.
+    # Splitting a class attribute across lines to satisfy a linter makes the
+    # markup harder to read, not easier.
+    "E501",
+    # SQLAlchemy filters are built with `Column == True`: `is True` cannot be
+    # overloaded, so the "fix" would stop generating SQL and start evaluating
+    # Python. Use `.is_(True)` if you want it gone for real.
+    "E712",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# main.py imports its routers after the app object exists, deliberately - that
+# is the shape of the application, not an accident of ordering.
+"app/main.py" = ["E402"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

@@ -1,4 +1,5 @@
 """Audit log routes."""
+
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy import select
@@ -12,7 +13,8 @@ router = APIRouter()
 
 @router.get("/settings/audit", response_class=HTMLResponse)
 async def audit_logs(
-    request: Request, action: str | None = Query(None),
+    request: Request,
+    action: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
 ):
     workspace = request.state.workspace
@@ -21,6 +23,11 @@ async def audit_logs(
         query = query.where(AuditLog.action == action)
     query = query.order_by(AuditLog.timestamp.desc()).limit(100)
     logs = (await db.execute(query)).scalars().all()
-    return request.app.state.templates.TemplateResponse("settings/audit.html", {
-        "request": request, "logs": logs, "action_filter": action,
-    })
+    return request.app.state.templates.TemplateResponse(
+        "settings/audit.html",
+        {
+            "request": request,
+            "logs": logs,
+            "action_filter": action,
+        },
+    )

@@ -3,6 +3,7 @@
 Subscribers connect via GET /events/stream. Background tasks push HTML
 fragments (or JSON) to all subscribers in a workspace via notify_workspace().
 """
+
 import asyncio
 import json
 import logging

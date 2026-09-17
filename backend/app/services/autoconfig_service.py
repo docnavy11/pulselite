@@ -25,9 +25,7 @@ async def run(
     workspace_id: uuid.UUID,
 ) -> Chatbot:
     # 1. Verify chatbot belongs to workspace
-    r = await db.execute(
-        select(Chatbot).where(Chatbot.id == chatbot_id, Chatbot.workspace_id == workspace_id)
-    )
+    r = await db.execute(select(Chatbot).where(Chatbot.id == chatbot_id, Chatbot.workspace_id == workspace_id))
     chatbot = r.scalar_one_or_none()
     if chatbot is None:
         raise ValueError("Chatbot not found")

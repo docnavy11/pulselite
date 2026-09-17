@@ -20,8 +20,9 @@ async def extract_from_dropbox(source_url: str, workspace_id: str, db) -> AsyncG
     Yields text chunks from supported file types.
     """
     from sqlalchemy import select
-    from app.models.integrations import IntegrationConfig
+
     from app.config import settings
+    from app.models.integrations import IntegrationConfig
 
     result = await db.execute(
         select(IntegrationConfig).where(

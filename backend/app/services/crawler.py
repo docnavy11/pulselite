@@ -18,6 +18,7 @@ class DiscoveredUrl:
     prefetched_text: str | None = field(default=None)
     prefetched_title: str | None = field(default=None)
 
+
 _MAX_CHILD_SITEMAPS = 20
 _MAX_DISCOVERED_URLS = 500
 
@@ -144,11 +145,13 @@ async def _discover_via_bfs(
             continue
 
         # Cache fetched content — avoids re-fetching (and re-launching Playwright) in Phase 2
-        found.append(DiscoveredUrl(
-            url=norm,
-            prefetched_text=result.text or None,
-            prefetched_title=result.title,
-        ))
+        found.append(
+            DiscoveredUrl(
+                url=norm,
+                prefetched_text=result.text or None,
+                prefetched_title=result.title,
+            )
+        )
 
         soup = BeautifulSoup(result.html, "html.parser")
         for tag in soup.find_all("a", href=True):
@@ -184,11 +187,7 @@ async def discover_urls(
     sitemap_urls = await _discover_via_sitemap(root_url, _inc, _exc)
     if sitemap_urls and len(sitemap_urls) >= 3:
         root_domain = urlparse(root_url).netloc
-        discovered = [
-            DiscoveredUrl(url=u)
-            for u in sitemap_urls
-            if _same_domain(u, root_domain)
-        ]
+        discovered = [DiscoveredUrl(url=u) for u in sitemap_urls if _same_domain(u, root_domain)]
     else:
         discovered = await _discover_via_bfs(root_url, include_paths=_inc, exclude_paths=_exc)
 

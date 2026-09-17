@@ -1,9 +1,7 @@
 from urllib.parse import urlparse
 
 import defusedxml.ElementTree as ET
-
 import httpx
-
 
 _SITEMAP_NS = "http://www.sitemaps.org/schemas/sitemap/0.9"
 

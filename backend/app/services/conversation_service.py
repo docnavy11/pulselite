@@ -124,14 +124,12 @@ async def list_conversations(
         query = query.where(Conversation.created_at < datetime.fromisoformat(date_to) + timedelta(days=1))
     if topic:
         from sqlalchemy import exists, literal
+
         from app.models.intelligence import ConversationAnalysis
 
-        topic_subq = (
-            select(literal(1))
-            .where(
-                ConversationAnalysis.conversation_id == Conversation.id,
-                ConversationAnalysis.topics.any(topic),
-            )
+        topic_subq = select(literal(1)).where(
+            ConversationAnalysis.conversation_id == Conversation.id,
+            ConversationAnalysis.topics.any(topic),
         )
         query = query.where(exists(topic_subq))
     query = query.order_by(Conversation.updated_at.desc()).limit(limit).offset(offset)
@@ -141,14 +139,16 @@ async def list_conversations(
     # Batch-load topics + last message preview
     if conversations:
         from sqlalchemy import func
+
         from app.models.intelligence import ConversationAnalysis
 
         conv_ids = [c.id for c in conversations]
 
         # Topics from analysis
         analysis_result = await db.execute(
-            select(ConversationAnalysis.conversation_id, ConversationAnalysis.topics)
-            .where(ConversationAnalysis.conversation_id.in_(conv_ids))
+            select(ConversationAnalysis.conversation_id, ConversationAnalysis.topics).where(
+                ConversationAnalysis.conversation_id.in_(conv_ids)
+            )
         )
         topics_map = {row[0]: row[1] for row in analysis_result.all()}
 

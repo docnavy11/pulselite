@@ -1,18 +1,18 @@
 """JSON-only API endpoints — for the widget, public chat, and Preact islands."""
+
 import json
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
 from app.database import get_db
-from app.models.knowledge import Chatbot
 from app.models.contacts import Contact
-from app.services.resolution import ResolutionEvent, handle_message
+from app.models.knowledge import Chatbot
+from app.services.resolution import handle_message
 
 router = APIRouter(prefix="/api")
 
@@ -24,9 +24,13 @@ async def widget_config(chatbot_id: uuid.UUID, db: AsyncSession = Depends(get_db
     if not chatbot:
         raise HTTPException(status_code=404, detail="Chatbot not found")
     return {
-        "chatbot_id": str(chatbot.id), "name": chatbot.name, "display_name": chatbot.display_name,
-        "welcome_message": chatbot.welcome_message, "suggested_questions": chatbot.suggested_questions or [],
-        "brand_color": chatbot.brand_color, "widget_config": chatbot.widget_config or {},
+        "chatbot_id": str(chatbot.id),
+        "name": chatbot.name,
+        "display_name": chatbot.display_name,
+        "welcome_message": chatbot.welcome_message,
+        "suggested_questions": chatbot.suggested_questions or [],
+        "brand_color": chatbot.brand_color,
+        "widget_config": chatbot.widget_config or {},
     }
 
 
@@ -59,19 +63,28 @@ async def public_chat(body: ChatRequest, request: Request, db: AsyncSession = De
 
     async def event_stream():
         async for event in handle_message(
-            db, chatbot.workspace_id, chatbot, body.message,
-            conversation_id=body.conversation_id, contact_id=contact_id,
+            db,
+            chatbot.workspace_id,
+            chatbot,
+            body.message,
+            conversation_id=body.conversation_id,
+            contact_id=contact_id,
         ):
             if event.type == "token":
                 yield {"event": "token", "data": event.data}
             elif event.type == "done":
-                yield {"event": "done", "data": json.dumps({
-                    "conversation_id": str(event.conversation_id) if event.conversation_id else None,
-                    "message_id": str(event.message_id) if event.message_id else None,
-                    "confidence_score": event.confidence_score,
-                    "escalated": event.escalated,
-                    "sources": event.sources or [],
-                })}
+                yield {
+                    "event": "done",
+                    "data": json.dumps(
+                        {
+                            "conversation_id": str(event.conversation_id) if event.conversation_id else None,
+                            "message_id": str(event.message_id) if event.message_id else None,
+                            "confidence_score": event.confidence_score,
+                            "escalated": event.escalated,
+                            "sources": event.sources or [],
+                        }
+                    ),
+                }
             elif event.type == "error":
                 yield {"event": "error", "data": event.data}
             elif event.type == "action":
@@ -83,6 +96,7 @@ async def public_chat(body: ChatRequest, request: Request, db: AsyncSession = De
 @router.get("/health")
 async def health(db: AsyncSession = Depends(get_db)):
     from sqlalchemy import text
+
     await db.execute(text("SELECT 1"))
     return {"status": "ok"}
 
@@ -90,4 +104,5 @@ async def health(db: AsyncSession = Depends(get_db)):
 @router.get("/config/deployment")
 async def deployment_config():
     from app.config import settings
+
     return {"cloud_mode": settings.CLOUD_MODE}

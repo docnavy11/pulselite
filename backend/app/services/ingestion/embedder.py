@@ -24,7 +24,5 @@ def _get_model() -> TextEmbedding:
 async def embed_chunks(texts: list[str]) -> list[list[float]]:
     """Embed texts using local ONNX model. Runs in thread to avoid blocking the event loop."""
     model = _get_model()
-    embeddings = await asyncio.to_thread(
-        lambda: [e.tolist() for e in model.embed(texts, batch_size=BATCH_SIZE)]
-    )
+    embeddings = await asyncio.to_thread(lambda: [e.tolist() for e in model.embed(texts, batch_size=BATCH_SIZE)])
     return embeddings

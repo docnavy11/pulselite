@@ -12,9 +12,10 @@ _tier_cache: dict = {}
 
 async def load_plan_tiers() -> None:
     """Load all plan tiers from DB into memory. Call once at app startup."""
+    from sqlalchemy import select
+
     from app.database import async_session_factory
     from app.models.plan_tier import PlanTier
-    from sqlalchemy import select
 
     async with async_session_factory() as session:
         result = await session.execute(select(PlanTier))

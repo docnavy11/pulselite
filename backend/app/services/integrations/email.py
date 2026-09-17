@@ -4,10 +4,9 @@ import uuid
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
+import resend
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-import resend
 
 from app.models.integrations import IntegrationConfig
 from app.services.encryption import decrypt_api_key

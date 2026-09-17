@@ -3,22 +3,24 @@
 Simplified: one function per step, dispatches by source_type internally.
 Extractors, chunkers, embedder remain in their own files.
 """
+
 import hashlib
 import logging
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import select, text as sa_text
+from sqlalchemy import select
+from sqlalchemy import text as sa_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.integrations import IntegrationConfig
 from app.models.knowledge import Document
+from app.realtime.events import notify_workspace
 from app.services.ingestion.chunkers.markdown_chunker import chunk_markdown
 from app.services.ingestion.chunkers.qa_chunker import chunk_qa
 from app.services.ingestion.chunkers.recursive_chunker import chunk_recursive
 from app.services.ingestion.embedder import embed_chunks
 from app.services.ingestion.vector_store import delete_by_document, insert_chunks
-from app.realtime.events import notify_workspace
 
 logger = logging.getLogger(__name__)
 
@@ -34,19 +36,32 @@ async def run_ingestion(db: AsyncSession, document_id: uuid.UUID) -> None:
     document.status = "processing"
     await db.flush()
 
-    await notify_workspace(str(document.workspace_id), "document:status_changed", {
-        "document_id": str(document.id), "knowledge_base_id": str(document.knowledge_base_id),
-        "status": "processing", "char_count": 0, "title": document.title or "", "error_message": None,
-    })
+    await notify_workspace(
+        str(document.workspace_id),
+        "document:status_changed",
+        {
+            "document_id": str(document.id),
+            "knowledge_base_id": str(document.knowledge_base_id),
+            "status": "processing",
+            "char_count": 0,
+            "title": document.title or "",
+            "error_message": None,
+        },
+    )
 
     steps = []
 
     def _record(step, status, t0, detail=None, error=None):
-        steps.append({
-            "step": step, "status": status, "started_at": t0.isoformat(),
-            "duration_ms": int((datetime.now(timezone.utc) - t0).total_seconds() * 1000),
-            "detail": detail, "error": error,
-        })
+        steps.append(
+            {
+                "step": step,
+                "status": status,
+                "started_at": t0.isoformat(),
+                "duration_ms": int((datetime.now(timezone.utc) - t0).total_seconds() * 1000),
+                "detail": detail,
+                "error": error,
+            }
+        )
 
     # Fan-out source types (sitemap, notion, google_drive, dropbox, salesforce, zendesk)
     if document.source_type in ("sitemap", "notion", "google_drive", "dropbox", "salesforce", "zendesk"):
@@ -88,10 +103,18 @@ async def run_ingestion(db: AsyncSession, document_id: uuid.UUID) -> None:
             document.char_count = 0
             document.ingestion_steps = steps
             await db.flush()
-            await notify_workspace(str(document.workspace_id), "document:status_changed", {
-                "document_id": str(document.id), "knowledge_base_id": str(document.knowledge_base_id),
-                "status": "skipped", "char_count": 0, "title": document.title or "", "error_message": "Character limit reached",
-            })
+            await notify_workspace(
+                str(document.workspace_id),
+                "document:status_changed",
+                {
+                    "document_id": str(document.id),
+                    "knowledge_base_id": str(document.knowledge_base_id),
+                    "status": "skipped",
+                    "char_count": 0,
+                    "title": document.title or "",
+                    "error_message": "Character limit reached",
+                },
+            )
             return
         _record("budget_check", "ok", t0, detail=f"{n} chars accepted")
         document.char_count = n
@@ -129,8 +152,14 @@ async def run_ingestion(db: AsyncSession, document_id: uuid.UUID) -> None:
     t0 = datetime.now(timezone.utc)
     try:
         await delete_by_document(db, document.id)
-        count = await insert_chunks(db, workspace_id=document.workspace_id, document_id=document.id,
-                                     knowledge_base_id=document.knowledge_base_id, chunks=chunks, embeddings=embeddings)
+        count = await insert_chunks(
+            db,
+            workspace_id=document.workspace_id,
+            document_id=document.id,
+            knowledge_base_id=document.knowledge_base_id,
+            chunks=chunks,
+            embeddings=embeddings,
+        )
         _record("index", "ok", t0, detail=f"{count} vectors stored")
     except Exception as exc:
         _record("index", "failed", t0, error=str(exc))
@@ -143,19 +172,27 @@ async def run_ingestion(db: AsyncSession, document_id: uuid.UUID) -> None:
     document.ingestion_steps = steps
     await db.flush()
 
-    await notify_workspace(str(document.workspace_id), "document:status_changed", {
-        "document_id": str(document.id), "knowledge_base_id": str(document.knowledge_base_id),
-        "status": "indexed", "char_count": document.char_count or 0, "title": document.title or "", "error_message": None,
-    })
+    await notify_workspace(
+        str(document.workspace_id),
+        "document:status_changed",
+        {
+            "document_id": str(document.id),
+            "knowledge_base_id": str(document.knowledge_base_id),
+            "status": "indexed",
+            "char_count": document.char_count or 0,
+            "title": document.title or "",
+            "error_message": None,
+        },
+    )
 
 
 async def _extract(db: AsyncSession, document: Document) -> str:
     """Extract text content from a document based on its source_type."""
+    from app.services.ingestion.extractors.csv_extractor import extract_from_csv
+    from app.services.ingestion.extractors.docx_extractor import extract_from_docx
+    from app.services.ingestion.extractors.pdf_extractor import extract_from_pdf
     from app.services.ingestion.extractors.text_extractor import extract_from_text
     from app.services.ingestion.extractors.url_extractor import extract_from_url
-    from app.services.ingestion.extractors.pdf_extractor import extract_from_pdf
-    from app.services.ingestion.extractors.docx_extractor import extract_from_docx
-    from app.services.ingestion.extractors.csv_extractor import extract_from_csv
 
     match document.source_type:
         case "url" | "sitemap":
@@ -192,8 +229,9 @@ def _chunk(document: Document, content: str) -> list[dict]:
 
 
 async def _check_budget(db: AsyncSession, document: Document, n: int) -> bool:
-    from app.services.plan_service import get_plan_limits
     from app.models.organizational import Workspace
+    from app.services.plan_service import get_plan_limits
+
     ws_result = await db.execute(select(Workspace).where(Workspace.id == document.workspace_id))
     workspace = ws_result.scalar_one()
     _limits = get_plan_limits(workspace.plan)
@@ -215,10 +253,18 @@ async def _mark_failed(db: AsyncSession, document: Document, error: str, steps: 
     document.error_message = error
     document.ingestion_steps = steps
     await db.commit()
-    await notify_workspace(str(document.workspace_id), "document:status_changed", {
-        "document_id": str(document.id), "knowledge_base_id": str(document.knowledge_base_id),
-        "status": "failed", "char_count": 0, "title": document.title or "", "error_message": error,
-    })
+    await notify_workspace(
+        str(document.workspace_id),
+        "document:status_changed",
+        {
+            "document_id": str(document.id),
+            "knowledge_base_id": str(document.knowledge_base_id),
+            "status": "failed",
+            "char_count": 0,
+            "title": document.title or "",
+            "error_message": error,
+        },
+    )
 
 
 async def _handle_fan_out_source(db: AsyncSession, document: Document, steps: list, _record):
@@ -229,6 +275,7 @@ async def _handle_fan_out_source(db: AsyncSession, document: Document, steps: li
 
     if document.source_type == "sitemap":
         from app.services.ingestion.extractors.sitemap_extractor import extract_urls_from_sitemap
+
         if not document.source_url:
             document.status = "failed"
             document.error_message = "source_url required for sitemap"
@@ -239,8 +286,15 @@ async def _handle_fan_out_source(db: AsyncSession, document: Document, steps: li
         _record("extract_sources", "ok", t0, detail=f"{len(urls)} sources discovered")
         children = []
         for url in urls:
-            child = Document(workspace_id=document.workspace_id, knowledge_base_id=document.knowledge_base_id,
-                             source_type="url", source_url=url, title=url, status="pending", sync_frequency=document.sync_frequency)
+            child = Document(
+                workspace_id=document.workspace_id,
+                knowledge_base_id=document.knowledge_base_id,
+                source_type="url",
+                source_url=url,
+                title=url,
+                status="pending",
+                sync_frequency=document.sync_frequency,
+            )
             db.add(child)
             children.append(child)
         await db.flush()
@@ -254,8 +308,9 @@ async def _handle_fan_out_source(db: AsyncSession, document: Document, steps: li
         return
 
     if document.source_type == "notion":
-        from app.services.ingestion.extractors.notion_extractor import extract_from_notion
         from app.config import settings
+        from app.services.ingestion.extractors.notion_extractor import extract_from_notion
+
         if not document.source_url:
             document.status = "failed"
             document.error_message = "source_url required for notion"
@@ -264,7 +319,8 @@ async def _handle_fan_out_source(db: AsyncSession, document: Document, steps: li
         notion_result = await db.execute(
             select(IntegrationConfig).where(
                 IntegrationConfig.workspace_id == document.workspace_id,
-                IntegrationConfig.integration_type == "notion", IntegrationConfig.is_active == True,
+                IntegrationConfig.integration_type == "notion",
+                IntegrationConfig.is_active == True,
             )
         )
         notion_integration = notion_result.scalar_one_or_none()
@@ -276,6 +332,7 @@ async def _handle_fan_out_source(db: AsyncSession, document: Document, steps: li
         access_token = notion_integration.config.get("access_token", "")
         if settings.FERNET_KEY and access_token:
             from cryptography.fernet import Fernet
+
             f = Fernet(settings.FERNET_KEY.encode())
             access_token = f.decrypt(access_token.encode()).decode()
         content = await extract_from_notion(document.source_url, access_token)
@@ -292,14 +349,20 @@ async def _handle_fan_out_source(db: AsyncSession, document: Document, steps: li
         }
         func_map = {"salesforce": "extract_from_salesforce", "zendesk": "extract_from_zendesk"}
         import importlib
+
         mod = importlib.import_module(extractor_map[document.source_type])
         extract_fn = getattr(mod, func_map[document.source_type])
         children = []
         async for article in extract_fn(document.source_url or "", str(document.workspace_id), db):
             child = Document(
-                workspace_id=document.workspace_id, knowledge_base_id=document.knowledge_base_id,
-                source_type="text", source_url=article.get("source_url"), title=article["title"],
-                raw_content=article["content"], status="pending", sync_frequency=document.sync_frequency,
+                workspace_id=document.workspace_id,
+                knowledge_base_id=document.knowledge_base_id,
+                source_type="text",
+                source_url=article.get("source_url"),
+                title=article["title"],
+                raw_content=article["content"],
+                status="pending",
+                sync_frequency=document.sync_frequency,
             )
             db.add(child)
             children.append(child)
@@ -316,6 +379,7 @@ async def _handle_fan_out_source(db: AsyncSession, document: Document, steps: li
 
     if document.source_type == "google_drive":
         from app.services.ingestion.extractors.google_drive_extractor import extract_from_google_drive
+
         if not document.source_url:
             document.status = "failed"
             document.error_message = "source_url required for google_drive"
@@ -328,6 +392,7 @@ async def _handle_fan_out_source(db: AsyncSession, document: Document, steps: li
 
     if document.source_type == "dropbox":
         from app.services.ingestion.extractors.dropbox_extractor import extract_from_dropbox
+
         parts = []
         async for chunk in extract_from_dropbox(document.source_url or "", str(document.workspace_id), db):
             parts.append(chunk)
@@ -357,8 +422,14 @@ async def _standard_ingest(db, document, content, steps, _record):
 
     t0 = datetime.now(timezone.utc)
     await delete_by_document(db, document.id)
-    count = await insert_chunks(db, workspace_id=document.workspace_id, document_id=document.id,
-                                 knowledge_base_id=document.knowledge_base_id, chunks=chunks, embeddings=embeddings)
+    count = await insert_chunks(
+        db,
+        workspace_id=document.workspace_id,
+        document_id=document.id,
+        knowledge_base_id=document.knowledge_base_id,
+        chunks=chunks,
+        embeddings=embeddings,
+    )
     _record("index", "ok", t0, detail=f"{count} vectors stored")
 
     document.status = "indexed"
@@ -370,6 +441,7 @@ async def _standard_ingest(db, document, content, steps, _record):
 async def _ingest_child(document_id: uuid.UUID):
     """Ingest a child document in a fresh session."""
     from app.database import async_session_factory
+
     async with async_session_factory() as db:
         await run_ingestion(db, document_id)
         await db.commit()

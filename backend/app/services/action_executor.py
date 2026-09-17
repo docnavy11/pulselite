@@ -5,6 +5,7 @@ Server-side types  (webhook, slack_message): make outbound HTTP calls.
 Client-side types  (collect_lead, custom_button, calendly, calcom, custom_tool): return
   payload dicts that will be sent as SSE "action" events to the widget.
 """
+
 import hashlib
 import hmac as hmac_lib
 import json
@@ -16,7 +17,7 @@ import httpx
 
 from app.models.actions import ActionEvent, ChatbotAction
 from app.services.encryption import decrypt_api_key
-from app.services.llm import get_internal_client, get_internal_model, get_llm_client
+from app.services.llm import get_internal_client, get_internal_model
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,6 @@ def compute_signature(secret: str, payload: dict) -> str:
     """Return hex SHA-256 HMAC of JSON-serialised payload."""
     body = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return hmac_lib.new(secret.encode(), body.encode(), hashlib.sha256).hexdigest()
-
 
 
 def build_client_payload(action: ChatbotAction) -> dict[str, Any]:
@@ -117,6 +117,7 @@ async def _execute_slack(
 async def _execute_stripe_lookup(action: ChatbotAction, context: dict[str, Any], db_session: Any) -> str:
     """Look up a Stripe customer by email and return subscription status."""
     from sqlalchemy import select
+
     from app.models.integrations import IntegrationConfig
 
     if db_session is None:
@@ -139,6 +140,7 @@ async def _execute_stripe_lookup(action: ChatbotAction, context: dict[str, Any],
 
     try:
         import stripe  # type: ignore[import]
+
         stripe.api_key = decrypt_api_key(integration.config["api_key"])
         customers = stripe.Customer.list(email=email, limit=1)
         if not customers.data:
@@ -155,6 +157,7 @@ async def _execute_stripe_lookup(action: ChatbotAction, context: dict[str, Any],
 async def _execute_salesforce_ticket(action: ChatbotAction, context: dict[str, Any], db_session: Any) -> str:
     """Create a Salesforce Case from the current conversation context."""
     from sqlalchemy import select
+
     from app.models.integrations import IntegrationConfig
 
     if db_session is None:
@@ -174,17 +177,20 @@ async def _execute_salesforce_ticket(action: ChatbotAction, context: dict[str, A
     cfg = integration.config
     try:
         from simple_salesforce import Salesforce  # type: ignore[import]
+
         sf = Salesforce(
             username=decrypt_api_key(cfg["username"]) if cfg.get("username") else None,
             password=decrypt_api_key(cfg["password"]) if cfg.get("password") else None,
             security_token=decrypt_api_key(cfg["security_token"]) if cfg.get("security_token") else None,
         )
-        sf.Case.create({
-            "Subject": f"Chat inquiry: {context.get('message', '')[:80]}",
-            "Description": context.get("message", ""),
-            "Origin": "Web",
-            "SuppliedEmail": context.get("email", ""),
-        })
+        sf.Case.create(
+            {
+                "Subject": f"Chat inquiry: {context.get('message', '')[:80]}",
+                "Description": context.get("message", ""),
+                "Origin": "Web",
+                "SuppliedEmail": context.get("email", ""),
+            }
+        )
         return "ok"
     except Exception:
         logger.warning("Salesforce ticket creation failed", exc_info=True)
@@ -229,6 +235,7 @@ async def execute_action(
 async def _get_workspace_slack_webhook(db_session, workspace_id: uuid.UUID) -> str | None:
     """Look up the workspace Slack integration webhook URL."""
     from sqlalchemy import select
+
     from app.models.integrations import IntegrationConfig
 
     result = await db_session.execute(

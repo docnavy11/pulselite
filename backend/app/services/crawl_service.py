@@ -9,18 +9,27 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.knowledge import Chatbot, CrawlJob, Document, KnowledgeBase
+from app.realtime.events import notify_workspace
 from app.services.crawler import DiscoveredUrl, discover_urls
 from app.services.fetcher import fetch
-from app.realtime.events import notify_workspace
 
 
 # Compatibility shims — old Redis state functions replaced by SSE push
 async def emit_to_workspace(workspace_id, event, data):
     await notify_workspace(workspace_id, event, data)
 
-async def write_chatbot_setup_state(*args, **kwargs): pass
-async def write_crawl_state(*args, **kwargs): pass
-async def clear_crawl_state(*args, **kwargs): pass
+
+async def write_chatbot_setup_state(*args, **kwargs):
+    pass
+
+
+async def write_crawl_state(*args, **kwargs):
+    pass
+
+
+async def clear_crawl_state(*args, **kwargs):
+    pass
+
 
 logger = logging.getLogger(__name__)
 
@@ -98,10 +107,14 @@ async def prepare_crawl(
     # Emit chatbot status change + persist state
     if chatbot_id is not None:
         await write_chatbot_setup_state(str(workspace_id), str(chatbot_id), "crawling")
-        await emit_to_workspace(str(workspace_id), "chatbot:status_changed", {
-            "chatbot_id": str(chatbot_id),
-            "setup_status": "crawling",
-        })
+        await emit_to_workspace(
+            str(workspace_id),
+            "chatbot:status_changed",
+            {
+                "chatbot_id": str(chatbot_id),
+                "setup_status": "crawling",
+            },
+        )
 
     return str(job.id), str(kb_id)
 
@@ -122,9 +135,7 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
     await db.refresh(job)
 
     # Resolve chatbot_id from KB (CrawlJob does not have chatbot_id)
-    _kb_result = await db.execute(
-        select(KnowledgeBase.chatbot_id).where(KnowledgeBase.id == job.kb_id)
-    )
+    _kb_result = await db.execute(select(KnowledgeBase.chatbot_id).where(KnowledgeBase.id == job.kb_id))
     _kb_row = _kb_result.one_or_none()
     _chatbot_id = str(_kb_row.chatbot_id) if _kb_row and _kb_row.chatbot_id else None
 
@@ -137,10 +148,14 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
         "status": "running",
     }
     await write_crawl_state(str(job.workspace_id), str(job.id), _crawl_state)
-    await emit_to_workspace(str(job.workspace_id), "crawl:progress", {
-        "job_id": str(job.id),
-        **_crawl_state,
-    })
+    await emit_to_workspace(
+        str(job.workspace_id),
+        "crawl:progress",
+        {
+            "job_id": str(job.id),
+            **_crawl_state,
+        },
+    )
 
     # Phase 1: discover URLs — wrap so any error is stored and surfaced immediately
     try:
@@ -157,34 +172,41 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
         job.completed_at = datetime.now(timezone.utc)
         await db.commit()
         await clear_crawl_state(str(job.workspace_id), str(job.id))
-        await emit_to_workspace(str(job.workspace_id), "crawl:completed", {
-            "job_id": str(job.id),
-            "chatbot_id": _chatbot_id,
-            "status": "failed",
-            "pages_queued": 0,
-            "pages_failed": 0,
-            "error_message": job.error_message,
-        })
+        await emit_to_workspace(
+            str(job.workspace_id),
+            "crawl:completed",
+            {
+                "job_id": str(job.id),
+                "chatbot_id": _chatbot_id,
+                "status": "failed",
+                "pages_queued": 0,
+                "pages_failed": 0,
+                "error_message": job.error_message,
+            },
+        )
         return
 
     if not urls:
         job.status = "failed"
         job.phase = None
         job.error_message = (
-            "No pages found on this site. "
-            "Check that the URL is correct and the site is publicly accessible."
+            "No pages found on this site. Check that the URL is correct and the site is publicly accessible."
         )
         job.completed_at = datetime.now(timezone.utc)
         await db.commit()
         await clear_crawl_state(str(job.workspace_id), str(job.id))
-        await emit_to_workspace(str(job.workspace_id), "crawl:completed", {
-            "job_id": str(job.id),
-            "chatbot_id": _chatbot_id,
-            "status": "failed",
-            "pages_queued": 0,
-            "pages_failed": 0,
-            "error_message": job.error_message,
-        })
+        await emit_to_workspace(
+            str(job.workspace_id),
+            "crawl:completed",
+            {
+                "job_id": str(job.id),
+                "chatbot_id": _chatbot_id,
+                "status": "failed",
+                "pages_queued": 0,
+                "pages_failed": 0,
+                "error_message": job.error_message,
+            },
+        )
         return
 
     job.pages_discovered = len(urls)
@@ -201,10 +223,14 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
         "status": "running",
     }
     await write_crawl_state(str(job.workspace_id), str(job.id), _crawl_state)
-    await emit_to_workspace(str(job.workspace_id), "crawl:progress", {
-        "job_id": str(job.id),
-        **_crawl_state,
-    })
+    await emit_to_workspace(
+        str(job.workspace_id),
+        "crawl:progress",
+        {
+            "job_id": str(job.id),
+            **_crawl_state,
+        },
+    )
 
     # Phase 2: fetch pages concurrently (with live DB progress updates).
     # AsyncSession is not concurrency-safe, so fetches run concurrently but
@@ -244,12 +270,18 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
                     wait = min(5 * (2**attempt), 60)
                     logger.warning(
                         "Rate limited on %s, retrying in %ds (attempt %d/%d)",
-                        page_url, wait, attempt + 1, _MAX_RETRIES,
+                        page_url,
+                        wait,
+                        attempt + 1,
+                        _MAX_RETRIES,
                     )
                     await asyncio.sleep(wait)
                     continue
                 return _FetchResult(
-                    url=page_url, text="", title="", failed=True,
+                    url=page_url,
+                    text="",
+                    title="",
+                    failed=True,
                     error="HTTP 429 (rate limited, max retries exceeded)",
                 )
 
@@ -264,6 +296,7 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
 
     # Write to DB as each fetch completes — gives live pages_queued progress
     import time as _time
+
     _last_progress_emit = 0.0
     doc_ids: list[str] = []
     fetch_tasks = [asyncio.create_task(_fetch(d)) for d in urls]
@@ -284,9 +317,7 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
                 db.add(failed_doc)
                 await db.flush()
                 await db.execute(
-                    update(CrawlJob)
-                    .where(CrawlJob.id == job_id)
-                    .values(pages_failed=CrawlJob.pages_failed + 1)
+                    update(CrawlJob).where(CrawlJob.id == job_id).values(pages_failed=CrawlJob.pages_failed + 1)
                 )
                 await db.commit()
                 await db.refresh(job)
@@ -304,10 +335,14 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
                         "status": "running",
                     }
                     await write_crawl_state(str(job.workspace_id), str(job.id), _crawl_state)
-                    await emit_to_workspace(str(job.workspace_id), "crawl:progress", {
-                        "job_id": str(job.id),
-                        **_crawl_state,
-                    })
+                    await emit_to_workspace(
+                        str(job.workspace_id),
+                        "crawl:progress",
+                        {
+                            "job_id": str(job.id),
+                            **_crawl_state,
+                        },
+                    )
                 continue
 
             doc = Document(
@@ -323,9 +358,7 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
             await db.flush()
             doc_ids.append(str(doc.id))
             await db.execute(
-                update(CrawlJob)
-                .where(CrawlJob.id == job_id)
-                .values(pages_queued=CrawlJob.pages_queued + 1)
+                update(CrawlJob).where(CrawlJob.id == job_id).values(pages_queued=CrawlJob.pages_queued + 1)
             )
             await db.commit()
             await db.refresh(job)
@@ -343,10 +376,14 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
                     "status": "running",
                 }
                 await write_crawl_state(str(job.workspace_id), str(job.id), _crawl_state)
-                await emit_to_workspace(str(job.workspace_id), "crawl:progress", {
-                    "job_id": str(job.id),
-                    **_crawl_state,
-                })
+                await emit_to_workspace(
+                    str(job.workspace_id),
+                    "crawl:progress",
+                    {
+                        "job_id": str(job.id),
+                        **_crawl_state,
+                    },
+                )
     except Exception:
         for task in fetch_tasks:
             task.cancel()
@@ -356,21 +393,22 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
     if not doc_ids and job.pages_failed == len(urls):
         job.status = "failed"
         job.phase = None
-        job.error_message = (
-            "All pages failed to fetch. "
-            "The site may be blocking crawlers or requiring authentication."
-        )
+        job.error_message = "All pages failed to fetch. The site may be blocking crawlers or requiring authentication."
         job.completed_at = datetime.now(timezone.utc)
         await db.commit()
         await clear_crawl_state(str(job.workspace_id), str(job.id))
-        await emit_to_workspace(str(job.workspace_id), "crawl:completed", {
-            "job_id": str(job.id),
-            "chatbot_id": _chatbot_id,
-            "status": "failed",
-            "pages_queued": 0,
-            "pages_failed": len(urls),
-            "error_message": job.error_message,
-        })
+        await emit_to_workspace(
+            str(job.workspace_id),
+            "crawl:completed",
+            {
+                "job_id": str(job.id),
+                "chatbot_id": _chatbot_id,
+                "status": "failed",
+                "pages_queued": 0,
+                "pages_failed": len(urls),
+                "error_message": job.error_message,
+            },
+        )
         return
 
     # Fire ingest tasks — all docs committed, workers can read them
@@ -384,11 +422,15 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
     await db.commit()
 
     await clear_crawl_state(str(job.workspace_id), str(job.id))
-    await emit_to_workspace(str(job.workspace_id), "crawl:completed", {
-        "job_id": str(job.id),
-        "chatbot_id": _chatbot_id,
-        "status": "completed",
-        "pages_queued": len(doc_ids),
-        "pages_failed": job.pages_failed,
-        "error_message": None,
-    })
+    await emit_to_workspace(
+        str(job.workspace_id),
+        "crawl:completed",
+        {
+            "job_id": str(job.id),
+            "chatbot_id": _chatbot_id,
+            "status": "completed",
+            "pages_queued": len(doc_ids),
+            "pages_failed": job.pages_failed,
+            "error_message": None,
+        },
+    )

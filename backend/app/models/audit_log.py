@@ -1,4 +1,3 @@
-
 from sqlalchemy import Column, DateTime, ForeignKey, String, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
@@ -9,7 +8,9 @@ class AuditLog(UUIDPrimaryKeyMixin, Base):
     __tablename__ = "audit_logs"
 
     timestamp = Column(DateTime(timezone=True), server_default=text("NOW()"), nullable=False, index=True)
-    workspace_id = Column(UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True, index=True)
+    workspace_id = Column(
+        UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True, index=True
+    )
     user_id = Column(UUID(as_uuid=True), ForeignKey("agents.id", ondelete="SET NULL"), nullable=True)
     user_email = Column(String(255), nullable=True)
     action = Column(String(100), nullable=False, index=True)

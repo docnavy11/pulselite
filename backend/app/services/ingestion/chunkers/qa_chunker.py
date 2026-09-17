@@ -22,11 +22,13 @@ def chunk_qa(text: str) -> list[dict]:
         # If adding this pair would exceed target and we already have content, flush
         if current_tokens + pair_tokens > TARGET_TOKENS and current_parts:
             content = "\n\n".join(current_parts)
-            chunks.append({
-                "content": content,
-                "heading_path": None,
-                "token_count": len(encoding.encode(content)),
-            })
+            chunks.append(
+                {
+                    "content": content,
+                    "heading_path": None,
+                    "token_count": len(encoding.encode(content)),
+                }
+            )
             current_parts = []
             current_tokens = 0
 
@@ -36,11 +38,13 @@ def chunk_qa(text: str) -> list[dict]:
     # Flush remaining
     if current_parts:
         content = "\n\n".join(current_parts)
-        chunks.append({
-            "content": content,
-            "heading_path": None,
-            "token_count": len(encoding.encode(content)),
-        })
+        chunks.append(
+            {
+                "content": content,
+                "heading_path": None,
+                "token_count": len(encoding.encode(content)),
+            }
+        )
 
     return chunks
 

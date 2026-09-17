@@ -62,8 +62,7 @@ def validate_url_not_private(url: str) -> None:
         ip_str = sockaddr[0]
         if _is_private_ip(ip_str):
             raise ValueError(
-                f"URL resolves to a private/reserved IP address ({ip_str}); "
-                f"request blocked to prevent SSRF"
+                f"URL resolves to a private/reserved IP address ({ip_str}); request blocked to prevent SSRF"
             )
 
 

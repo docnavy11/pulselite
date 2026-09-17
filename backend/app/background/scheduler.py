@@ -3,6 +3,7 @@
 Uses APScheduler's AsyncIOScheduler for cron-style recurring tasks.
 Each job is a thin wrapper that submits work to the Postgres job queue.
 """
+
 import logging
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler

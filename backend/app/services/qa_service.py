@@ -1,4 +1,8 @@
 import uuid
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # the real import stays inside the function, to avoid a cycle
+    from app.models.knowledge import Document
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
@@ -51,9 +55,7 @@ async def list_qa_pairs(
 
 
 async def get_qa_pair(db: AsyncSession, workspace_id: uuid.UUID, qa_pair_id: uuid.UUID) -> QAPair:
-    result = await db.execute(
-        select(QAPair).where(QAPair.id == qa_pair_id, QAPair.workspace_id == workspace_id)
-    )
+    result = await db.execute(select(QAPair).where(QAPair.id == qa_pair_id, QAPair.workspace_id == workspace_id))
     pair = result.scalar_one_or_none()
     if pair is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="QA pair not found")
@@ -94,9 +96,7 @@ async def get_testable_pair_ids(db: AsyncSession, chatbot_id: uuid.UUID) -> list
     return [row[0] for row in result.all()]
 
 
-async def reset_pairs_for_retest(
-    db: AsyncSession, chatbot_id: uuid.UUID, pair_ids: list[uuid.UUID]
-) -> None:
+async def reset_pairs_for_retest(db: AsyncSession, chatbot_id: uuid.UUID, pair_ids: list[uuid.UUID]) -> None:
     """Reset pairs to testing state for batch re-test."""
     from sqlalchemy import update
 
@@ -130,9 +130,7 @@ async def has_pending_pairs(db: AsyncSession, chatbot_id: uuid.UUID) -> bool:
 
 async def count_qa_pairs(db: AsyncSession, chatbot_id: uuid.UUID) -> int:
     result = await db.execute(
-        select(func.count()).select_from(
-            select(QAPair.id).where(QAPair.chatbot_id == chatbot_id).subquery()
-        )
+        select(func.count()).select_from(select(QAPair.id).where(QAPair.chatbot_id == chatbot_id).subquery())
     )
     return result.scalar() or 0
 
@@ -146,9 +144,7 @@ async def add_qa_to_kb(
     from app.models.knowledge import Document, KnowledgeBase
 
     # Find the chatbot's primary KB
-    result = await db.execute(
-        select(KnowledgeBase).where(KnowledgeBase.chatbot_id == chatbot_id).limit(1)
-    )
+    result = await db.execute(select(KnowledgeBase).where(KnowledgeBase.chatbot_id == chatbot_id).limit(1))
     kb = result.scalar_one_or_none()
     if kb is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Chatbot has no knowledge base")
@@ -166,8 +162,10 @@ async def add_qa_to_kb(
     pair.kb_document_id = doc.id
     await db.commit()
 
-    from app.background.runner import submit_job
     import asyncio
+
+    from app.background.runner import submit_job
+
     asyncio.ensure_future(submit_job("ingest_document", {"document_id": str(doc.id)}))
 
     return doc

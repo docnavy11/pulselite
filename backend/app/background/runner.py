@@ -4,10 +4,10 @@ Two-tier system:
 - enqueue(): fire-and-forget asyncio tasks for quick, non-critical work
 - run_job_worker(): Postgres-backed queue for crash-resilient long-running jobs
 """
+
 import asyncio
 import logging
 import uuid
-from datetime import datetime, timezone
 
 from sqlalchemy import text
 
@@ -41,9 +41,11 @@ _worker_task: asyncio.Task | None = None
 
 def register_job(job_type: str):
     """Decorator to register an async function as a job handler."""
+
     def decorator(func):
         JOB_HANDLERS[job_type] = func
         return func
+
     return decorator
 
 
@@ -55,15 +57,18 @@ async def submit_job(
     """Insert a job into the background_jobs table. Returns the job ID."""
     job_id = uuid.uuid4()
     async with async_session_factory() as db:
-        await db.execute(text("""
+        await db.execute(
+            text("""
             INSERT INTO background_jobs (id, job_type, payload, max_retries)
             VALUES (:id, :job_type, CAST(:payload AS jsonb), :max_retries)
-        """), {
-            "id": job_id,
-            "job_type": job_type,
-            "payload": __import__("json").dumps(payload or {}),
-            "max_retries": max_retries,
-        })
+        """),
+            {
+                "id": job_id,
+                "job_type": job_type,
+                "payload": __import__("json").dumps(payload or {}),
+                "max_retries": max_retries,
+            },
+        )
         await db.commit()
     return job_id
 
@@ -71,7 +76,8 @@ async def submit_job(
 async def _process_one_job() -> bool:
     """Try to claim and process one pending job. Returns True if a job was processed."""
     async with async_session_factory() as db:
-        result = await db.execute(text("""
+        result = await db.execute(
+            text("""
             UPDATE background_jobs SET status='running', started_at=now()
             WHERE id = (
                 SELECT id FROM background_jobs
@@ -81,7 +87,8 @@ async def _process_one_job() -> bool:
                 LIMIT 1
             )
             RETURNING id, job_type, payload, attempts, max_retries
-        """))
+        """)
+        )
         row = result.fetchone()
         if not row:
             return False
@@ -116,17 +123,23 @@ async def _mark_job(
 ):
     async with async_session_factory() as db:
         if status in ("completed", "failed"):
-            await db.execute(text("""
+            await db.execute(
+                text("""
                 UPDATE background_jobs
                 SET status=:status, completed_at=now(), error=:error
                 WHERE id=:id
-            """), {"id": job_id, "status": status, "error": error})
+            """),
+                {"id": job_id, "status": status, "error": error},
+            )
         elif attempts is not None:
-            await db.execute(text("""
+            await db.execute(
+                text("""
                 UPDATE background_jobs
                 SET status=:status, attempts=:attempts, error=:error
                 WHERE id=:id
-            """), {"id": job_id, "status": status, "attempts": attempts, "error": error})
+            """),
+                {"id": job_id, "status": status, "attempts": attempts, "error": error},
+            )
         await db.commit()
 
 

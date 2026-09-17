@@ -6,9 +6,9 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.conversations import Conversation, Message
-from app.models.knowledge import Chatbot, KnowledgeBase, Document
 from app.models.actions import ChatbotAction
+from app.models.conversations import Conversation, Message
+from app.models.knowledge import Chatbot, Document, KnowledgeBase
 
 
 async def execute_tool(
@@ -54,9 +54,7 @@ async def execute_tool(
 
 
 async def _fetch_chatbots(db: AsyncSession, workspace_id: uuid.UUID) -> list:
-    result = await db.execute(
-        select(Chatbot).where(Chatbot.workspace_id == workspace_id)
-    )
+    result = await db.execute(select(Chatbot).where(Chatbot.workspace_id == workspace_id))
     bots = result.scalars().all()
     return [
         {
@@ -107,9 +105,7 @@ async def _fetch_conversations(
 ) -> list:
     # Conversations belong to workspace directly (workspace_id column exists)
     stmt = (
-        select(Conversation)
-        .where(Conversation.workspace_id == workspace_id)
-        .order_by(Conversation.created_at.desc())
+        select(Conversation).where(Conversation.workspace_id == workspace_id).order_by(Conversation.created_at.desc())
     )
     if filters.get("escalated"):
         # Escalated conversations have status="escalated" or escalation_reason set
@@ -132,12 +128,9 @@ async def _fetch_conversations(
     ]
 
 
-async def _fetch_conversation(
-    db: AsyncSession, workspace_id: uuid.UUID, conversation_id: str
-) -> dict:
+async def _fetch_conversation(db: AsyncSession, workspace_id: uuid.UUID, conversation_id: str) -> dict:
     result = await db.execute(
-        select(Conversation)
-        .where(
+        select(Conversation).where(
             Conversation.id == uuid.UUID(conversation_id),
             Conversation.workspace_id == workspace_id,
         )
@@ -147,9 +140,7 @@ async def _fetch_conversation(
         return {"error": "Conversation not found"}
 
     msg_result = await db.execute(
-        select(Message)
-        .where(Message.conversation_id == conv.id)
-        .order_by(Message.created_at)
+        select(Message).where(Message.conversation_id == conv.id).order_by(Message.created_at)
     )
     msgs = msg_result.scalars().all()
     return {
@@ -160,7 +151,7 @@ async def _fetch_conversation(
         "created_at": conv.created_at.isoformat() if conv.created_at else None,
         "messages": [
             {
-                "author_type": m.author_type,   # "user" | "bot" | "agent"
+                "author_type": m.author_type,  # "user" | "bot" | "agent"
                 "content": m.content,
                 "created_at": m.created_at.isoformat() if m.created_at else None,
             }
@@ -176,8 +167,7 @@ async def _fetch_metrics(db: AsyncSession, workspace_id: uuid.UUID, period: str)
     from sqlalchemy import func
 
     total_result = await db.execute(
-        select(func.count(Conversation.id))
-        .where(
+        select(func.count(Conversation.id)).where(
             Conversation.workspace_id == workspace_id,
             Conversation.created_at >= since,
         )
@@ -185,8 +175,7 @@ async def _fetch_metrics(db: AsyncSession, workspace_id: uuid.UUID, period: str)
     total = total_result.scalar() or 0
 
     escalated_result = await db.execute(
-        select(func.count(Conversation.id))
-        .where(
+        select(func.count(Conversation.id)).where(
             Conversation.workspace_id == workspace_id,
             Conversation.created_at >= since,
             Conversation.escalation_reason.isnot(None),
@@ -203,8 +192,8 @@ async def _fetch_metrics(db: AsyncSession, workspace_id: uuid.UUID, period: str)
 
 
 async def _fetch_credits(db: AsyncSession, workspace_id: uuid.UUID) -> dict:
-    from app.services.credits import get_balance
     from app.models.organizational import Workspace
+    from app.services.credits import get_balance
 
     balance = await get_balance(db, workspace_id)
     ws_result = await db.execute(select(Workspace).where(Workspace.id == workspace_id))
@@ -217,8 +206,7 @@ async def _fetch_credits(db: AsyncSession, workspace_id: uuid.UUID) -> dict:
 
 async def _fetch_documents(db: AsyncSession, workspace_id: uuid.UUID, chatbot_id: str) -> list:
     kb_result = await db.execute(
-        select(KnowledgeBase)
-        .where(
+        select(KnowledgeBase).where(
             KnowledgeBase.workspace_id == workspace_id,
             KnowledgeBase.chatbot_id == uuid.UUID(chatbot_id),
         )
@@ -227,9 +215,7 @@ async def _fetch_documents(db: AsyncSession, workspace_id: uuid.UUID, chatbot_id
     if not kb:
         return []
 
-    doc_result = await db.execute(
-        select(Document).where(Document.knowledge_base_id == kb.id).limit(50)
-    )
+    doc_result = await db.execute(select(Document).where(Document.knowledge_base_id == kb.id).limit(50))
     docs = doc_result.scalars().all()
     return [
         {
@@ -281,9 +267,18 @@ async def _update_chatbot(
         return {"error": "Chatbot not found"}
 
     allowed = {
-        "name", "display_name", "system_prompt", "tone", "welcome_message",
-        "fallback_message", "confidence_threshold", "temperature", "llm_model",
-        "is_active", "use_reranking", "use_hybrid_retrieval",
+        "name",
+        "display_name",
+        "system_prompt",
+        "tone",
+        "welcome_message",
+        "fallback_message",
+        "confidence_threshold",
+        "temperature",
+        "llm_model",
+        "is_active",
+        "use_reranking",
+        "use_hybrid_retrieval",
     }
     for key, value in fields.items():
         if key in allowed:
@@ -293,27 +288,23 @@ async def _update_chatbot(
     return {"ok": True, "chatbot_id": chatbot_id, "updated": [k for k in fields.keys() if k in allowed]}
 
 
-async def _create_chatbot(
-    db: AsyncSession, workspace_id: uuid.UUID, name: str, url: str | None
-) -> dict:
+async def _create_chatbot(db: AsyncSession, workspace_id: uuid.UUID, name: str, url: str | None) -> dict:
     from app.services.chatbot_service import create_chatbot as svc_create
+
     bot = await svc_create(db, workspace_id, name=name)
     await db.commit()
     result: dict = {"ok": True, "chatbot_id": str(bot.id), "name": bot.name}
     if url:
-        from app.services.crawl_service import prepare_crawl
         from app.background.runner import submit_job
-        job_id, _kb_id = await prepare_crawl(
-            db, workspace_id, url, chatbot_id=bot.id
-        )
+        from app.services.crawl_service import prepare_crawl
+
+        job_id, _kb_id = await prepare_crawl(db, workspace_id, url, chatbot_id=bot.id)
         await submit_job("crawl_website", {"job_id": job_id})
         result["crawl_job_id"] = job_id
     return result
 
 
-async def _delete_chatbot(
-    db: AsyncSession, workspace_id: uuid.UUID, chatbot_id: str
-) -> dict:
+async def _delete_chatbot(db: AsyncSession, workspace_id: uuid.UUID, chatbot_id: str) -> dict:
     result = await db.execute(
         select(Chatbot).where(
             Chatbot.id == uuid.UUID(chatbot_id),
@@ -328,11 +319,9 @@ async def _delete_chatbot(
     return {"ok": True, "deleted": chatbot_id}
 
 
-async def _run_crawl(
-    db: AsyncSession, workspace_id: uuid.UUID, chatbot_id: str, url: str
-) -> dict:
-    from app.services.crawl_service import prepare_crawl
+async def _run_crawl(db: AsyncSession, workspace_id: uuid.UUID, chatbot_id: str, url: str) -> dict:
     from app.background.runner import submit_job
+    from app.services.crawl_service import prepare_crawl
 
     result = await db.execute(
         select(Chatbot).where(
@@ -344,8 +333,6 @@ async def _run_crawl(
     if not bot:
         return {"error": "Chatbot not found"}
 
-    job_id, _kb_id = await prepare_crawl(
-        db, workspace_id, url, chatbot_id=uuid.UUID(chatbot_id)
-    )
+    job_id, _kb_id = await prepare_crawl(db, workspace_id, url, chatbot_id=uuid.UUID(chatbot_id))
     await submit_job("crawl_website", {"job_id": job_id})
     return {"ok": True, "crawl_job_id": job_id}

@@ -1,4 +1,5 @@
 """Auto-bootstrap: creates admin user + workspace on first startup if configured via env."""
+
 import logging
 
 from sqlalchemy import func, select
@@ -14,7 +15,9 @@ logger = logging.getLogger(__name__)
 async def bootstrap_admin():
     """Create the admin user and default workspace if the DB has no users and env vars are set."""
     if not settings.ADMIN_EMAIL or not settings.ADMIN_PASSWORD:
-        logger.info("ADMIN_EMAIL or ADMIN_PASSWORD not set — skipping admin bootstrap. Set these in .env to auto-create an admin on first startup.")
+        logger.info(
+            "ADMIN_EMAIL or ADMIN_PASSWORD not set — skipping admin bootstrap. Set these in .env to auto-create an admin on first startup."
+        )
         return
 
     async with async_session_factory() as session:
@@ -25,9 +28,7 @@ async def bootstrap_admin():
             return
 
         # Check if this specific admin already exists (safety net)
-        result = await session.execute(
-            select(Agent).where(Agent.email == settings.ADMIN_EMAIL)
-        )
+        result = await session.execute(select(Agent).where(Agent.email == settings.ADMIN_EMAIL))
         if result.scalar_one_or_none():
             return
 

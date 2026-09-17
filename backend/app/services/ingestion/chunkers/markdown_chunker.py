@@ -69,11 +69,13 @@ def _merge_small_chunks(chunks: list[dict], encoding: tiktoken.Encoding) -> list
         if not is_small:
             if buf_parts:
                 content = "\n\n".join(buf_parts)
-                merged.append({
-                    "content": content,
-                    "heading_path": buf_heading,
-                    "token_count": _count_tokens(content, encoding),
-                })
+                merged.append(
+                    {
+                        "content": content,
+                        "heading_path": buf_heading,
+                        "token_count": _count_tokens(content, encoding),
+                    }
+                )
                 buf_parts = []
                 buf_tokens = 0
                 buf_heading = None
@@ -83,11 +85,13 @@ def _merge_small_chunks(chunks: list[dict], encoding: tiktoken.Encoding) -> list
         # Small chunk — try to accumulate
         if buf_tokens + chunk["token_count"] > TARGET_TOKENS and buf_parts:
             content = "\n\n".join(buf_parts)
-            merged.append({
-                "content": content,
-                "heading_path": buf_heading,
-                "token_count": _count_tokens(content, encoding),
-            })
+            merged.append(
+                {
+                    "content": content,
+                    "heading_path": buf_heading,
+                    "token_count": _count_tokens(content, encoding),
+                }
+            )
             buf_parts = []
             buf_tokens = 0
             buf_heading = None
@@ -99,11 +103,13 @@ def _merge_small_chunks(chunks: list[dict], encoding: tiktoken.Encoding) -> list
 
     if buf_parts:
         content = "\n\n".join(buf_parts)
-        merged.append({
-            "content": content,
-            "heading_path": buf_heading,
-            "token_count": _count_tokens(content, encoding),
-        })
+        merged.append(
+            {
+                "content": content,
+                "heading_path": buf_heading,
+                "token_count": _count_tokens(content, encoding),
+            }
+        )
 
     return merged
 

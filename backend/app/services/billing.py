@@ -143,4 +143,3 @@ async def _update_subscription(db: AsyncSession, subscription: dict) -> None:
                     limits = _get_plan_limits(plan)
                     workspace.plan_conversation_cap = limits["conversations"]
                     break
-

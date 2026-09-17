@@ -1,4 +1,5 @@
 """Consolidated LLM client — replaces services/llm/ directory (6 files → 1)."""
+
 from __future__ import annotations
 
 import asyncio
@@ -21,17 +22,29 @@ DEFAULT_INTERNAL_MODEL = settings.INTERNAL_MODEL or "claude-haiku-4-5-20251001"
 class BaseLLMClient(ABC):
     @abstractmethod
     async def stream_generate(
-        self, messages: list[dict], model: str, temperature: float = 0.3, max_tokens: int = 1000,
+        self,
+        messages: list[dict],
+        model: str,
+        temperature: float = 0.3,
+        max_tokens: int = 1000,
     ) -> AsyncGenerator[str, None]: ...
 
     @abstractmethod
     async def generate(
-        self, messages: list[dict], model: str, temperature: float = 0.3, max_tokens: int = 1000,
+        self,
+        messages: list[dict],
+        model: str,
+        temperature: float = 0.3,
+        max_tokens: int = 1000,
     ) -> str: ...
 
     async def generate_with_tools(
-        self, messages: list[dict], model: str, tools: list[dict],
-        temperature: float = 0.3, max_tokens: int = 1000,
+        self,
+        messages: list[dict],
+        model: str,
+        tools: list[dict],
+        temperature: float = 0.3,
+        max_tokens: int = 1000,
     ) -> dict[str, Any]:
         content = await self.generate(messages, model, temperature, max_tokens)
         return {"type": "message", "content": content}
@@ -46,13 +59,18 @@ class OpenRouterLLMClient(BaseLLMClient):
     def _get_client(self):
         if self._client is None:
             from openai import AsyncOpenAI
+
             self._client = AsyncOpenAI(api_key=self._api_key, base_url=self._base_url, timeout=httpx.Timeout(60.0))
         return self._client
 
     async def stream_generate(self, messages, model, temperature=0.7, max_tokens=1000):
         stream = await self._get_client().chat.completions.create(
-            model=model, messages=messages, temperature=temperature,
-            max_tokens=max_tokens, stream=True, stream_options={"include_usage": True},
+            model=model,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            stream=True,
+            stream_options={"include_usage": True},
         )
         usage = None
         async for chunk in stream:
@@ -65,22 +83,33 @@ class OpenRouterLLMClient(BaseLLMClient):
 
     async def generate(self, messages, model, temperature=0.7, max_tokens=1000):
         from openai import OpenAI
+
         def _sync_call():
             sync_client = OpenAI(api_key=self._api_key, base_url=self._base_url, timeout=60.0)
             response = sync_client.chat.completions.create(
-                model=model, messages=messages, temperature=temperature, max_tokens=max_tokens,
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
             )
             return response.choices[0].message.content or ""
+
         return await asyncio.to_thread(_sync_call)
 
     async def generate_with_tools(self, messages, model, tools, temperature=0.3, max_tokens=1000):
         from openai import OpenAI
+
         def _sync_call():
             sync_client = OpenAI(api_key=self._api_key, base_url=self._base_url, timeout=60.0)
             return sync_client.chat.completions.create(
-                model=model, messages=messages, tools=tools, tool_choice="auto",
-                temperature=temperature, max_tokens=max_tokens,
+                model=model,
+                messages=messages,
+                tools=tools,
+                tool_choice="auto",
+                temperature=temperature,
+                max_tokens=max_tokens,
             )
+
         response = await asyncio.to_thread(_sync_call)
         choice = response.choices[0]
         if choice.finish_reason == "tool_calls" and choice.message.tool_calls:
@@ -96,6 +125,7 @@ class OpenRouterLLMClient(BaseLLMClient):
 class OpenAILLMClient(BaseLLMClient):
     def __init__(self, api_key: str | None = None, base_url: str | None = None):
         from openai import AsyncOpenAI
+
         kwargs = {"api_key": api_key or settings.AI_API_KEY, "timeout": httpx.Timeout(60.0)}
         resolved = base_url or settings.AI_BASE_URL
         if resolved:
@@ -104,8 +134,12 @@ class OpenAILLMClient(BaseLLMClient):
 
     async def stream_generate(self, messages, model="gpt-4o-mini", temperature=0.3, max_tokens=1000):
         stream = await self._client.chat.completions.create(
-            model=model, messages=messages, temperature=temperature,
-            max_tokens=max_tokens, stream=True, stream_options={"include_usage": True},
+            model=model,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            stream=True,
+            stream_options={"include_usage": True},
         )
         usage = None
         async for chunk in stream:
@@ -118,7 +152,10 @@ class OpenAILLMClient(BaseLLMClient):
 
     async def generate(self, messages, model="gpt-4o-mini", temperature=0.3, max_tokens=1000):
         response = await self._client.chat.completions.create(
-            model=model, messages=messages, temperature=temperature, max_tokens=max_tokens,
+            model=model,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
         )
         return response.choices[0].message.content or ""
 
@@ -126,8 +163,10 @@ class OpenAILLMClient(BaseLLMClient):
 class AnthropicLLMClient(BaseLLMClient):
     def __init__(self, api_key: str | None = None):
         import anthropic
+
         self._client = anthropic.AsyncAnthropic(
-            api_key=api_key or settings.ANTHROPIC_API_KEY, timeout=httpx.Timeout(60.0),
+            api_key=api_key or settings.ANTHROPIC_API_KEY,
+            timeout=httpx.Timeout(60.0),
         )
 
     async def stream_generate(self, messages, model="claude-sonnet-4-20250514", temperature=0.3, max_tokens=1000):
@@ -139,8 +178,11 @@ class AnthropicLLMClient(BaseLLMClient):
             else:
                 chat_messages.append(msg)
         async with self._client.messages.stream(
-            model=model, messages=chat_messages, system=system_msg,
-            temperature=temperature, max_tokens=max_tokens,
+            model=model,
+            messages=chat_messages,
+            system=system_msg,
+            temperature=temperature,
+            max_tokens=max_tokens,
         ) as stream:
             async for text in stream.text_stream:
                 yield text
@@ -154,8 +196,11 @@ class AnthropicLLMClient(BaseLLMClient):
             else:
                 chat_messages.append(msg)
         response = await self._client.messages.create(
-            model=model, messages=chat_messages, system=system_msg,
-            temperature=temperature, max_tokens=max_tokens,
+            model=model,
+            messages=chat_messages,
+            system=system_msg,
+            temperature=temperature,
+            max_tokens=max_tokens,
         )
         return response.content[0].text
 
@@ -191,10 +236,28 @@ class AgentSDKLLMClient(BaseLLMClient):
     # Named explicitly as well as omitted from `allowed_tools`: the whitelist
     # alone has been observed not to close the surface.
     BUILTINS = [
-        "Read", "Write", "Edit", "MultiEdit", "NotebookEdit", "Bash", "BashOutput",
-        "KillShell", "Glob", "Grep", "WebSearch", "WebFetch", "Task", "TodoWrite",
-        "SlashCommand", "ToolSearch", "ExitPlanMode", "EnterPlanMode", "Artifact",
-        "Skill", "Workflow", "AskUserQuestion",
+        "Read",
+        "Write",
+        "Edit",
+        "MultiEdit",
+        "NotebookEdit",
+        "Bash",
+        "BashOutput",
+        "KillShell",
+        "Glob",
+        "Grep",
+        "WebSearch",
+        "WebFetch",
+        "Task",
+        "TodoWrite",
+        "SlashCommand",
+        "ToolSearch",
+        "ExitPlanMode",
+        "EnterPlanMode",
+        "Artifact",
+        "Skill",
+        "Workflow",
+        "AskUserQuestion",
     ]
 
     def __init__(self, api_key: str | None = None, base_url: str | None = None) -> None:
@@ -205,21 +268,18 @@ class AgentSDKLLMClient(BaseLLMClient):
     @staticmethod
     def _split(messages: list[dict]) -> tuple[str, str]:
         """Return (system_prompt, prompt) from an OpenAI-style message list."""
-        system = "\n\n".join(
-            str(m.get("content") or "") for m in messages if m.get("role") == "system"
-        )
+        system = "\n\n".join(str(m.get("content") or "") for m in messages if m.get("role") == "system")
         turns = [m for m in messages if m.get("role") != "system"]
         if len(turns) == 1 and turns[0].get("role") == "user":
             return system, str(turns[0].get("content") or "")
         prompt = "\n\n".join(
-            f"{'Assistant' if m.get('role') == 'assistant' else 'User'}: "
-            f"{str(m.get('content') or '')}"
-            for m in turns
+            f"{'Assistant' if m.get('role') == 'assistant' else 'User'}: {str(m.get('content') or '')}" for m in turns
         )
         return system, prompt
 
     def _options(self, system_prompt: str, model: str | None):
         from claude_agent_sdk import ClaudeAgentOptions
+
         kwargs: dict[str, Any] = {
             "model": model or self._model,
             "allowed_tools": [],
@@ -243,8 +303,8 @@ class AgentSDKLLMClient(BaseLLMClient):
 
     async def _run(self, messages: list[dict], model: str | None):
         """Yield ('text', delta) as it arrives, then ('usage', dict) at the end."""
-        from claude_agent_sdk import (AssistantMessage, ClaudeSDKClient,
-                                      ResultMessage, TextBlock)
+        from claude_agent_sdk import AssistantMessage, ClaudeSDKClient, ResultMessage, TextBlock
+
         system_prompt, prompt = self._split(messages)
         async with ClaudeSDKClient(self._options(system_prompt, model)) as client:
             await client.query(prompt)
@@ -255,14 +315,15 @@ class AgentSDKLLMClient(BaseLLMClient):
                             yield "text", block.text
                 elif isinstance(msg, ResultMessage):
                     if msg.is_error:
-                        raise RuntimeError(
-                            f"Agent SDK returned an error: {msg.result or msg.subtype}"
-                        )
+                        raise RuntimeError(f"Agent SDK returned an error: {msg.result or msg.subtype}")
                     raw = msg.usage or {}
-                    yield "usage", {
-                        "prompt_tokens": raw.get("input_tokens", 0),
-                        "completion_tokens": raw.get("output_tokens", 0),
-                    }
+                    yield (
+                        "usage",
+                        {
+                            "prompt_tokens": raw.get("input_tokens", 0),
+                            "completion_tokens": raw.get("output_tokens", 0),
+                        },
+                    )
 
     async def generate(self, messages, model=None, temperature=0.3, max_tokens=1000):
         parts: list[str] = []
@@ -287,7 +348,8 @@ class AgentSDKLLMClient(BaseLLMClient):
         if tools:
             logger.warning(
                 "agentsdk: %d tool(s) offered but tool calling is not implemented; "
-                "returning a text answer and firing no action", len(tools),
+                "returning a text answer and firing no action",
+                len(tools),
             )
         return await super().generate_with_tools(messages, model, tools or [], temperature, max_tokens)
 
@@ -319,7 +381,9 @@ def get_internal_client() -> BaseLLMClient:
 
 async def get_internal_model(session, workspace_id: uuid.UUID) -> str:
     from sqlalchemy import select
+
     from app.models.organizational import Workspace
+
     result = await session.execute(select(Workspace.internal_model).where(Workspace.id == workspace_id))
     model = result.scalar_one_or_none()
     return model or DEFAULT_INTERNAL_MODEL

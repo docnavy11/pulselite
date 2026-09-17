@@ -1,4 +1,5 @@
 """Chatbot action routes."""
+
 import uuid
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -8,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.knowledge import Chatbot
-from app.services.action_service import list_actions, create_action, update_action, delete_action
+from app.services.action_service import create_action, delete_action, list_actions
 
 router = APIRouter()
 
@@ -21,15 +22,22 @@ async def actions_list(request: Request, chatbot_id: uuid.UUID, db: AsyncSession
     if not chatbot:
         return HTMLResponse("Not found", status_code=404)
     actions = await list_actions(db, workspace.id, chatbot_id)
-    return request.app.state.templates.TemplateResponse("chatbots/actions.html", {
-        "request": request, "chatbot": chatbot, "actions": actions,
-    })
+    return request.app.state.templates.TemplateResponse(
+        "chatbots/actions.html",
+        {
+            "request": request,
+            "chatbot": chatbot,
+            "actions": actions,
+        },
+    )
 
 
 @router.post("/chatbots/{chatbot_id}/actions")
 async def create_action_route(
-    request: Request, chatbot_id: uuid.UUID,
-    name: str = Form(...), action_type: str = Form(...),
+    request: Request,
+    chatbot_id: uuid.UUID,
+    name: str = Form(...),
+    action_type: str = Form(...),
     trigger_description: str = Form(...),
     db: AsyncSession = Depends(get_db),
 ):
@@ -46,19 +54,33 @@ async def create_action_route(
         config["calendly_url"] = form["calendly_url"]
 
     action = await create_action(
-        db, workspace.id, chatbot_id, action_type, name, trigger_description, config,
+        db,
+        workspace.id,
+        chatbot_id,
+        action_type,
+        name,
+        trigger_description,
+        config,
     )
     if request.headers.get("HX-Request"):
-        return request.app.state.templates.TemplateResponse("components/action_row.html", {
-            "request": request, "action": action, "chatbot_id": chatbot_id,
-        })
+        return request.app.state.templates.TemplateResponse(
+            "components/action_row.html",
+            {
+                "request": request,
+                "action": action,
+                "chatbot_id": chatbot_id,
+            },
+        )
     return RedirectResponse(f"/chatbots/{chatbot_id}/actions", status_code=303)
 
 
 @router.post("/chatbots/{chatbot_id}/actions/{action_id}/toggle")
-async def toggle_action(request: Request, chatbot_id: uuid.UUID, action_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def toggle_action(
+    request: Request, chatbot_id: uuid.UUID, action_id: uuid.UUID, db: AsyncSession = Depends(get_db)
+):
     workspace = request.state.workspace
     from app.services.action_service import get_action
+
     action = await get_action(db, action_id, workspace.id)
     if action:
         action.is_enabled = not action.is_enabled
@@ -68,7 +90,9 @@ async def toggle_action(request: Request, chatbot_id: uuid.UUID, action_id: uuid
 
 @router.delete("/chatbots/{chatbot_id}/actions/{action_id}")
 async def delete_action_route(
-    request: Request, chatbot_id: uuid.UUID, action_id: uuid.UUID,
+    request: Request,
+    chatbot_id: uuid.UUID,
+    action_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
 ):
     workspace = request.state.workspace

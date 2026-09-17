@@ -30,18 +30,14 @@ class Workspace(UUIDPrimaryKeyMixin, TimestampUpdateMixin, Base):
     # None = retain forever
     openrouter_api_key: Mapped[str | None] = mapped_column(Text, nullable=True)
     openrouter_base_url: Mapped[str | None] = mapped_column(Text, nullable=True)
-    allowed_models: Mapped[list] = mapped_column(
-        JSONB, server_default=text("'[]'::jsonb"), nullable=False
-    )
+    allowed_models: Mapped[list] = mapped_column(JSONB, server_default=text("'[]'::jsonb"), nullable=False)
     internal_model: Mapped[str | None] = mapped_column(Text, nullable=True)
     default_chatbot_model: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_byok: Mapped[bool] = mapped_column(Boolean, server_default=text("FALSE"), nullable=False)
     chars_indexed: Mapped[int] = mapped_column(BigInteger, server_default=text("0"), nullable=False)
     intelligence_config: Mapped[dict] = mapped_column(
         JSONB,
-        server_default=text(
-            """'{"auto_analyze": true, "sentiment_trends": true, "gap_clustering": true}'::jsonb"""
-        ),
+        server_default=text("""'{"auto_analyze": true, "sentiment_trends": true, "gap_clustering": true}'::jsonb"""),
         nullable=False,
     )
     last_report_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

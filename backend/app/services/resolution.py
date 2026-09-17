@@ -1,4 +1,5 @@
 """Chat resolution service — orchestrates RAG + LLM streaming + actions."""
+
 import asyncio
 import logging
 import re
@@ -13,11 +14,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.intelligence import GapEvent, RetrievalLog
 from app.models.knowledge import Chatbot
 from app.models.organizational import Workspace
-from app.services.encryption import decrypt_api_key
 from app.services import conversation_service
-from app.services.rag import RAGResult, process_query
+from app.services.credits import debit_credits, estimate_token_cost
 from app.services.deployment import is_cloud
-from app.services.credits import estimate_token_cost, debit_credits
+from app.services.encryption import decrypt_api_key
+from app.services.rag import RAGResult, process_query
 
 logger = logging.getLogger(__name__)
 
@@ -69,8 +70,12 @@ class ResolutionEvent:
 
 
 async def handle_message(
-    db: AsyncSession, workspace_id: uuid.UUID, chatbot: Chatbot, message: str,
-    conversation_id: uuid.UUID | None = None, contact_id: uuid.UUID | None = None,
+    db: AsyncSession,
+    workspace_id: uuid.UUID,
+    chatbot: Chatbot,
+    message: str,
+    conversation_id: uuid.UUID | None = None,
+    contact_id: uuid.UUID | None = None,
 ) -> AsyncGenerator[ResolutionEvent, None]:
     openrouter_key = None
     openrouter_base_url = None
@@ -96,13 +101,17 @@ async def handle_message(
         conversation_id = conversation.id
         # Fire webhook in background
         from app.services.webhooks import fire_event
+
         asyncio.create_task(fire_event(workspace_id, "conversation.created", {"conversation_id": str(conversation_id)}))
     else:
         conversation = await conversation_service.get_conversation(db, conversation_id)
 
-    await conversation_service.add_message(db, conversation_id, workspace_id, content=message, author_type="contact", message_type="incoming")
+    await conversation_service.add_message(
+        db, conversation_id, workspace_id, content=message, author_type="contact", message_type="incoming"
+    )
 
     from app.services.action_service import list_enabled_actions
+
     enabled_actions = await list_enabled_actions(db, workspace_id, chatbot.id)
     actions_with_params = [a for a in enabled_actions if a.parameters]
 
@@ -113,8 +122,12 @@ async def handle_message(
 
     try:
         async for item in process_query(
-            db, message, chatbot, conversation_id,
-            openrouter_key=openrouter_key, openrouter_base_url=openrouter_base_url,
+            db,
+            message,
+            chatbot,
+            conversation_id,
+            openrouter_key=openrouter_key,
+            openrouter_base_url=openrouter_base_url,
             actions=actions_with_params if actions_with_params else None,
         ):
             if isinstance(item, RAGResult):
@@ -131,7 +144,9 @@ async def handle_message(
     except Exception as exc:
         error_msg = str(exc).lower()
         if "401" in error_msg or "unauthorized" in error_msg:
-            user_error = "AI provider authentication failed. Please check your API key configuration in Settings > AI Models."
+            user_error = (
+                "AI provider authentication failed. Please check your API key configuration in Settings > AI Models."
+            )
         elif "429" in error_msg or "rate" in error_msg:
             user_error = "AI provider rate limit reached. Please try again in a moment."
         elif "timeout" in error_msg or "timed out" in error_msg:
@@ -154,15 +169,24 @@ async def handle_message(
         escalated = False
 
     bot_message = await conversation_service.add_message(
-        db, conversation_id, workspace_id, content=full_response,
-        author_type="bot", message_type="outgoing", confidence_score=confidence_score, is_fallback=escalated,
+        db,
+        conversation_id,
+        workspace_id,
+        content=full_response,
+        author_type="bot",
+        message_type="outgoing",
+        confidence_score=confidence_score,
+        is_fallback=escalated,
     )
 
     if escalated:
         conversation.escalation_reason = "low_confidence"
         conversation.outcome = "escalated_to_human"
         from app.services.webhooks import fire_event
-        asyncio.create_task(fire_event(workspace_id, "conversation.escalated", {"conversation_id": str(conversation_id)}))
+
+        asyncio.create_task(
+            fire_event(workspace_id, "conversation.escalated", {"conversation_id": str(conversation_id)})
+        )
     else:
         conversation.autonomous_resolved = True
         conversation.outcome = "resolved_autonomously"
@@ -182,16 +206,29 @@ async def handle_message(
 
     try:
         retrieval_log = RetrievalLog(
-            id=uuid.uuid4(), workspace_id=workspace_id, chatbot_id=chatbot.id,
-            conversation_id=conversation_id, message_id=bot_message.id, query=message,
-            confidence_score=confidence_score, confidence_avg=confidence_avg,
+            id=uuid.uuid4(),
+            workspace_id=workspace_id,
+            chatbot_id=chatbot.id,
+            conversation_id=conversation_id,
+            message_id=bot_message.id,
+            query=message,
+            confidence_score=confidence_score,
+            confidence_avg=confidence_avg,
             retrieved_chunk_ids=rag_result.retrieved_chunk_ids if rag_result else [],
-            reranked=chatbot.use_reranking, escalated=escalated, response_generated=True,
+            reranked=chatbot.use_reranking,
+            escalated=escalated,
+            response_generated=True,
         )
         db.add(retrieval_log)
         await db.flush()
         if rag_result and rag_result.original_confidence_low and _is_substantive_query(message):
-            gap_event = GapEvent(id=uuid.uuid4(), workspace_id=workspace_id, retrieval_log_id=retrieval_log.id, query=message, confidence_score=confidence_score)
+            gap_event = GapEvent(
+                id=uuid.uuid4(),
+                workspace_id=workspace_id,
+                retrieval_log_id=retrieval_log.id,
+                query=message,
+                confidence_score=confidence_score,
+            )
             db.add(gap_event)
             await db.flush()
     except Exception:
@@ -202,11 +239,16 @@ async def handle_message(
 
     try:
         from app.services.action_executor import run_actions
+
         actions_without_params = [a for a in enabled_actions if not a.parameters]
         if actions_without_params:
             client_payloads = await run_actions(
-                db_session=db, workspace_id=workspace_id, chatbot_id=chatbot.id,
-                conversation_id=conversation_id, user_message=message, bot_response=full_response,
+                db_session=db,
+                workspace_id=workspace_id,
+                chatbot_id=chatbot.id,
+                conversation_id=conversation_id,
+                user_message=message,
+                bot_response=full_response,
             )
             for payload in client_payloads:
                 yield ResolutionEvent(type="action", data=payload, conversation_id=conversation_id)
@@ -215,6 +257,12 @@ async def handle_message(
 
     sources = rag_result.sources if rag_result else []
     yield ResolutionEvent(
-        type="done", data="", confidence_score=confidence_score, confidence_avg=confidence_avg,
-        escalated=escalated, conversation_id=conversation_id, message_id=bot_message.id, sources=sources,
+        type="done",
+        data="",
+        confidence_score=confidence_score,
+        confidence_avg=confidence_avg,
+        escalated=escalated,
+        conversation_id=conversation_id,
+        message_id=bot_message.id,
+        sources=sources,
     )

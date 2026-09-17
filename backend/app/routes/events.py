@@ -1,4 +1,5 @@
 """SSE event stream — replaces Socket.IO."""
+
 from fastapi import APIRouter, Request
 from starlette.responses import StreamingResponse
 

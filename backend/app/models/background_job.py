@@ -27,9 +27,7 @@ class BackgroundJob(UUIDPrimaryKeyMixin, Base):
 
 class CrawlPage(UUIDPrimaryKeyMixin, Base):
     __tablename__ = "crawl_pages"
-    __table_args__ = (
-        Index("idx_crawl_pages_job_status", "crawl_job_id", "status"),
-    )
+    __table_args__ = (Index("idx_crawl_pages_job_status", "crawl_job_id", "status"),)
 
     crawl_job_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     url: Mapped[str] = mapped_column(Text, nullable=False)

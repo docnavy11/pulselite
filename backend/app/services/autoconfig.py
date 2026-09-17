@@ -23,13 +23,34 @@ _DEFAULT_QUESTIONS = [
 _TONE_OPTIONS = ["professional", "friendly", "casual", "formal"]
 
 _LANG_NAMES: dict[str, str] = {
-    "en": "English", "nl": "Dutch", "fr": "French", "de": "German",
-    "es": "Spanish", "pt": "Portuguese", "it": "Italian", "pl": "Polish",
-    "ru": "Russian", "tr": "Turkish", "ar": "Arabic", "zh": "Chinese",
-    "ja": "Japanese", "ko": "Korean", "sv": "Swedish", "da": "Danish",
-    "no": "Norwegian", "fi": "Finnish", "cs": "Czech", "ro": "Romanian",
-    "hu": "Hungarian", "sk": "Slovak", "bg": "Bulgarian", "hr": "Croatian",
-    "uk": "Ukrainian", "el": "Greek", "he": "Hebrew", "th": "Thai",
+    "en": "English",
+    "nl": "Dutch",
+    "fr": "French",
+    "de": "German",
+    "es": "Spanish",
+    "pt": "Portuguese",
+    "it": "Italian",
+    "pl": "Polish",
+    "ru": "Russian",
+    "tr": "Turkish",
+    "ar": "Arabic",
+    "zh": "Chinese",
+    "ja": "Japanese",
+    "ko": "Korean",
+    "sv": "Swedish",
+    "da": "Danish",
+    "no": "Norwegian",
+    "fi": "Finnish",
+    "cs": "Czech",
+    "ro": "Romanian",
+    "hu": "Hungarian",
+    "sk": "Slovak",
+    "bg": "Bulgarian",
+    "hr": "Croatian",
+    "uk": "Ukrainian",
+    "el": "Greek",
+    "he": "Hebrew",
+    "th": "Thai",
 }
 
 _PROMPT = """You are a chatbot configuration assistant. Based on the website content below, generate a chatbot configuration.
@@ -63,10 +84,10 @@ class AutoConfigResult:
     name: str
     welcome_message: str
     system_prompt: str
-    suggested_questions: list[str]   # exactly 4 items
+    suggested_questions: list[str]  # exactly 4 items
     fallback_message: str
-    brand_color: str | None          # hex "#RRGGBB" or None
-    tone: str                        # professional | friendly | casual | formal
+    brand_color: str | None  # hex "#RRGGBB" or None
+    tone: str  # professional | friendly | casual | formal
 
 
 def extract_brand_color(html: str) -> str | None:
@@ -83,13 +104,13 @@ def extract_brand_color(html: str) -> str | None:
         match = re.search(pattern, html, re.IGNORECASE)
         if match:
             color = match.group(1).strip()
-            if re.match(r'^#[0-9a-fA-F]{3}$', color) or re.match(r'^#[0-9a-fA-F]{6}$', color):
+            if re.match(r"^#[0-9a-fA-F]{3}$", color) or re.match(r"^#[0-9a-fA-F]{6}$", color):
                 return color
 
     # Fallback: scan inline <style> tags for --primary CSS variable
-    style_blocks = re.findall(r'<style[^>]*>(.*?)</style>', html, re.DOTALL | re.IGNORECASE)
+    style_blocks = re.findall(r"<style[^>]*>(.*?)</style>", html, re.DOTALL | re.IGNORECASE)
     for block in style_blocks:
-        match = re.search(r'--primary\s*:\s*(#[0-9a-fA-F]{6}|#[0-9a-fA-F]{3})(?=[^0-9a-fA-F]|$)', block, re.IGNORECASE)
+        match = re.search(r"--primary\s*:\s*(#[0-9a-fA-F]{6}|#[0-9a-fA-F]{3})(?=[^0-9a-fA-F]|$)", block, re.IGNORECASE)
         if match:
             return match.group(1).strip()
 
@@ -100,12 +121,14 @@ def _parse_llm_response(raw: str) -> dict:
     """Parse JSON from LLM response text. Raises json.JSONDecodeError on failure."""
     text = raw.strip()
     # Strip markdown code fences if present (with optional trailing newline)
-    text = re.sub(r'^```(?:json)?\s*\n?', '', text, flags=re.IGNORECASE)
-    text = re.sub(r'\n?```\s*$', '', text)
+    text = re.sub(r"^```(?:json)?\s*\n?", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\n?```\s*$", "", text)
     return json.loads(text.strip())
 
 
-async def generate(chunks: list[str], homepage_html: str, language: str | None = None, model: str | None = None) -> AutoConfigResult:
+async def generate(
+    chunks: list[str], homepage_html: str, language: str | None = None, model: str | None = None
+) -> AutoConfigResult:
     """Generate chatbot config from content chunks using Claude Haiku.
 
     - Sample strategy: first 5 chunks + random sample up to 20 total
@@ -119,7 +142,9 @@ async def generate(chunks: list[str], homepage_html: str, language: str | None =
     first = chunks[:5]
     remaining = chunks[5:]
     extra_needed = max(0, 20 - len(first))
-    sampled_extra = random.sample(remaining, min(extra_needed, len(remaining))) if remaining and extra_needed > 0 else []
+    sampled_extra = (
+        random.sample(remaining, min(extra_needed, len(remaining))) if remaining and extra_needed > 0 else []
+    )
     sampled_chunks = first + sampled_extra
 
     content = "\n\n---\n\n".join(sampled_chunks)
@@ -128,7 +153,8 @@ async def generate(chunks: list[str], homepage_html: str, language: str | None =
     lang_name = _LANG_NAMES.get(language or "", "") if language else ""
     language_instruction = (
         f"- IMPORTANT: Write ALL text fields (welcome_message, system_prompt, suggested_questions, fallback_message) in {lang_name}. Do NOT use English unless the website language is English.\n"
-        if lang_name else ""
+        if lang_name
+        else ""
     )
     prompt_text = _PROMPT.format(content=content, language_instruction=language_instruction)
 
@@ -161,7 +187,7 @@ async def generate(chunks: list[str], homepage_html: str, language: str | None =
     # Ensure exactly 4 suggested_questions
     questions: list[str] = list(result.get("suggested_questions", []))
     if len(questions) < 4:
-        questions = questions + _DEFAULT_QUESTIONS[:4 - len(questions)]
+        questions = questions + _DEFAULT_QUESTIONS[: 4 - len(questions)]
     elif len(questions) > 4:
         questions = questions[:4]
 

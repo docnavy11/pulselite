@@ -38,9 +38,7 @@ def get_tool_definitions() -> list[dict]:
                 "description": "Fetch a single conversation with all its messages.",
                 "parameters": {
                     "type": "object",
-                    "properties": {
-                        "conversation_id": {"type": "string", "description": "UUID of the conversation"}
-                    },
+                    "properties": {"conversation_id": {"type": "string", "description": "UUID of the conversation"}},
                     "required": ["conversation_id"],
                 },
             },
@@ -60,9 +58,7 @@ def get_tool_definitions() -> list[dict]:
                 "description": "Fetch a single chatbot's full config.",
                 "parameters": {
                     "type": "object",
-                    "properties": {
-                        "chatbot_id": {"type": "string", "description": "UUID of the chatbot"}
-                    },
+                    "properties": {"chatbot_id": {"type": "string", "description": "UUID of the chatbot"}},
                     "required": ["chatbot_id"],
                 },
             },
@@ -99,9 +95,7 @@ def get_tool_definitions() -> list[dict]:
                 "description": "List knowledge base documents for a chatbot.",
                 "parameters": {
                     "type": "object",
-                    "properties": {
-                        "chatbot_id": {"type": "string", "description": "UUID of the chatbot"}
-                    },
+                    "properties": {"chatbot_id": {"type": "string", "description": "UUID of the chatbot"}},
                     "required": ["chatbot_id"],
                 },
             },
@@ -113,9 +107,7 @@ def get_tool_definitions() -> list[dict]:
                 "description": "List configured actions for a chatbot.",
                 "parameters": {
                     "type": "object",
-                    "properties": {
-                        "chatbot_id": {"type": "string", "description": "UUID of the chatbot"}
-                    },
+                    "properties": {"chatbot_id": {"type": "string", "description": "UUID of the chatbot"}},
                     "required": ["chatbot_id"],
                 },
             },
@@ -242,7 +234,9 @@ def get_client_side_tool_definitions() -> list[dict]:
                 ),
                 "parameters": {
                     "type": "object",
-                    "properties": {"route": {"type": "string", "description": "Next.js route path, may include query params"}},
+                    "properties": {
+                        "route": {"type": "string", "description": "Next.js route path, may include query params"}
+                    },
                     "required": ["route"],
                 },
             },

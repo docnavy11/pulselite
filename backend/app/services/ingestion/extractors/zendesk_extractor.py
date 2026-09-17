@@ -26,8 +26,9 @@ async def extract_from_zendesk(source_url: str, workspace_id: str, db) -> AsyncG
     Each yielded dict has: {title, content, source_url}
     """
     from sqlalchemy import select
-    from app.models.integrations import IntegrationConfig
+
     from app.config import settings
+    from app.models.integrations import IntegrationConfig
 
     result = await db.execute(
         select(IntegrationConfig).where(

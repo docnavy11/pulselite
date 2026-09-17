@@ -37,8 +37,9 @@ async def extract_from_google_drive(source_url: str, workspace_id: str, db) -> s
     Returns extracted plain text for ingestion.
     """
     from sqlalchemy import select
-    from app.models.integrations import IntegrationConfig
+
     from app.config import settings
+    from app.models.integrations import IntegrationConfig
 
     result = await db.execute(
         select(IntegrationConfig).where(

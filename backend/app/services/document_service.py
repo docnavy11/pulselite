@@ -108,17 +108,22 @@ async def delete_document(db: AsyncSession, workspace_id: uuid.UUID, document_id
         )
         # Emit usage update
         from app.services.plan_service import get_plan_limits
+
         ws_result = await db.execute(
             sa_text("SELECT chars_indexed, plan FROM workspaces WHERE id = :id"),
             {"id": workspace_id},
         )
         ws_row = ws_result.one_or_none()
         if ws_row:
-            await notify_workspace(str(workspace_id), "workspace:usage_updated", {
-                "chars_indexed": ws_row.chars_indexed,
-                "chars_limit": get_plan_limits(ws_row.plan)["chars_indexed"],
-                "plan": ws_row.plan,
-            })
+            await notify_workspace(
+                str(workspace_id),
+                "workspace:usage_updated",
+                {
+                    "chars_indexed": ws_row.chars_indexed,
+                    "chars_limit": get_plan_limits(ws_row.plan)["chars_indexed"],
+                    "plan": ws_row.plan,
+                },
+            )
 
 
 async def update_document(

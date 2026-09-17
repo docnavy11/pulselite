@@ -1,4 +1,5 @@
 """Pulse Lite v2 — FastAPI app with Jinja2 + HTMX, no React/Celery/Redis."""
+
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -11,7 +12,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 
 from app.config import settings
-from app.database import get_db, async_session_factory
+from app.database import async_session_factory
 from app.models.organizational import Agent, Workspace, WorkspaceMembership
 from app.models.session import Session
 
@@ -19,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -28,12 +30,14 @@ async def lifespan(app: FastAPI):
     # deadlocks if LogBuffer's threading.Lock is held on the app.* logger during model load.
     try:
         from app.services.ingestion.embedder import _get_model
+
         _get_model()
         logger.info("Embedding model preloaded")
     except Exception:
         logger.warning("Failed to preload embedding model", exc_info=True)
     # Wire in-memory log buffer AFTER model load (app.* only, NOT root logger)
     from app.services.log_buffer import LogBuffer as _LogBuffer
+
     _log_buffer = _LogBuffer.get_instance()
     _log_buffer.setFormatter(logging.Formatter("%(message)s"))
     logging.getLogger("app").addHandler(_log_buffer)
@@ -41,16 +45,19 @@ async def lifespan(app: FastAPI):
     # Bootstrap admin user
     try:
         from app.services.bootstrap import bootstrap_admin
+
         await bootstrap_admin()
     except Exception:
         logger.warning("Admin bootstrap failed", exc_info=True)
 
     # Start background job worker
     from app.background.runner import start_worker, stop_worker
+
     start_worker()
 
     # Start scheduler
     from app.background.scheduler import setup_scheduler
+
     setup_scheduler()
 
     # Register job handlers (import triggers @register_job decorators)
@@ -62,6 +69,7 @@ async def lifespan(app: FastAPI):
     # Shutdown
     stop_worker()
     from app.background.scheduler import scheduler
+
     scheduler.shutdown(wait=False)
     logger.info("Pulse Lite v2 stopped")
 
@@ -89,9 +97,16 @@ app.add_middleware(
 
 # Public paths that don't require authentication
 _PUBLIC_PATHS = {
-    "/login", "/register", "/auth/google", "/auth/google/callback",
-    "/api/health", "/api/config/deployment", "/api/chat", "/api/widget",
-    "/static", "/favicon.ico",
+    "/login",
+    "/register",
+    "/auth/google",
+    "/auth/google/callback",
+    "/api/health",
+    "/api/config/deployment",
+    "/api/chat",
+    "/api/widget",
+    "/static",
+    "/favicon.ico",
 }
 
 
@@ -116,6 +131,7 @@ async def session_middleware(request: Request, call_next):
     if not session_id:
         if request.headers.get("HX-Request"):
             from starlette.responses import Response
+
             response = Response(status_code=401)
             response.headers["HX-Redirect"] = "/login"
             return response
@@ -123,6 +139,7 @@ async def session_middleware(request: Request, call_next):
 
     async with async_session_factory() as db:
         from datetime import datetime, timezone
+
         session_result = await db.execute(
             select(Session).where(Session.id == session_id, Session.expires_at > datetime.now(timezone.utc))
         )
@@ -159,6 +176,7 @@ async def session_middleware(request: Request, call_next):
 
 # --- Security headers ---
 
+
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
     response = await call_next(request)
@@ -170,23 +188,23 @@ async def security_headers(request: Request, call_next):
 
 # --- Register routers ---
 
+from app.routes.actions import router as actions_router
+from app.routes.admin import router as admin_router
+from app.routes.api import router as api_router
+from app.routes.articles import router as articles_router
+from app.routes.audit import router as audit_router
 from app.routes.auth import router as auth_router
 from app.routes.chatbots import router as chatbots_router
 from app.routes.conversations import router as conversations_router
-from app.routes.dashboard import router as dashboard_router
-from app.routes.api import router as api_router
-from app.routes.events import router as events_router
-from app.routes.settings import router as settings_router
-from app.routes.qa import router as qa_router
-from app.routes.actions import router as actions_router
 from app.routes.crawl import router as crawl_router
+from app.routes.dashboard import router as dashboard_router
 from app.routes.documents import router as documents_router
+from app.routes.events import router as events_router
 from app.routes.intelligence import router as intelligence_router
 from app.routes.logs import router as logs_router
-from app.routes.articles import router as articles_router
-from app.routes.audit import router as audit_router
-from app.routes.admin import router as admin_router
+from app.routes.qa import router as qa_router
 from app.routes.search import router as search_router
+from app.routes.settings import router as settings_router
 
 app.include_router(auth_router)
 app.include_router(chatbots_router)

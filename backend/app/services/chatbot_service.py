@@ -64,9 +64,7 @@ async def delete_chatbot(db: AsyncSession, workspace_id: uuid.UUID, chatbot_id: 
     # Release character budget for all documents in this chatbot's KBs
     kb_subq = select(KnowledgeBase.id).where(KnowledgeBase.chatbot_id == chatbot_id).scalar_subquery()
     total_result = await db.execute(
-        select(func.coalesce(func.sum(Document.char_count), 0)).where(
-            Document.knowledge_base_id.in_(kb_subq)
-        )
+        select(func.coalesce(func.sum(Document.char_count), 0)).where(Document.knowledge_base_id.in_(kb_subq))
     )
     total_chars = total_result.scalar() or 0
     if total_chars > 0:
@@ -87,9 +85,7 @@ async def delete_chatbot(db: AsyncSession, workspace_id: uuid.UUID, chatbot_id: 
     await db.execute(delete(CrawlJob).where(CrawlJob.kb_id.in_(kb_subq)))
     await db.execute(delete(Chunk).where(Chunk.knowledge_base_id.in_(kb_subq)))
     await db.execute(delete(Document).where(Document.knowledge_base_id.in_(kb_subq)))
-    await db.execute(
-        update(Article).where(Article.knowledge_base_id.in_(kb_subq)).values(knowledge_base_id=None)
-    )
+    await db.execute(update(Article).where(Article.knowledge_base_id.in_(kb_subq)).values(knowledge_base_id=None))
     await db.execute(delete(KnowledgeBase).where(KnowledgeBase.chatbot_id == chatbot_id))
     await db.flush()
 
@@ -97,28 +93,29 @@ async def delete_chatbot(db: AsyncSession, workspace_id: uuid.UUID, chatbot_id: 
     # GapEvents reference RetrievalLogs, so delete them first
     retrieval_log_subq = select(RetrievalLog.id).where(RetrievalLog.chatbot_id == chatbot_id).scalar_subquery()
     await db.execute(delete(GapEvent).where(GapEvent.retrieval_log_id.in_(retrieval_log_subq)))
-    await db.execute(
-        delete(RetrievalLog).where(RetrievalLog.chatbot_id == chatbot_id)
-    )
-    await db.execute(
-        delete(GapCluster).where(GapCluster.chatbot_id == chatbot_id)
-    )
+    await db.execute(delete(RetrievalLog).where(RetrievalLog.chatbot_id == chatbot_id))
+    await db.execute(delete(GapCluster).where(GapCluster.chatbot_id == chatbot_id))
     await db.delete(chatbot)
     await db.flush()
     # Emit usage update if chars were released
     if total_chars > 0:
         from app.services.plan_service import get_plan_limits
+
         ws_result = await db.execute(
             sa_text("SELECT chars_indexed, plan FROM workspaces WHERE id = :id"),
             {"id": workspace_id},
         )
         ws_row = ws_result.one_or_none()
         if ws_row:
-            await notify_workspace(str(workspace_id), "workspace:usage_updated", {
-                "chars_indexed": ws_row.chars_indexed,
-                "chars_limit": get_plan_limits(ws_row.plan)["chars_indexed"],
-                "plan": ws_row.plan,
-            })
+            await notify_workspace(
+                str(workspace_id),
+                "workspace:usage_updated",
+                {
+                    "chars_indexed": ws_row.chars_indexed,
+                    "chars_limit": get_plan_limits(ws_row.plan)["chars_indexed"],
+                    "plan": ws_row.plan,
+                },
+            )
 
 
 async def archive_chatbot(db: AsyncSession, workspace_id: uuid.UUID, chatbot_id: uuid.UUID) -> Chatbot:
