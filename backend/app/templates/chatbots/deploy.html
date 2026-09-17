@@ -3,21 +3,105 @@
 {% block content %}
 <div class="mb-6">
     <a href="/chatbots/{{ chatbot.id }}" class="text-sm text-gray-500 hover:text-gray-700">&larr; {{ chatbot.name }}</a>
-    <h1 class="text-2xl font-bold text-gray-900 mt-1">Deploy Widget</h1>
+    <h1 class="text-2xl font-bold text-gray-900 mt-1">Publish</h1>
 </div>
 
-<nav class="flex gap-4 border-b border-gray-200 mb-6">
-    <a href="/chatbots/{{ chatbot.id }}" class="pb-2 text-sm text-gray-500 hover:text-gray-700 border-b-2 border-transparent">Overview</a>
-    <a href="/chatbots/{{ chatbot.id }}/sources" class="pb-2 text-sm text-gray-500 hover:text-gray-700 border-b-2 border-transparent">Sources</a>
-    <a href="/chatbots/{{ chatbot.id }}/deploy" class="pb-2 text-sm font-medium border-b-2 border-indigo-600 text-indigo-600">Deploy</a>
-    <a href="/chatbots/{{ chatbot.id }}/settings" class="pb-2 text-sm text-gray-500 hover:text-gray-700 border-b-2 border-transparent">Settings</a>
-</nav>
+{% include "chatbots/_tabs.html" %}
 
-<div class="bg-white rounded-lg border border-gray-200 p-6 max-w-2xl">
-    <h3 class="text-sm font-medium text-gray-700 mb-3">Embed code</h3>
-    <p class="text-sm text-gray-500 mb-4">Paste this snippet before the closing <code>&lt;/body&gt;</code> tag on your website.</p>
-    <div class="bg-gray-900 rounded-lg p-4 overflow-x-auto">
-        <code class="text-sm text-green-400 whitespace-pre">&lt;script src="{{ base_url }}/static/widget/pulselight.js" data-chatbot-id="{{ chatbot.id }}"&gt;&lt;/script&gt;</code>
+<div class="max-w-2xl">
+    <!-- Tab switcher -->
+    <div class="flex gap-1 border-b border-warm-200 mb-6">
+        <button onclick="showTab('script')" id="tab-script" class="deploy-tab px-4 py-2.5 text-sm font-medium border-b-2 -mb-px border-brand-500 text-brand-600">Script Tag</button>
+        <button onclick="showTab('link')" id="tab-link" class="deploy-tab px-4 py-2.5 text-sm font-medium border-b-2 -mb-px border-transparent text-gray-500 hover:text-gray-700">Shareable Link</button>
+        <button onclick="showTab('api')" id="tab-api" class="deploy-tab px-4 py-2.5 text-sm font-medium border-b-2 -mb-px border-transparent text-gray-500 hover:text-gray-700">REST API</button>
+    </div>
+
+    <!-- Script Tag -->
+    <div id="panel-script" class="deploy-panel">
+        <div class="bg-white rounded-xl border border-warm-200 p-6">
+            <h3 class="text-sm font-semibold text-gray-900 mb-2">Embed on your website</h3>
+            <p class="text-sm text-gray-500 mb-4">Paste this snippet before the closing <code class="bg-gray-100 px-1 rounded text-xs">&lt;/body&gt;</code> tag.</p>
+            <div class="relative group">
+                <pre class="bg-gray-900 rounded-lg p-4 overflow-x-auto"><code class="text-sm text-green-400 font-mono">&lt;script src="{{ base_url }}/static/widget/pulselight.js"
+  data-chatbot-id="{{ chatbot.id }}"&gt;&lt;/script&gt;</code></pre>
+                <button onclick="navigator.clipboard.writeText(this.dataset.code); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy',1500)"
+                        data-code='&lt;script src="{{ base_url }}/static/widget/pulselight.js" data-chatbot-id="{{ chatbot.id }}"&gt;&lt;/script&gt;'
+                        class="absolute top-2 right-2 px-2.5 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+                    Copy
+                </button>
+            </div>
+        </div>
+
+        <!-- Platform guides -->
+        <div class="mt-4 space-y-2">
+            {% for platform in [
+                {"name": "WordPress", "steps": "Go to Appearance → Theme File Editor → footer.php. Paste the script tag before &lt;/body&gt;. Save and verify on your site."},
+                {"name": "Shopify", "steps": "Go to Online Store → Themes → Edit code → theme.liquid. Paste the script tag before &lt;/body&gt;. Save."},
+                {"name": "Webflow", "steps": "Go to Project Settings → Custom Code → Footer Code. Paste the script tag. Save and publish."},
+            ] %}
+            <details class="bg-white rounded-xl border border-warm-200">
+                <summary class="px-4 py-3 text-sm font-medium text-gray-700 cursor-pointer hover:bg-warm-50 rounded-xl">{{ platform.name }}</summary>
+                <div class="px-4 pb-3 text-sm text-gray-500">{{ platform.steps }}</div>
+            </details>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Shareable Link -->
+    <div id="panel-link" class="deploy-panel hidden">
+        <div class="bg-white rounded-xl border border-warm-200 p-6">
+            <h3 class="text-sm font-semibold text-gray-900 mb-2">Chat Link</h3>
+            <p class="text-sm text-gray-500 mb-4">Share this URL to let anyone chat with your bot in a full-page view.</p>
+            <div class="flex gap-2 mb-6">
+                <input type="text" readonly value="{{ base_url }}/chat/{{ chatbot.id }}" id="chat-link"
+                       class="flex-1 rounded-lg border border-warm-200 px-3 py-2 text-sm font-mono bg-warm-50 text-gray-700">
+                <button onclick="navigator.clipboard.writeText(document.getElementById('chat-link').value); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy',1500)"
+                        class="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-lg text-sm font-medium transition-colors">Copy</button>
+            </div>
+
+            <!-- QR Code -->
+            <h4 class="text-sm font-medium text-gray-700 mb-3">QR Code</h4>
+            <div class="bg-white border border-warm-200 rounded-lg p-4 inline-block">
+                <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={{ base_url }}/chat/{{ chatbot.id }}" alt="QR Code" class="w-48 h-48">
+            </div>
+            <p class="text-xs text-gray-400 mt-2">Scan to open the chat page on mobile.</p>
+        </div>
+    </div>
+
+    <!-- REST API -->
+    <div id="panel-api" class="deploy-panel hidden">
+        <div class="bg-white rounded-xl border border-warm-200 p-6">
+            <h3 class="text-sm font-semibold text-gray-900 mb-2">REST API</h3>
+            <p class="text-sm text-gray-500 mb-4">Send messages programmatically via SSE streaming.</p>
+            <div class="relative group">
+                <pre class="bg-gray-900 rounded-lg p-4 overflow-x-auto text-sm"><code class="text-green-400 font-mono">curl -N {{ base_url }}/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "chatbot_id": "{{ chatbot.id }}",
+    "message": "Hello!",
+    "session_id": "visitor-123"
+  }'</code></pre>
+                <button onclick="navigator.clipboard.writeText(this.closest('.relative').querySelector('code').textContent); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy',1500)"
+                        class="absolute top-2 right-2 px-2.5 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+                    Copy
+                </button>
+            </div>
+            <p class="text-xs text-gray-400 mt-3">Response is an SSE stream with <code class="bg-gray-100 px-1 rounded">token</code>, <code class="bg-gray-100 px-1 rounded">done</code>, and <code class="bg-gray-100 px-1 rounded">error</code> events.</p>
+        </div>
     </div>
 </div>
+
+<script>
+function showTab(name) {
+    document.querySelectorAll('.deploy-panel').forEach(p => p.classList.add('hidden'));
+    document.querySelectorAll('.deploy-tab').forEach(t => {
+        t.classList.remove('border-brand-500', 'text-brand-600');
+        t.classList.add('border-transparent', 'text-gray-500');
+    });
+    document.getElementById('panel-' + name).classList.remove('hidden');
+    const tab = document.getElementById('tab-' + name);
+    tab.classList.add('border-brand-500', 'text-brand-600');
+    tab.classList.remove('border-transparent', 'text-gray-500');
+}
+</script>
 {% endblock %}

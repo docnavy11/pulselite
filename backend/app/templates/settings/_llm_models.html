@@ -1,0 +1,135 @@
+{# Partial: edit mode — rendered inside #models-panel via "Load from OpenRouter" #}
+{% if error %}
+<p class="text-sm text-red-600">{{ error }}</p>
+{% else %}
+
+{# Selected chips #}
+<div id="model-chips" class="flex flex-wrap gap-1.5 min-h-[28px] mb-3">
+    {% for m in selected_models %}
+    <span class="inline-flex items-center gap-1 bg-brand-50 border border-brand-200 rounded-full px-2.5 py-1 text-xs font-mono text-brand-700">
+        {{ m.split('/')[-1] }}
+        <button type="button" onclick="removeChip('{{ m }}')"
+                class="text-brand-400 hover:text-brand-700 ml-0.5 leading-none font-sans">&times;</button>
+    </span>
+    {% else %}
+    <span id="chips-empty" class="text-xs text-gray-400 italic self-center">No models selected — all allowed</span>
+    {% endfor %}
+</div>
+
+<input type="text" id="model-search" placeholder="Search models..."
+       oninput="filterModels(this.value)"
+       class="block w-full rounded-lg border border-warm-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500 mb-2">
+
+<div id="model-list" class="max-h-72 overflow-y-auto border border-warm-200 rounded-lg divide-y divide-warm-100">
+    {% for model in models %}
+    <label class="flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 cursor-pointer"
+           data-name="{{ model.name|lower }}" data-id="{{ model.id|lower }}">
+        <input type="checkbox" value="{{ model.id }}"
+               {% if model.id in selected_models %}checked{% endif %}
+               onchange="toggleChip(this.value, this.checked)"
+               class="rounded border-warm-200 text-brand-600 focus:ring-brand-500 flex-shrink-0">
+        <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium text-gray-800 truncate">{{ model.name }}</p>
+            <p class="text-xs text-gray-500 font-mono truncate">{{ model.id }}</p>
+        </div>
+        {% if model.context_length %}
+        <span class="text-xs text-gray-400 flex-shrink-0">{{ (model.context_length / 1000)|int }}k ctx</span>
+        {% endif %}
+    </label>
+    {% endfor %}
+</div>
+
+<div class="flex items-center justify-between mt-3">
+    <button type="button" onclick="toggleSelectAll()" id="select-all-btn"
+            class="text-sm text-brand-600 hover:underline">Select all</button>
+    <form hx-post="/settings/llm/models"
+          hx-target="#models-panel"
+          hx-swap="innerHTML">
+        <input type="hidden" name="allowed_models" id="allowed-models-hidden" value="{{ selected_models|tojson }}">
+        <button type="submit"
+                class="bg-brand-500 text-white rounded-lg px-4 py-2 text-sm font-semibold hover:bg-brand-600 transition-colors">
+            Save selection
+        </button>
+    </form>
+</div>
+
+<script>
+(function() {
+    var selected = new Set({{ selected_models|tojson }});
+
+    function syncHidden() {
+        var h = document.getElementById('allowed-models-hidden');
+        if (h) h.value = JSON.stringify([...selected]);
+    }
+
+    function renderChips() {
+        var c = document.getElementById('model-chips');
+        if (!c) return;
+        if (selected.size === 0) {
+            c.innerHTML = '<span id="chips-empty" class="text-xs text-gray-400 italic self-center">No models selected — all allowed</span>';
+            return;
+        }
+        c.innerHTML = [...selected].map(function(id) {
+            var short = id.split('/').pop();
+            var safe = id.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+            return '<span class="inline-flex items-center gap-1 bg-brand-50 border border-brand-200 rounded-full px-2.5 py-1 text-xs font-mono text-brand-700">'
+                + short
+                + '<button type="button" onclick="removeChip(\'' + safe + '\')" class="text-brand-400 hover:text-brand-700 ml-0.5 leading-none font-sans">&times;</button>'
+                + '</span>';
+        }).join('');
+    }
+
+    window.toggleChip = function(id, checked) {
+        if (checked) selected.add(id); else selected.delete(id);
+        renderChips();
+        syncHidden();
+        updateSelectAllLabel();
+    };
+
+    window.removeChip = function(id) {
+        selected.delete(id);
+        var cb = document.querySelector('#model-list input[value="' + id.replace(/"/g, '\\"') + '"]');
+        if (cb) cb.checked = false;
+        renderChips();
+        syncHidden();
+        updateSelectAllLabel();
+    };
+
+    window.filterModels = function(q) {
+        q = q.toLowerCase();
+        document.querySelectorAll('#model-list label').forEach(function(el) {
+            el.style.display = (!q || el.dataset.name.includes(q) || el.dataset.id.includes(q)) ? '' : 'none';
+        });
+        updateSelectAllLabel();
+    };
+
+    window.toggleSelectAll = function() {
+        var visible = [...document.querySelectorAll('#model-list label')].filter(function(el) {
+            return el.style.display !== 'none';
+        });
+        var allChecked = visible.every(function(el) { return el.querySelector('input').checked; });
+        visible.forEach(function(el) {
+            var cb = el.querySelector('input');
+            cb.checked = !allChecked;
+            if (!allChecked) selected.add(cb.value); else selected.delete(cb.value);
+        });
+        renderChips();
+        syncHidden();
+        updateSelectAllLabel();
+    };
+
+    function updateSelectAllLabel() {
+        var btn = document.getElementById('select-all-btn');
+        if (!btn) return;
+        var visible = [...document.querySelectorAll('#model-list label')].filter(function(el) {
+            return el.style.display !== 'none';
+        });
+        btn.textContent = (visible.length > 0 && visible.every(function(el) { return el.querySelector('input').checked; }))
+            ? 'Deselect all' : 'Select all';
+    }
+
+    syncHidden();
+    updateSelectAllLabel();
+})();
+</script>
+{% endif %}

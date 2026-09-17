@@ -134,7 +134,7 @@ async def analyze_conversation(payload: dict):
     async with async_session_factory() as db:
         from app.models.conversations import Conversation, Message
         from app.models.intelligence import ConversationAnalysis
-        from app.services.llm import get_llm_client, get_internal_model
+        from app.services.llm import get_internal_client, get_llm_client, get_internal_model
 
         if not force:
             existing = await db.execute(
@@ -158,7 +158,7 @@ async def analyze_conversation(payload: dict):
 
         transcript = "\n".join(f"{m.author_type}: {m.content}" for m in messages if m.content)
         model = await get_internal_model(db, workspace_id)
-        client = get_llm_client("openrouter")
+        client = get_internal_client()
 
         import json
         prompt = f"""Analyze this conversation and return JSON:
@@ -285,7 +285,7 @@ async def generate_qa(payload: dict):
     async with async_session_factory() as db:
         from app.models.knowledge import Chunk, KnowledgeBase, Chatbot
         from app.models.qa import QAPair
-        from app.services.llm import get_llm_client, get_internal_model
+        from app.services.llm import get_internal_client, get_llm_client, get_internal_model
         import json, random
 
         chatbot_result = await db.execute(select(Chatbot).where(Chatbot.id == chatbot_id))
@@ -309,7 +309,7 @@ async def generate_qa(payload: dict):
         content = "\n\n---\n\n".join(c.content for c in sampled)
 
         model = await get_internal_model(db, workspace_id)
-        client = get_llm_client("openrouter")
+        client = get_internal_client()
 
         prompt = f"""Based on this content, generate 10 realistic Q&A pairs that a customer might ask.
 Return JSON array: [{{"question": "...", "answer": "..."}}]
@@ -439,6 +439,196 @@ async def gdpr_export(payload: dict):
             json.dump(export_data, f, indent=2)
 
         logger.info("GDPR export %s completed for workspace %s", export_id, workspace_id)
+
+
+# --- Q&A testing ---
+
+@register_job("test_qa_question")
+async def test_qa_question(payload: dict):
+    """Run a single QA pair through the RAG pipeline and score it."""
+    qa_id = uuid.UUID(payload["qa_id"])
+    async with async_session_factory() as db:
+        from app.models.qa import QAPair
+        from app.models.knowledge import Chatbot, KnowledgeBase, Document
+        from app.models.organizational import Workspace
+        from app.services.rag import hybrid_search, rerank, compute_confidence, should_escalate, build_context_prompt, build_system_prompt
+        from app.services.llm import get_internal_client, get_llm_client, get_internal_model
+        from app.services.encryption import decrypt_api_key
+
+        pair = (await db.execute(select(QAPair).where(QAPair.id == qa_id))).scalar_one_or_none()
+        if not pair:
+            return
+
+        chatbot = (await db.execute(select(Chatbot).where(Chatbot.id == pair.chatbot_id))).scalar_one_or_none()
+        if not chatbot:
+            pair.status = "failed"
+            pair.error_message = "Chatbot not found"
+            await db.commit()
+            return
+
+        kb = (await db.execute(select(KnowledgeBase).where(KnowledgeBase.chatbot_id == chatbot.id).limit(1))).scalar_one_or_none()
+        if not kb:
+            pair.status = "failed"
+            pair.error_message = "No knowledge base configured"
+            await db.commit()
+            return
+
+        ws = (await db.execute(select(Workspace).where(Workspace.id == pair.workspace_id))).scalar_one_or_none()
+        openrouter_key = None
+        openrouter_base_url = None
+        if ws:
+            openrouter_base_url = ws.openrouter_base_url
+            if ws.openrouter_api_key:
+                try:
+                    openrouter_key = decrypt_api_key(ws.openrouter_api_key)
+                except Exception:
+                    pass
+
+        try:
+            candidates = await hybrid_search(db, chatbot.workspace_id, kb.id, pair.question, top_k=20)
+            if chatbot.use_reranking and candidates:
+                scored_chunks = rerank(pair.question, candidates, top_k=chatbot.retrieval_top_k)
+            else:
+                scored_chunks = [(c, 0.5) for c in candidates[:chatbot.retrieval_top_k]]
+
+            confidence_score, _ = compute_confidence(scored_chunks)
+            escalated = should_escalate(confidence_score, chatbot.confidence_threshold)
+
+            doc_ids = list({chunk.document_id for chunk, _ in scored_chunks})
+            docs_result = await db.execute(select(Document.id, Document.title, Document.source_url).where(Document.id.in_(doc_ids)))
+            docs_by_id = {row[0]: {"title": row[1], "source_url": row[2]} for row in docs_result.all()}
+            seen_docs: set = set()
+            sources = []
+            for chunk, _ in scored_chunks:
+                if chunk.document_id not in seen_docs:
+                    doc_info = docs_by_id.get(chunk.document_id, {})
+                    if doc_info.get("source_url"):
+                        sources.append({"index": len(sources) + 1, "title": doc_info.get("title") or f"Source {len(sources) + 1}", "url": doc_info["source_url"]})
+                        seen_docs.add(chunk.document_id)
+
+            api_key = openrouter_key
+            if api_key is None and chatbot.byoak:
+                try:
+                    api_key = decrypt_api_key(chatbot.byoak)
+                except Exception:
+                    pass
+            provider = "openrouter" if openrouter_key else chatbot.llm_provider
+            client = get_llm_client(provider, api_key=api_key, base_url=openrouter_base_url)
+
+            context_prompt = build_context_prompt(scored_chunks)
+            system_prompt_text = build_system_prompt(chatbot)
+            generated_answer = await client.generate(
+                messages=[
+                    {"role": "system", "content": system_prompt_text},
+                    {"role": "user", "content": f"{context_prompt}\n\nUser question: {pair.question}"},
+                ],
+                model=chatbot.llm_model, temperature=0.0, max_tokens=500,
+            )
+
+            if escalated:
+                status = "escalated"
+            elif pair.answer:
+                # LLM-as-judge: compare generated vs expected answer
+                internal_model = await get_internal_model(db, pair.workspace_id)
+                judge_client = get_internal_client()
+                judge_prompt = (
+                    f"Compare these two answers and determine if they convey the same information.\n"
+                    f"Expected answer: {pair.answer}\n"
+                    f"Generated answer: {generated_answer}\n\n"
+                    f"Reply with PASS if the generated answer correctly addresses the question and is consistent "
+                    f"with the expected answer, or FAIL if it does not. Reply with just one word."
+                )
+                verdict = await judge_client.generate(
+                    messages=[{"role": "user", "content": judge_prompt}],
+                    model=internal_model, temperature=0.0, max_tokens=10,
+                )
+                status = "passed" if "PASS" in verdict.strip().upper() else "failed"
+            else:
+                status = "passed"
+
+            pair.status = status
+            pair.confidence_score = confidence_score
+            pair.sources = sources if sources else None
+            pair.escalated = escalated
+            pair.error_message = None
+        except Exception as exc:
+            logger.exception("test_qa_question failed for pair %s", qa_id)
+            pair.status = "failed"
+            pair.error_message = str(exc)[:300]
+
+        await db.commit()
+
+
+@register_job("suggest_qa_answer")
+async def suggest_qa_answer(payload: dict):
+    """Generate an AI-suggested answer for a QA pair using the knowledge base."""
+    qa_id = uuid.UUID(payload["qa_id"])
+    async with async_session_factory() as db:
+        from app.models.qa import QAPair
+        from app.models.knowledge import Chatbot, KnowledgeBase
+        from app.models.organizational import Workspace
+        from app.services.rag import hybrid_search, rerank, build_context_prompt
+        from app.services.llm import get_internal_client, get_llm_client
+        from app.services.encryption import decrypt_api_key
+
+        pair = (await db.execute(select(QAPair).where(QAPair.id == qa_id))).scalar_one_or_none()
+        if not pair:
+            return
+
+        chatbot = (await db.execute(select(Chatbot).where(Chatbot.id == pair.chatbot_id))).scalar_one_or_none()
+        if not chatbot:
+            return
+
+        kb = (await db.execute(select(KnowledgeBase).where(KnowledgeBase.chatbot_id == chatbot.id).limit(1))).scalar_one_or_none()
+        if not kb:
+            return
+
+        ws = (await db.execute(select(Workspace).where(Workspace.id == pair.workspace_id))).scalar_one_or_none()
+        openrouter_key = None
+        openrouter_base_url = None
+        if ws:
+            openrouter_base_url = ws.openrouter_base_url
+            if ws.openrouter_api_key:
+                try:
+                    openrouter_key = decrypt_api_key(ws.openrouter_api_key)
+                except Exception:
+                    pass
+
+        try:
+            candidates = await hybrid_search(db, chatbot.workspace_id, kb.id, pair.question, top_k=10)
+            if chatbot.use_reranking and candidates:
+                scored_chunks = rerank(pair.question, candidates, top_k=5)
+            else:
+                scored_chunks = [(c, 0.5) for c in candidates[:5]]
+
+            context_prompt = build_context_prompt(scored_chunks)
+            api_key = openrouter_key
+            if api_key is None and chatbot.byoak:
+                try:
+                    api_key = decrypt_api_key(chatbot.byoak)
+                except Exception:
+                    pass
+            provider = "openrouter" if openrouter_key else chatbot.llm_provider
+            client = get_llm_client(provider, api_key=api_key, base_url=openrouter_base_url)
+
+            prompt = (
+                f"{context_prompt}\n\n"
+                f"Question: {pair.question}\n\n"
+                f"Write a concise, accurate answer based only on the provided context."
+            )
+            suggested = await client.generate(
+                messages=[{"role": "user", "content": prompt}],
+                model=chatbot.llm_model, temperature=0.3, max_tokens=300,
+            )
+            pair.suggested_answer = suggested.strip()
+            await db.commit()
+
+            from app.realtime.events import notify_workspace
+            await notify_workspace(str(pair.workspace_id), "qa:suggestion_ready", {
+                "qa_id": str(qa_id), "chatbot_id": str(pair.chatbot_id),
+            })
+        except Exception:
+            logger.exception("suggest_qa_answer failed for pair %s", qa_id)
 
 
 # --- Reindex article ---

@@ -1,0 +1,29 @@
+<div id="crawl-progress" class="bg-white rounded-lg border border-gray-200 p-4"
+     {% if status == 'pending' or status == 'running' %}
+     hx-get="/chatbots/{{ chatbot_id }}/crawl/{{ job_id }}" hx-trigger="every 2s" hx-swap="outerHTML"
+     {% endif %}>
+    <div class="flex items-center justify-between">
+        <div>
+            <p class="text-sm font-medium text-gray-900">Crawl {{ status }}</p>
+            {% if pages_discovered %}
+            <p class="text-xs text-gray-500">Discovered: {{ pages_discovered }} | Queued: {{ pages_queued or 0 }} | Failed: {{ pages_failed or 0 }}</p>
+            {% endif %}
+        </div>
+        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
+            {% if status == 'completed' %}bg-green-100 text-green-800
+            {% elif status == 'failed' %}bg-red-100 text-red-800
+            {% elif status == 'running' %}bg-blue-100 text-blue-800
+            {% else %}bg-yellow-100 text-yellow-800{% endif %}">
+            {{ status }}
+        </span>
+    </div>
+    {% if error_message %}
+    <p class="text-xs text-red-600 mt-2">{{ error_message }}</p>
+    {% endif %}
+    {% if status == 'running' or status == 'pending' %}
+    <div class="mt-2 w-full bg-gray-200 rounded-full h-1.5">
+        {% set pct = ((pages_queued or 0) / (pages_discovered or 1) * 100)|int %}
+        <div class="bg-brand-500 h-1.5 rounded-full transition-all" style="width: {{ pct }}%"></div>
+    </div>
+    {% endif %}
+</div>

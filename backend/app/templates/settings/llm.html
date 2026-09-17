@@ -1,44 +1,196 @@
 {% extends "base.html" %}
-{% block title %}AI Models — PulseLight{% endblock %}
+{% block title %}AI Models — Settings — PulseLight{% endblock %}
 {% block content %}
-<h1 class="text-2xl font-bold text-gray-900 mb-6">Settings</h1>
+<h1 class="text-2xl font-bold text-gray-900 mb-1">AI Models</h1>
+<p class="text-sm text-gray-500 mb-6">Configure your OpenRouter API key and select which models chatbots in this workspace can use.</p>
 
-<div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
-    <nav class="space-y-1">
-        <a href="/settings" class="block px-3 py-2 text-sm rounded-md hover:bg-gray-100">General</a>
-        <a href="/settings/llm" class="block px-3 py-2 text-sm rounded-md bg-gray-100 font-medium">AI Models</a>
-    </nav>
+{% include "settings/_tabs.html" %}
 
-    <div class="lg:col-span-3">
-        <form hx-post="/settings/llm" hx-swap="none" class="bg-white rounded-lg border border-gray-200 p-6 space-y-4">
+<div class="space-y-6 max-w-2xl">
+
+    {% if cloud_mode %}
+    <!-- BYOK -->
+    <div class="bg-white rounded-xl border border-warm-200 p-6">
+        <div class="flex items-center justify-between">
             <div>
-                <label for="openrouter_api_key" class="block text-sm font-medium text-gray-700">API Key</label>
-                <input type="password" name="openrouter_api_key" id="openrouter_api_key" placeholder="sk-or-..."
-                    class="mt-1 block w-full max-w-md rounded-md border border-gray-300 px-3 py-2 text-sm">
-                <p class="text-xs text-gray-400 mt-1">{% if workspace.openrouter_api_key %}Key configured{% else %}Not set{% endif %}</p>
+                <h2 class="text-sm font-semibold text-gray-900">Bring Your Own Key (BYOK)</h2>
+                <p class="text-xs text-gray-500 mt-1">
+                    {% if workspace.is_byok %}
+                    Using your own API key — 50% discount on credits
+                    {% else %}
+                    Using platform API keys — standard credit pricing
+                    {% endif %}
+                </p>
             </div>
-            <div>
-                <label for="openrouter_base_url" class="block text-sm font-medium text-gray-700">Base URL</label>
-                <input type="url" name="openrouter_base_url" id="openrouter_base_url"
-                    value="{{ workspace.openrouter_base_url or '' }}" placeholder="https://openrouter.ai/api/v1"
-                    class="mt-1 block w-full max-w-md rounded-md border border-gray-300 px-3 py-2 text-sm">
+            <form hx-post="/settings/llm/byok" hx-swap="outerHTML" hx-target="closest div.bg-white">
+                <button type="submit"
+                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {% if workspace.is_byok %}bg-brand-500{% else %}bg-gray-300{% endif %}">
+                    <span class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform {% if workspace.is_byok %}translate-x-6{% else %}translate-x-1{% endif %}"></span>
+                </button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- API Connection -->
+    <div class="bg-white rounded-xl border border-warm-200 p-6 space-y-4">
+        <div class="flex items-center gap-2">
+            <h2 class="text-sm font-semibold text-gray-900">OpenRouter API Key</h2>
+            {% if workspace.openrouter_api_key %}
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-green-100 text-green-700">✓ Key saved</span>
+            {% elif env_api_key_set %}
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-blue-100 text-blue-700">Server default</span>
+            {% endif %}
+        </div>
+
+        <form hx-post="/settings/llm/key" hx-swap="none" class="flex gap-2 max-w-md">
+            <input type="password" name="openrouter_api_key"
+                   placeholder="{% if workspace.openrouter_api_key %}••••••••••••••••••••{% else %}sk-or-v1-...{% endif %}"
+                   class="flex-1 rounded-lg border border-warm-200 px-3 py-2 text-sm font-mono focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+            <button type="submit"
+                    class="bg-brand-500 text-white rounded-lg px-4 py-2 text-sm font-semibold hover:bg-brand-600 transition-colors whitespace-nowrap">
+                Save key
+            </button>
+        </form>
+
+        {% if workspace.openrouter_api_key %}
+        <form hx-post="/settings/llm/key/remove" hx-swap="none">
+            <button type="submit" class="text-xs text-red-500 hover:underline">Remove key</button>
+        </form>
+        {% endif %}
+
+        <div class="border-t border-warm-100 pt-4 space-y-2">
+            <label class="block text-sm font-medium text-gray-700">
+                Custom Base URL <span class="text-gray-400 font-normal">(optional)</span>
+            </label>
+            <p class="text-xs text-gray-500">Override the default API endpoint — useful for proxies or self-hosted compatible APIs.</p>
+            <form hx-post="/settings/llm/base-url" hx-swap="none" class="flex gap-2 max-w-md">
+                <input type="url" name="openrouter_base_url"
+                       value="{{ workspace.openrouter_base_url or '' }}"
+                       placeholder="{{ env_base_url or 'https://openrouter.ai/api/v1' }}"
+                       class="flex-1 rounded-lg border border-warm-200 px-3 py-2 text-sm font-mono focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+                <button type="submit"
+                        class="bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap">
+                    Save URL
+                </button>
+            </form>
+            {% if not workspace.openrouter_base_url and env_base_url %}
+            <p class="text-xs text-gray-400">Using server default: <code class="bg-gray-100 px-1 rounded">{{ env_base_url }}</code></p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Allowed Models -->
+    <div class="bg-white rounded-xl border border-warm-200 p-6 space-y-4">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <h2 class="text-sm font-semibold text-gray-900">Allowed Models</h2>
+                {% if workspace.allowed_models %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-brand-100 text-brand-700">{{ workspace.allowed_models|length }} selected</span>
+                {% endif %}
             </div>
-            <div>
-                <label for="default_chatbot_model" class="block text-sm font-medium text-gray-700">Default chatbot model</label>
-                <input type="text" name="default_chatbot_model" id="default_chatbot_model"
-                    value="{{ workspace.default_chatbot_model or '' }}" placeholder="claude-haiku-4-5-20251001"
-                    class="mt-1 block w-full max-w-md rounded-md border border-gray-300 px-3 py-2 text-sm">
+            <button type="button"
+                    hx-get="/settings/llm/models"
+                    hx-target="#models-panel"
+                    hx-swap="innerHTML"
+                    hx-indicator="#models-loading"
+                    {% if not workspace.openrouter_api_key and not env_api_key_set %}disabled title="Save your API key first"{% endif %}
+                    class="flex items-center gap-1.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors rounded-lg px-3 py-1.5">
+                <svg id="models-loading" class="htmx-indicator animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                Load from OpenRouter
+            </button>
+        </div>
+
+        {% if not workspace.openrouter_api_key and not env_api_key_set %}
+        <p class="text-sm text-gray-500">Save your API key first to load available models.</p>
+        {% endif %}
+
+        <!-- Currently selected chips (shown before loading) -->
+        <div id="models-panel">
+            {% if workspace.allowed_models %}
+            <div class="flex flex-wrap gap-1.5">
+                {% for m in workspace.allowed_models %}
+                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-mono bg-brand-50 border border-brand-200 text-brand-700">
+                    {{ m.split('/')[-1] }}
+                </span>
+                {% endfor %}
             </div>
-            <div>
-                <label for="internal_model" class="block text-sm font-medium text-gray-700">Internal model (autoconfig, analysis)</label>
-                <input type="text" name="internal_model" id="internal_model"
-                    value="{{ workspace.internal_model or '' }}" placeholder="claude-haiku-4-5-20251001"
-                    class="mt-1 block w-full max-w-md rounded-md border border-gray-300 px-3 py-2 text-sm">
+            {% else %}
+            <p class="text-xs text-gray-400 italic">All models allowed (no restriction). Load from OpenRouter to select specific models.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Default Chatbot Model -->
+    <div class="bg-white rounded-xl border border-warm-200 p-6 space-y-4">
+        <div>
+            <h2 class="text-sm font-semibold text-gray-900 mb-1">Default Chatbot Model</h2>
+            <p class="text-xs text-gray-500">Applied when creating a new chatbot.</p>
+        </div>
+        <form hx-post="/settings/llm/default-chatbot-model" hx-swap="none" class="flex gap-2 max-w-md">
+            <div id="default-model-input" class="flex-1">
+                {% if workspace.allowed_models %}
+                <select name="default_chatbot_model"
+                        class="w-full rounded-lg border border-warm-200 px-3 py-2 text-sm text-gray-700 focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+                    <option value="">— use default —</option>
+                    {% for m in workspace.allowed_models %}
+                    <option value="{{ m }}" {% if workspace.default_chatbot_model == m %}selected{% endif %}>{{ m.split('/')[-1] }}</option>
+                    {% endfor %}
+                </select>
+                {% else %}
+                <input type="text" name="default_chatbot_model"
+                       value="{{ workspace.default_chatbot_model or '' }}"
+                       placeholder="{{ env_default_chatbot_model or 'anthropic/claude-haiku-4-5-20251001' }}"
+                       class="w-full rounded-lg border border-warm-200 px-3 py-2 text-sm font-mono focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+                {% endif %}
             </div>
-            <div class="flex justify-end pt-2">
-                <button type="submit" class="bg-indigo-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-indigo-700">Save</button>
-            </div>
+            <button type="submit"
+                    class="bg-brand-500 text-white rounded-lg px-4 py-2 text-sm font-semibold hover:bg-brand-600 transition-colors flex-shrink-0">
+                Save
+            </button>
         </form>
     </div>
+
+    <!-- Background Tasks Model -->
+    <div class="bg-white rounded-xl border border-warm-200 p-6 space-y-4">
+        <div>
+            <h2 class="text-sm font-semibold text-gray-900 mb-1">Background Tasks Model</h2>
+            <p class="text-xs text-gray-500">
+                Used for internal tasks: conversation analysis, Q&amp;A generation, action triggers, and the copilot.
+                {% if not workspace.internal_model %}
+                Defaults to <code class="bg-gray-100 px-1 rounded">{{ env_internal_model or 'anthropic/claude-haiku-4-5-20251001' }}</code>.
+                {% endif %}
+            </p>
+        </div>
+        <form hx-post="/settings/llm/internal-model" hx-swap="none" class="flex gap-2 max-w-md">
+            <div id="internal-model-input" class="flex-1">
+                {% if workspace.allowed_models %}
+                <select name="internal_model"
+                        class="w-full rounded-lg border border-warm-200 px-3 py-2 text-sm text-gray-700 focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+                    <option value="">— use default —</option>
+                    {% for m in workspace.allowed_models %}
+                    <option value="{{ m }}" {% if workspace.internal_model == m %}selected{% endif %}>{{ m.split('/')[-1] }}</option>
+                    {% endfor %}
+                </select>
+                {% else %}
+                <input type="text" name="internal_model"
+                       value="{{ workspace.internal_model or '' }}"
+                       placeholder="{{ env_internal_model or 'anthropic/claude-haiku-4-5-20251001' }}"
+                       class="w-full rounded-lg border border-warm-200 px-3 py-2 text-sm font-mono focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+                {% endif %}
+            </div>
+            <button type="submit"
+                    class="bg-brand-500 text-white rounded-lg px-4 py-2 text-sm font-semibold hover:bg-brand-600 transition-colors flex-shrink-0">
+                Save
+            </button>
+        </form>
+    </div>
+
 </div>
 {% endblock %}

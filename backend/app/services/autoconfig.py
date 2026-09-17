@@ -5,13 +5,13 @@ import random
 import re
 from dataclasses import dataclass
 
-from app.services.llm.openrouter_client import OpenRouterLLMClient
+from app.services.llm import get_internal_client
 
 logger = logging.getLogger(__name__)
 
 _HAIKU_MODEL = "claude-haiku-4-5-20251001"
 
-_llm_client = OpenRouterLLMClient()
+_llm_client = get_internal_client()
 
 _DEFAULT_QUESTIONS = [
     "How can I get started?",

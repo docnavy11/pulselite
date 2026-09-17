@@ -1,0 +1,457 @@
+{% extends "base.html" %}
+{% block title %}Integrations — Settings — PulseLight{% endblock %}
+{% block content %}
+
+{# ── Macros (must be declared before use in Jinja2) ── #}
+{% macro connected_badge(connected) %}
+{% if connected %}
+<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-green-100 text-green-700">Connected</span>
+{% else %}
+<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-gray-100 text-gray-500">Not connected</span>
+{% endif %}
+{% endmacro %}
+
+{% macro section_header(title) %}
+<h2 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3 mt-2">{{ title }}</h2>
+{% endmacro %}
+
+{# Expandable config card (for API-key integrations) #}
+{% macro config_card(type, icon, icon_cls, name, desc, cfg) %}
+<div class="bg-white rounded-xl border border-warm-200 p-5">
+    <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg {{ icon_cls }} flex items-center justify-center text-sm font-bold">{{ icon }}</div>
+            <div>
+                <div class="flex items-center gap-2">
+                    <p class="text-sm font-semibold text-gray-900">{{ name }}</p>
+                    {{ connected_badge(cfg and cfg.is_active) }}
+                </div>
+                <p class="text-xs text-gray-500 mt-0.5">{{ desc }}</p>
+            </div>
+        </div>
+        <button type="button" onclick="toggleDetails('details-{{ type }}')"
+                class="text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors rounded-lg px-3 py-1.5">
+            {% if cfg and cfg.is_active %}Update{% else %}Configure{% endif %}
+        </button>
+    </div>
+    <div id="details-{{ type }}" class="hidden mt-4 pt-4 border-t border-warm-100">
+        <form hx-post="/settings/integrations/{{ type }}" hx-swap="none" class="space-y-3">
+            {{ caller() }}
+            <div class="flex justify-end pt-1">
+                <button type="submit"
+                        class="bg-brand-500 text-white rounded-lg px-4 py-2 text-sm font-semibold hover:bg-brand-600 transition-colors">
+                    Save
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endmacro %}
+
+{# OAuth card (no inline form, just redirect button) #}
+{% macro oauth_card(type, icon, icon_cls, name, desc, cfg, connected_desc, disconnected_desc) %}
+<div class="bg-white rounded-xl border border-warm-200 p-5">
+    <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg {{ icon_cls }} flex items-center justify-center text-sm font-bold">{{ icon }}</div>
+            <div>
+                <div class="flex items-center gap-2">
+                    <p class="text-sm font-semibold text-gray-900">{{ name }}</p>
+                    {{ connected_badge(cfg and cfg.is_active) }}
+                </div>
+                <p class="text-xs text-gray-500 mt-0.5">
+                    {% if cfg and cfg.is_active %}{{ connected_desc }}{% else %}{{ disconnected_desc }}{% endif %}
+                </p>
+            </div>
+        </div>
+        <a href="/oauth/{{ type }}/authorize"
+           class="text-sm font-medium {% if cfg and cfg.is_active %}text-gray-600 bg-gray-100 hover:bg-gray-200{% else %}text-white bg-brand-500 hover:bg-brand-600{% endif %} transition-colors rounded-lg px-3 py-1.5">
+            {% if cfg and cfg.is_active %}Reconnect{% else %}Connect{% endif %}
+        </a>
+    </div>
+</div>
+{% endmacro %}
+
+{# ── Page ── #}
+<h1 class="text-2xl font-bold text-gray-900 mb-6">Settings</h1>
+{% include "settings/_tabs.html" %}
+
+<div class="space-y-6 max-w-2xl">
+
+    {# ── Knowledge Base Sources ── #}
+    {{ section_header("Knowledge Base Sources") }}
+
+    {{ oauth_card(
+        'notion', 'N', 'bg-gray-100 text-gray-700', 'Notion',
+        '',
+        configs.get('notion'),
+        'Connected to "' ~ (configs.get('notion').config.get('workspace_name', '') if configs.get('notion') else '') ~ '" — add Notion page URLs to your knowledge base.',
+        'Connect your Notion workspace to import pages into the knowledge base.'
+    ) }}
+
+    {{ oauth_card(
+        'google_drive', 'G', 'bg-blue-50 text-blue-600', 'Google Drive',
+        '',
+        configs.get('google_drive'),
+        'Connected — add Google Doc or folder URLs to your knowledge base.',
+        'Connect Google Drive to import Docs and folders.'
+    ) }}
+
+    {{ oauth_card(
+        'dropbox', 'D', 'bg-blue-50 text-blue-600', 'Dropbox',
+        '',
+        configs.get('dropbox'),
+        'Connected — enter a folder path when adding a Dropbox source. Supported: .txt, .md, .csv, .rst.',
+        'Connect Dropbox to import text files from your folders.'
+    ) }}
+
+    {# Zendesk — needs subdomain before OAuth #}
+    {% set zendesk = configs.get('zendesk') %}
+    <div class="bg-white rounded-xl border border-warm-200 p-5">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center text-sm font-bold text-green-700">Z</div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <p class="text-sm font-semibold text-gray-900">Zendesk</p>
+                        {{ connected_badge(zendesk and zendesk.is_active) }}
+                    </div>
+                    <p class="text-xs text-gray-500 mt-0.5">
+                        {% if zendesk and zendesk.is_active and zendesk.config.get('subdomain') %}
+                        Connected to {{ zendesk.config.subdomain }}.zendesk.com — ingest Help Center articles via knowledge base sources.
+                        {% else %}
+                        Connect your Zendesk account to ingest Help Center articles.
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+            <button type="button" onclick="toggleDetails('zendesk-input')"
+                    class="text-sm font-medium {% if zendesk and zendesk.is_active %}text-gray-600 bg-gray-100 hover:bg-gray-200{% else %}text-white bg-brand-500 hover:bg-brand-600{% endif %} transition-colors rounded-lg px-3 py-1.5">
+                {% if zendesk and zendesk.is_active %}Reconnect{% else %}Connect{% endif %}
+            </button>
+        </div>
+        <div id="zendesk-input" class="hidden mt-4 pt-4 border-t border-warm-100">
+            <div class="flex items-center gap-2">
+                <input type="text" id="zendesk-sub" placeholder="mycompany"
+                       class="rounded-lg border border-warm-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500 w-36">
+                <span class="text-xs text-gray-400 whitespace-nowrap">.zendesk.com</span>
+                <button type="button"
+                        onclick="redirectOAuth('zendesk', 'subdomain=' + encodeURIComponent(document.getElementById('zendesk-sub').value))"
+                        class="bg-brand-500 text-white rounded-lg px-3 py-2 text-sm font-medium hover:bg-brand-600 transition-colors">
+                    Connect
+                </button>
+            </div>
+        </div>
+    </div>
+
+    {{ oauth_card(
+        'salesforce', 'SF', 'bg-blue-50 text-blue-700', 'Salesforce',
+        '',
+        configs.get('salesforce'),
+        'Connected — ingest Knowledge articles and use AI actions for contact lookup and case creation.',
+        'Connect your Salesforce org to ingest Knowledge articles and enable AI actions.'
+    ) }}
+
+    {# ── Slack Bot ── #}
+    {{ section_header("Slack Bot") }}
+
+    {% set slack_bot = configs.get('slack_bot') %}
+    <div class="bg-white rounded-xl border border-warm-200 p-5">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center text-lg font-bold text-gray-600">#</div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <p class="text-sm font-semibold text-gray-900">Slack Bot</p>
+                        {{ connected_badge(slack_bot and slack_bot.is_active) }}
+                    </div>
+                    <p class="text-xs text-gray-500 mt-0.5">
+                        {% if slack_bot and slack_bot.is_active and slack_bot.config.get('team_name') %}
+                        Connected to "{{ slack_bot.config.team_name }}" — users can message the AI in DMs and @mentions.
+                        {% else %}
+                        Install the bot in your Slack workspace so users can chat with the AI in DMs and channels.
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+            <a href="/oauth/slack/authorize"
+               class="text-sm font-medium {% if slack_bot and slack_bot.is_active %}text-gray-600 bg-gray-100 hover:bg-gray-200{% else %}text-white bg-brand-500 hover:bg-brand-600{% endif %} transition-colors rounded-lg px-3 py-1.5">
+                {% if slack_bot and slack_bot.is_active %}Reconnect{% else %}Connect Slack Bot{% endif %}
+            </a>
+        </div>
+    </div>
+
+    {# ── Messaging Channels ── #}
+    {{ section_header("Messaging Channels") }}
+
+    {# WhatsApp #}
+    {% set wa = configs.get('whatsapp') %}
+    {% call config_card('whatsapp', 'W', 'bg-green-50 text-green-700', 'WhatsApp Business', 'Receive and reply to WhatsApp messages via the AI.', wa) %}
+    <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Phone Number ID</label>
+        <input type="text" name="phone_number_id" value="{{ (wa.config.phone_number_id if wa) or '' }}"
+               class="block w-full rounded-lg border border-warm-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+    </div>
+    <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Access Token</label>
+        <input type="password" name="access_token" {% if wa and wa.config.get('access_token') %}placeholder="••• configured — enter to update"{% endif %}
+               class="block w-full rounded-lg border border-warm-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+    </div>
+    <div class="bg-gray-50 border border-warm-200 rounded-lg px-3 py-2 text-xs text-gray-500 font-mono break-all">
+        Webhook URL: {{ request.url.scheme }}://{{ request.url.netloc }}/api/v1/whatsapp/webhook
+    </div>
+    {% endcall %}
+
+    {# Messenger #}
+    {% set fb = configs.get('messenger') %}
+    {% call config_card('messenger', 'M', 'bg-blue-50 text-blue-700', 'Facebook Messenger', 'Answer Messenger conversations from your Facebook Page.', fb) %}
+    <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Facebook Page ID</label>
+        <input type="text" name="page_id" value="{{ (fb.config.page_id if fb) or '' }}"
+               class="block w-full rounded-lg border border-warm-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+    </div>
+    <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Page Access Token</label>
+        <input type="password" name="page_access_token" {% if fb and fb.config.get('page_access_token') %}placeholder="••• configured — enter to update"{% endif %}
+               class="block w-full rounded-lg border border-warm-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+    </div>
+    <div class="bg-gray-50 border border-warm-200 rounded-lg px-3 py-2 text-xs text-gray-500 font-mono break-all">
+        Webhook URL: {{ request.url.scheme }}://{{ request.url.netloc }}/api/v1/messenger/webhook
+    </div>
+    {% endcall %}
+
+    {# Instagram #}
+    {% set ig = configs.get('instagram') %}
+    {% call config_card('instagram', 'I', 'bg-pink-50 text-pink-700', 'Instagram DMs', 'Reply to Instagram Direct Messages with the AI.', ig) %}
+    <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Instagram Business Account ID</label>
+        <input type="text" name="account_id" value="{{ (ig.config.account_id if ig) or '' }}"
+               class="block w-full rounded-lg border border-warm-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+    </div>
+    <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Page Access Token</label>
+        <input type="password" name="page_access_token" {% if ig and ig.config.get('page_access_token') %}placeholder="••• configured — enter to update"{% endif %}
+               class="block w-full rounded-lg border border-warm-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+    </div>
+    <div class="bg-gray-50 border border-warm-200 rounded-lg px-3 py-2 text-xs text-gray-500 font-mono break-all">
+        Webhook URL: {{ request.url.scheme }}://{{ request.url.netloc }}/api/v1/instagram/webhook
+    </div>
+    {% endcall %}
+
+    {# Shopify — needs shop URL before OAuth #}
+    {% set shopify = configs.get('shopify') %}
+    <div class="bg-white rounded-xl border border-warm-200 p-5">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center text-sm font-bold text-green-700">S</div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <p class="text-sm font-semibold text-gray-900">Shopify</p>
+                        {{ connected_badge(shopify and shopify.is_active) }}
+                    </div>
+                    <p class="text-xs text-gray-500 mt-0.5">
+                        {% if shopify and shopify.is_active and shopify.config.get('shop') %}
+                        Connected to {{ shopify.config.shop }} — widget injected into your storefront.
+                        {% else %}
+                        Connect your Shopify store to auto-inject the widget on your storefront.
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+            <button type="button" onclick="toggleDetails('shopify-input')"
+                    class="text-sm font-medium {% if shopify and shopify.is_active %}text-gray-600 bg-gray-100 hover:bg-gray-200{% else %}text-white bg-brand-500 hover:bg-brand-600{% endif %} transition-colors rounded-lg px-3 py-1.5">
+                {% if shopify and shopify.is_active %}Reconnect{% else %}Connect Shopify{% endif %}
+            </button>
+        </div>
+        <div id="shopify-input" class="hidden mt-4 pt-4 border-t border-warm-100">
+            <div class="flex items-center gap-2">
+                <input type="text" id="shopify-shop" placeholder="mystore.myshopify.com"
+                       class="rounded-lg border border-warm-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500 w-56">
+                <button type="button"
+                        onclick="redirectOAuth('shopify', 'shop=' + encodeURIComponent(document.getElementById('shopify-shop').value))"
+                        class="bg-brand-500 text-white rounded-lg px-3 py-2 text-sm font-medium hover:bg-brand-600 transition-colors">
+                    Connect
+                </button>
+            </div>
+        </div>
+    </div>
+
+    {# ── Payments ── #}
+    {{ section_header("Payments") }}
+
+    {% set stripe = configs.get('stripe') %}
+    {% call config_card('stripe', '$', 'bg-brand-50 text-brand-600', 'Stripe', 'Let the AI look up customer invoices and subscription info mid-conversation.', stripe) %}
+    <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Stripe Secret Key</label>
+        <input type="password" name="secret_key" placeholder="sk_live_..."
+               class="block w-full rounded-lg border border-warm-200 px-3 py-2 text-sm font-mono focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+        {% if stripe and stripe.is_active %}
+        <p class="text-xs text-green-600 mt-1">✓ Key configured — enter a new value to update</p>
+        {% endif %}
+    </div>
+    <p class="text-xs text-gray-400">Use a Restricted Key with read-only access to Customers, Invoices, and Subscriptions.</p>
+    {% endcall %}
+
+    {# ── Notifications & CRM ── #}
+    {{ section_header("Notifications & CRM") }}
+
+    {# Slack notifications #}
+    {% set slack = configs.get('slack') %}
+    {% call config_card('slack', '#', 'bg-gray-100 text-gray-600', 'Slack', 'Get escalation alerts and weekly digests in a Slack channel.', slack) %}
+    <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Webhook URL</label>
+        <input type="text" name="webhook_url"
+               value="{% if slack and slack.config.get('webhook_url') and slack.config.webhook_url != '***' %}{{ slack.config.webhook_url }}{% endif %}"
+               placeholder="https://hooks.slack.com/services/..."
+               class="block w-full rounded-lg border border-warm-200 px-3 py-2 text-sm font-mono focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+        {% if slack and slack.config.get('webhook_url') %}
+        <p class="text-xs text-green-600 mt-1">✓ Webhook configured</p>
+        {% endif %}
+    </div>
+    <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Alert when confidence below <span class="text-gray-400 font-normal">(0–1, blank = always alert)</span></label>
+        <input type="number" name="alert_max_confidence" min="0" max="1" step="0.05"
+               value="{{ slack.config.get('alert_max_confidence', '') if slack else '' }}" placeholder="e.g. 0.4"
+               class="w-32 rounded-lg border border-warm-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+    </div>
+    {% endcall %}
+
+    {# Email #}
+    {% set eml = configs.get('email') %}
+    {% set ep = (eml.config.get('provider') if eml) or 'resend' %}
+    {% call config_card('email', '@', 'bg-gray-100 text-gray-600', 'Email', 'Send escalation notifications and reports via email (Resend or SMTP).', eml) %}
+    <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2">Provider</label>
+        <div class="flex gap-4">
+            <label class="flex items-center gap-1.5 cursor-pointer">
+                <input type="radio" name="provider" value="resend" {% if ep == 'resend' %}checked{% endif %}
+                       onchange="document.getElementById('email-resend').classList.remove('hidden'); document.getElementById('email-smtp').classList.add('hidden')"
+                       class="text-brand-600 focus:ring-brand-500">
+                <span class="text-sm text-gray-700">Resend</span>
+            </label>
+            <label class="flex items-center gap-1.5 cursor-pointer">
+                <input type="radio" name="provider" value="smtp" {% if ep == 'smtp' %}checked{% endif %}
+                       onchange="document.getElementById('email-smtp').classList.remove('hidden'); document.getElementById('email-resend').classList.add('hidden')"
+                       class="text-brand-600 focus:ring-brand-500">
+                <span class="text-sm text-gray-700">SMTP</span>
+            </label>
+        </div>
+    </div>
+    <div id="email-resend" class="{% if ep == 'smtp' %}hidden{% endif %}">
+        <label class="block text-sm font-medium text-gray-700 mb-1">Resend API Key</label>
+        <input type="password" name="api_key" placeholder="re_..."
+               class="block w-full rounded-lg border border-warm-200 px-3 py-2 text-sm font-mono focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+        {% if eml and eml.config.get('api_key') %}<p class="text-xs text-green-600 mt-1">✓ Key configured</p>{% endif %}
+    </div>
+    <div id="email-smtp" class="space-y-3 {% if ep != 'smtp' %}hidden{% endif %}">
+        <div class="grid grid-cols-3 gap-3">
+            <div class="col-span-2">
+                <label class="block text-sm font-medium text-gray-700 mb-1">SMTP Host</label>
+                <input type="text" name="host" value="{{ (eml.config.host if eml) or '' }}" placeholder="smtp.example.com"
+                       class="block w-full rounded-lg border border-warm-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Port</label>
+                <input type="number" name="port" value="{{ (eml.config.port if eml) or 587 }}"
+                       class="block w-full rounded-lg border border-warm-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+            </div>
+        </div>
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+            <input type="text" name="username" value="{{ (eml.config.username if eml) or '' }}"
+                   class="block w-full rounded-lg border border-warm-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+        </div>
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+            <input type="password" name="password" placeholder="••••••••"
+                   class="block w-full rounded-lg border border-warm-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+        </div>
+        <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" name="tls" {% if not eml or eml.config.get('tls', True) %}checked{% endif %}
+                   class="rounded border-warm-200 text-brand-600 focus:ring-brand-500">
+            <span class="text-sm text-gray-700">Use TLS</span>
+        </label>
+    </div>
+    <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Send alerts to</label>
+        <input type="email" name="to_email" value="{{ (eml.config.to_email if eml) or '' }}" placeholder="you@yourcompany.com"
+               class="block w-full rounded-lg border border-warm-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+    </div>
+    <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">From address</label>
+        <input type="text" name="from_email" value="{{ (eml.config.from_email if eml) or 'Pulse <notifications@pulse.app>' }}"
+               class="block w-full rounded-lg border border-warm-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+    </div>
+    <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Alert when confidence below <span class="text-gray-400 font-normal">(0–1, blank = always)</span></label>
+        <input type="number" name="alert_max_confidence" min="0" max="1" step="0.05"
+               value="{{ eml.config.get('alert_max_confidence', '') if eml else '' }}" placeholder="e.g. 0.4"
+               class="w-32 rounded-lg border border-warm-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+    </div>
+    {% endcall %}
+
+    {# HubSpot #}
+    {% set hubspot = configs.get('hubspot') %}
+    {% call config_card('hubspot', 'H', 'bg-orange-50 text-orange-600', 'HubSpot', 'Auto-push qualified leads to HubSpot CRM.', hubspot) %}
+    <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">API Key</label>
+        <input type="password" name="access_token" placeholder="pat-..."
+               class="block w-full rounded-lg border border-warm-200 px-3 py-2 text-sm font-mono focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+        {% if hubspot and hubspot.is_active %}<p class="text-xs text-green-600 mt-1">✓ Key configured</p>{% endif %}
+    </div>
+    {% endcall %}
+
+    {# Linear #}
+    {% set linear = configs.get('linear') %}
+    {% call config_card('linear', 'L', 'bg-gray-100 text-gray-600', 'Linear', 'Push feature requests as Linear issues.', linear) %}
+    <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">API Token</label>
+        <input type="password" name="api_key" placeholder="lin_api_..."
+               class="block w-full rounded-lg border border-warm-200 px-3 py-2 text-sm font-mono focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+        {% if linear and linear.is_active %}<p class="text-xs text-green-600 mt-1">✓ Token configured</p>{% endif %}
+    </div>
+    <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Team ID</label>
+        <input type="text" name="team_id" value="{{ (linear.config.team_id if linear) or '' }}" placeholder="Team UUID or key"
+               class="block w-full rounded-lg border border-warm-200 px-3 py-2 text-sm font-mono focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+    </div>
+    {% endcall %}
+
+    {# Jira #}
+    {% set jira = configs.get('jira') %}
+    {% call config_card('jira', 'J', 'bg-blue-50 text-blue-600', 'Jira', 'Push feature requests as Jira tickets.', jira) %}
+    <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Server URL</label>
+        <input type="text" name="server" value="{{ (jira.config.server if jira) or '' }}" placeholder="https://yourco.atlassian.net"
+               class="block w-full rounded-lg border border-warm-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+    </div>
+    <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+        <input type="email" name="email" value="{{ (jira.config.email if jira) or '' }}" placeholder="you@yourco.com"
+               class="block w-full rounded-lg border border-warm-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+    </div>
+    <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">API Token</label>
+        <input type="password" name="api_token"
+               class="block w-full rounded-lg border border-warm-200 px-3 py-2 text-sm font-mono focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+        {% if jira and jira.is_active %}<p class="text-xs text-green-600 mt-1">✓ Token configured</p>{% endif %}
+    </div>
+    <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Project Key</label>
+        <input type="text" name="project_key" value="{{ (jira.config.project_key if jira) or '' }}" placeholder="PROJ"
+               class="block w-full rounded-lg border border-warm-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+    </div>
+    {% endcall %}
+
+</div>
+
+<script>
+function toggleDetails(id) {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('hidden');
+}
+function redirectOAuth(service, params) {
+    window.location.href = '/oauth/' + service + '/authorize?' + params;
+}
+</script>
+{% endblock %}

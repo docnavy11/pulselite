@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}{{ cluster.topic_label }} — PulseLight{% endblock %}
+{% block content %}
+<div class="mb-6">
+    <a href="/intelligence/gaps" class="text-sm text-gray-500 hover:text-gray-700">&larr; Documentation Gaps</a>
+    <div class="flex items-center gap-3 mt-1">
+        <h1 class="text-2xl font-bold text-gray-900">{{ cluster.topic_label }}</h1>
+        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+            {% if cluster.status == 'open' %}bg-red-100 text-red-700
+            {% elif cluster.status == 'draft_ready' or cluster.status == 'ai_draft_pending' %}bg-amber-100 text-amber-700
+            {% elif cluster.status == 'approved' %}bg-green-100 text-green-700
+            {% else %}bg-gray-100 text-gray-500{% endif %}">
+            {{ cluster.status.replace('_', ' ') }}
+        </span>
+        <span class="text-sm text-gray-500">{{ cluster.gap_count }} question{{ 's' if cluster.gap_count != 1 else '' }}</span>
+    </div>
+</div>
+
+<!-- Keywords -->
+{% if cluster.topic_keywords %}
+<div class="mb-6">
+    <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Keywords</h3>
+    <div class="flex flex-wrap gap-1.5">
+        {% for kw in cluster.topic_keywords %}
+        <span class="px-3 py-1 bg-white border border-warm-200 rounded-full text-sm text-gray-600">{{ kw }}</span>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Action buttons -->
+{% if cluster.status in ['open', 'draft_ready', 'ai_draft_pending'] %}
+<div id="gap-actions" class="flex gap-2 mb-6">
+    <button hx-post="/intelligence/gaps/{{ cluster.id }}/approve"
+            hx-target="#gap-actions"
+            hx-swap="outerHTML"
+            class="inline-flex items-center gap-1.5 px-4 py-2 bg-brand-500 text-white rounded-lg text-sm font-medium hover:bg-brand-600 transition-colors">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+        </svg>
+        Approve
+    </button>
+    <button hx-post="/intelligence/gaps/{{ cluster.id }}/dismiss"
+            hx-target="#gap-actions"
+            hx-swap="outerHTML"
+            class="inline-flex items-center gap-1.5 px-4 py-2 bg-white border border-warm-200 rounded-lg text-sm font-medium text-gray-600 hover:bg-warm-50 transition-colors">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+        Dismiss
+    </button>
+</div>
+{% elif cluster.status == 'approved' %}
+<div class="mb-6">
+    <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-50 border border-green-200 text-sm text-green-700">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+        Approved
+    </span>
+</div>
+{% elif cluster.status == 'dismissed' %}
+<div class="mb-6">
+    <span class="text-sm text-gray-400">Dismissed</span>
+</div>
+{% endif %}
+
+<!-- Example Queries -->
+<div class="bg-white rounded-xl border border-warm-200 p-6 max-w-3xl">
+    <h3 class="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
+        <svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
+        </svg>
+        Example Queries
+    </h3>
+    {% if events %}
+    <ol class="space-y-2">
+        {% for event in events %}
+        <li class="flex items-start gap-3 py-2 {% if not loop.last %}border-b border-warm-100{% endif %}">
+            <span class="text-xs font-bold text-gray-400 mt-0.5 w-5 text-right flex-shrink-0">{{ loop.index }}</span>
+            <div class="flex-1 min-w-0">
+                <p class="text-sm text-gray-700 italic">&ldquo;{{ event.query }}&rdquo;</p>
+                <div class="flex items-center gap-2 mt-1">
+                    {% set pct = (event.confidence_score * 100)|int %}
+                    <span class="text-[11px] {% if pct >= 50 %}text-amber-600{% else %}text-red-600{% endif %}">{{ pct }}% confidence</span>
+                    <span class="text-[11px] text-gray-400">{{ event.created_at.strftime('%b %d, %H:%M') }}</span>
+                </div>
+            </div>
+        </li>
+        {% endfor %}
+    </ol>
+    {% else %}
+    <p class="text-sm text-gray-400">No example queries</p>
+    {% endif %}
+</div>
+{% endblock %}

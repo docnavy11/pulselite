@@ -1,50 +1,300 @@
 {% extends "base.html" %}
 {% block title %}{{ chatbot.name }} — PulseLight{% endblock %}
 {% block content %}
+
+<!-- Header -->
 <div class="flex items-center justify-between mb-6">
     <div>
-        <a href="/chatbots" class="text-sm text-gray-500 hover:text-gray-700">&larr; Chatbots</a>
-        <h1 class="text-2xl font-bold text-gray-900 mt-1">{{ chatbot.name }}</h1>
+        <h1 class="text-2xl font-black tracking-tight text-gray-900">{{ chatbot.display_name or chatbot.name }}</h1>
+        <p class="text-[13px] text-gray-400 mt-0.5">
+            {% if chatbot.is_active %}<span class="inline-flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-green-500 inline-block"></span>Active</span>{% else %}<span class="text-gray-400">Inactive</span>{% endif %}
+        </p>
     </div>
-    <div class="flex gap-2">
-        {% include "components/status_badge.html" with context %}
-    </div>
-</div>
-
-<!-- Sub-navigation -->
-<nav class="flex gap-4 border-b border-gray-200 mb-6">
-    <a href="/chatbots/{{ chatbot.id }}" class="pb-2 text-sm font-medium border-b-2 border-indigo-600 text-indigo-600">Overview</a>
-    <a href="/chatbots/{{ chatbot.id }}/sources" class="pb-2 text-sm text-gray-500 hover:text-gray-700 border-b-2 border-transparent">Sources</a>
-    <a href="/chatbots/{{ chatbot.id }}/deploy" class="pb-2 text-sm text-gray-500 hover:text-gray-700 border-b-2 border-transparent">Deploy</a>
-    <a href="/chatbots/{{ chatbot.id }}/settings" class="pb-2 text-sm text-gray-500 hover:text-gray-700 border-b-2 border-transparent">Settings</a>
-</nav>
-
-<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-    <div class="bg-white rounded-lg border border-gray-200 p-5">
-        <p class="text-sm text-gray-500">Documents</p>
-        <p class="text-2xl font-bold text-gray-900 mt-1">{{ doc_count }}</p>
-    </div>
-    <div class="bg-white rounded-lg border border-gray-200 p-5">
-        <p class="text-sm text-gray-500">Model</p>
-        <p class="text-sm font-medium text-gray-900 mt-1">{{ chatbot.llm_model }}</p>
-    </div>
-    <div class="bg-white rounded-lg border border-gray-200 p-5">
-        <p class="text-sm text-gray-500">Tone</p>
-        <p class="text-sm font-medium text-gray-900 mt-1 capitalize">{{ chatbot.tone }}</p>
+    <!-- Range pill selector -->
+    <div class="inline-flex rounded-lg border border-warm-200 bg-white p-0.5">
+        {% for d, label in [(7, '7d'), (30, '30d'), (90, '90d')] %}
+        <a href="/chatbots/{{ chatbot.id }}?days={{ d }}"
+           class="px-3 py-1 text-xs font-medium rounded-md transition-colors
+           {% if days == d %}bg-brand-500 text-white{% else %}text-gray-500 hover:text-gray-700{% endif %}">
+            {{ label }}
+        </a>
+        {% endfor %}
     </div>
 </div>
 
-{% if chatbot.welcome_message %}
-<div class="mt-6 bg-white rounded-lg border border-gray-200 p-5">
-    <h3 class="text-sm font-medium text-gray-700 mb-2">Welcome message</h3>
-    <p class="text-sm text-gray-600">{{ chatbot.welcome_message }}</p>
-</div>
-{% endif %}
+{% include "chatbots/_tabs.html" %}
 
-{% if chatbot.system_prompt %}
-<div class="mt-4 bg-white rounded-lg border border-gray-200 p-5">
-    <h3 class="text-sm font-medium text-gray-700 mb-2">System prompt</h3>
-    <p class="text-sm text-gray-600 whitespace-pre-wrap">{{ chatbot.system_prompt }}</p>
+<div class="space-y-6">
+
+<!-- Section 1: KPI Row -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <a href="/conversations?chatbot_id={{ chatbot.id }}" class="block bg-white rounded-xl border border-warm-200 p-5 hover:shadow-md transition-shadow">
+        <p class="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Conversations</p>
+        <p class="text-[26px] font-bold text-gray-900 leading-tight">{{ total }}</p>
+        <p class="text-xs text-gray-400 mt-1">{{ resolved }} resolved · {{ escalated }} escalated</p>
+    </a>
+    <a href="/conversations?chatbot_id={{ chatbot.id }}" class="block bg-white rounded-xl border border-warm-200 p-5 hover:shadow-md transition-shadow">
+        <p class="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Resolution Rate</p>
+        <p class="text-[26px] font-bold text-gray-900 leading-tight">{{ resolution_rate }}%</p>
+        <p class="text-xs text-gray-400 mt-1">Last {{ days }} days</p>
+    </a>
+    <a href="/intelligence/sentiment" class="block bg-white rounded-xl border border-warm-200 p-5 hover:shadow-md transition-shadow">
+        <p class="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Avg Sentiment</p>
+        {% if avg_sentiment is not none %}
+        <p class="text-[26px] font-bold text-gray-900 leading-tight">{{ avg_sentiment }}</p>
+        <p class="text-xs mt-1 {% if avg_sentiment >= 0.3 %}text-green-500{% elif avg_sentiment >= -0.3 %}text-gray-400{% else %}text-red-500{% endif %}">
+            {% if avg_sentiment >= 0.3 %}Positive{% elif avg_sentiment >= -0.3 %}Neutral{% else %}Negative{% endif %}
+        </p>
+        {% else %}
+        <p class="text-[26px] font-bold text-gray-300 leading-tight">—</p>
+        <p class="text-xs text-gray-400 mt-1">No data yet</p>
+        {% endif %}
+    </a>
+    <a href="/intelligence/sentiment" class="block bg-white rounded-xl border border-warm-200 p-5 hover:shadow-md transition-shadow">
+        <p class="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Positive Feedback</p>
+        {% if positive_pct is not none %}
+        <p class="text-[26px] font-bold text-gray-900 leading-tight">{{ positive_pct }}%</p>
+        <p class="text-xs text-gray-400 mt-1">{{ thumbs_up }} 👍 · {{ thumbs_down }} 👎</p>
+        {% else %}
+        <p class="text-[26px] font-bold text-gray-300 leading-tight">—</p>
+        <p class="text-xs text-gray-400 mt-1">No ratings yet</p>
+        {% endif %}
+    </a>
 </div>
-{% endif %}
+
+<!-- Section 2: Conversation Outcomes -->
+<div class="bg-white border border-warm-200 rounded-xl p-5">
+    <h3 class="text-sm font-semibold text-gray-700 mb-4">Conversation Outcomes</h3>
+    <div class="flex items-center gap-6">
+        <div class="flex-1">
+            <div class="h-5 flex rounded-full overflow-hidden bg-gray-100">
+                {% if total > 0 %}
+                    {% if resolved > 0 %}
+                    <div class="bg-green-500 transition-all" style="width: {{ (resolved / total * 100)|round|int }}%"></div>
+                    {% endif %}
+                    {% if escalated > 0 %}
+                    <div class="bg-yellow-400 transition-all" style="width: {{ (escalated / total * 100)|round|int }}%"></div>
+                    {% endif %}
+                    {% if unresolved > 0 %}
+                    <div class="bg-red-400 transition-all" style="width: {{ (unresolved / total * 100)|round|int }}%"></div>
+                    {% endif %}
+                {% else %}
+                <div class="w-full bg-gray-200 rounded-full"></div>
+                {% endif %}
+            </div>
+        </div>
+        <div class="flex gap-6 text-sm shrink-0">
+            <div class="text-center">
+                <p class="font-bold text-green-600">{{ resolved }}</p>
+                <p class="text-[10px] text-gray-400">Resolved</p>
+            </div>
+            <div class="text-center">
+                <p class="font-bold text-yellow-500">{{ escalated }}</p>
+                <p class="text-[10px] text-gray-400">Escalated</p>
+            </div>
+            <div class="text-center">
+                <p class="font-bold text-gray-400">{{ unresolved }}</p>
+                <p class="text-[10px] text-gray-400">Unresolved</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Section 3: Topics + Gaps -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <div class="bg-white border border-warm-200 rounded-xl p-5">
+        <a href="/conversations?chatbot_id={{ chatbot.id }}" class="text-sm font-semibold text-gray-700 mb-3 flex items-center justify-between group">
+            <span>Top Topics</span>
+            <span class="text-xs text-brand-500 opacity-0 group-hover:opacity-100 transition-opacity">View logs →</span>
+        </a>
+        {% if top_topics %}
+        <ul class="space-y-2">
+            {% for topic, count in top_topics[:5] %}
+            <li class="flex items-center justify-between text-sm">
+                <span class="text-gray-700 truncate mr-2">{{ topic }}</span>
+                <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-600 shrink-0">{{ count }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-sm text-gray-400">No topics yet</p>
+        {% endif %}
+    </div>
+
+    <div class="bg-white border border-warm-200 rounded-xl p-5">
+        <a href="/intelligence/gaps" class="text-sm font-semibold text-gray-700 mb-3 flex items-center justify-between group">
+            <span>Knowledge Gaps</span>
+            <span class="text-xs text-brand-500 opacity-0 group-hover:opacity-100 transition-opacity">View all →</span>
+        </a>
+        {% if gaps %}
+        <ul class="space-y-2">
+            {% for gap in gaps %}
+            <li>
+                <a href="/intelligence/gaps/{{ gap.id }}" class="flex items-center justify-between text-sm hover:bg-gray-50 -mx-2 px-2 py-1 rounded-lg transition-colors">
+                    <span class="text-gray-700 truncate mr-2">{{ gap.representative_query or gap.topic_label }}</span>
+                    <span class="text-xs text-gray-400 shrink-0">×{{ gap.gap_count }}</span>
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+        <a href="/intelligence/gaps" class="inline-block mt-3 text-xs text-brand-500 hover:text-brand-600 font-medium">View all →</a>
+        {% else %}
+        <p class="text-sm text-gray-400">No knowledge gaps detected</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Section 4: Recent Conversations -->
+<div class="bg-white border border-warm-200 rounded-xl p-5">
+    <a href="/conversations?chatbot_id={{ chatbot.id }}" class="text-sm font-semibold text-gray-700 mb-3 flex items-center justify-between group">
+        <span>Recent Conversations</span>
+        <span class="text-xs text-brand-500 opacity-0 group-hover:opacity-100 transition-opacity">View all →</span>
+    </a>
+    {% if recent %}
+    <ul class="divide-y divide-warm-100">
+        {% for conv in recent %}
+        {% set age_min = ((now - conv.created_at).total_seconds() / 60)|int %}
+        {% if age_min < 1 %}{% set age = "just now" %}
+        {% elif age_min < 60 %}{% set age = age_min|string + "m ago" %}
+        {% elif age_min < 1440 %}{% set age = (age_min // 60)|string + "h ago" %}
+        {% else %}{% set age = (age_min // 1440)|string + "d ago" %}{% endif %}
+        <li>
+            <a href="/conversations?selected={{ conv.id }}" class="flex items-center justify-between py-2.5 gap-4 hover:bg-warm-50 -mx-2 px-2 rounded-lg transition-colors">
+                <p class="text-sm text-gray-700 truncate flex-1">{{ conv.last_message_preview or "No messages" }}</p>
+                <div class="flex items-center gap-3 shrink-0">
+                    {% if conv.outcome == 'resolved_autonomously' %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-green-50 text-green-700">Resolved</span>
+                    {% elif conv.outcome == 'escalated_to_human' %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-yellow-50 text-yellow-700">Escalated</span>
+                    {% else %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-50 text-gray-500">{{ conv.status|capitalize }}</span>
+                    {% endif %}
+                    <span class="text-xs text-gray-400 w-16 text-right">{{ age }}</span>
+                </div>
+            </a>
+        </li>
+        {% endfor %}
+    </ul>
+    <a href="/conversations?chatbot_id={{ chatbot.id }}" class="inline-block mt-3 text-xs text-brand-500 hover:text-brand-600 font-medium">View all →</a>
+    {% else %}
+    <p class="text-sm text-gray-400">No conversations yet</p>
+    {% endif %}
+</div>
+
+<!-- Section 5: Knowledge Sources + User Feedback -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <!-- Knowledge Sources -->
+    <div class="bg-white border border-warm-200 rounded-xl p-5">
+        <a href="/chatbots/{{ chatbot.id }}/sources" class="text-sm font-semibold text-gray-700 mb-3 flex items-center justify-between group">
+            <span>Knowledge Sources</span>
+            <span class="text-xs text-brand-500 opacity-0 group-hover:opacity-100 transition-opacity">View →</span>
+        </a>
+        {% if knowledge_bases %}
+        <p class="text-sm text-gray-500 mb-2">{{ knowledge_bases|length }} knowledge base{{ 's' if knowledge_bases|length != 1 }}</p>
+        <ul class="space-y-1.5 mb-3">
+            {% for kb in knowledge_bases %}
+            <li class="text-sm text-gray-700 flex items-center gap-2">
+                <span class="w-1.5 h-1.5 rounded-full bg-brand-400 shrink-0"></span>
+                {{ kb.name }}
+            </li>
+            {% endfor %}
+        </ul>
+        <a href="/chatbots/{{ chatbot.id }}/sources" class="text-xs text-brand-500 hover:text-brand-600 font-medium">Manage sources →</a>
+        {% else %}
+        <p class="text-sm text-gray-400">No knowledge base yet. <a href="/chatbots/{{ chatbot.id }}/sources" class="text-brand-500 hover:text-brand-600 font-medium">Add one →</a></p>
+        {% endif %}
+    </div>
+
+    <!-- User Feedback -->
+    <div class="bg-white border border-warm-200 rounded-xl p-5">
+        <h3 class="text-sm font-semibold text-gray-700 mb-3">User Feedback</h3>
+        <div class="flex gap-6 mb-4">
+            <div class="text-center">
+                <p class="text-lg font-bold text-green-600">👍 {{ thumbs_up }}</p>
+            </div>
+            <div class="text-center">
+                <p class="text-lg font-bold text-red-500">👎 {{ thumbs_down }}</p>
+            </div>
+        </div>
+        {% if thumbs_up + thumbs_down > 0 %}
+        <div class="h-2 rounded-full bg-warm-200 overflow-hidden">
+            <div class="h-full bg-green-400 rounded-full" style="width: {{ positive_pct }}%"></div>
+        </div>
+        <p class="text-[11px] text-gray-400 mt-1">{{ positive_pct }}% satisfaction rate</p>
+        {% else %}
+        <p class="text-sm text-gray-400">No ratings yet</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Section 6: Configuration -->
+<div class="bg-white border border-warm-200 rounded-xl p-5">
+    <a href="/chatbots/{{ chatbot.id }}/settings" class="text-sm font-semibold text-gray-700 mb-4 flex items-center justify-between group">
+        <span>Configuration</span>
+        <span class="text-xs text-brand-500 opacity-0 group-hover:opacity-100 transition-opacity">Edit →</span>
+    </a>
+
+    <!-- Model / Retrieval / Tone -->
+    <a href="/chatbots/{{ chatbot.id }}/settings" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5 hover:bg-warm-50 -mx-2 px-2 py-2 rounded-lg transition-colors">
+        <div>
+            <p class="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Model</p>
+            <p class="text-sm text-gray-700">{{ (chatbot.llm_model or '—').split('/')[-1] }}</p>
+            <p class="text-xs text-gray-400">temp {{ chatbot.temperature }} · {{ chatbot.max_tokens }} tokens</p>
+        </div>
+        <div>
+            <p class="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Retrieval</p>
+            <p class="text-sm text-gray-700">top-{{ chatbot.retrieval_top_k }}{% if chatbot.use_reranking %} + reranking{% endif %}</p>
+            <p class="text-xs text-gray-400">threshold {{ chatbot.confidence_threshold }}</p>
+        </div>
+        <div>
+            <p class="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Tone</p>
+            <p class="text-sm text-gray-700 capitalize">{{ chatbot.tone or '—' }}</p>
+        </div>
+    </a>
+
+    <!-- Actions -->
+    <div class="mb-4">
+        <div class="flex items-center justify-between mb-2">
+            <p class="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Actions</p>
+            <a href="/chatbots/{{ chatbot.id }}/actions" class="text-xs text-brand-500 hover:text-brand-600 font-medium">Manage →</a>
+        </div>
+        {% if actions %}
+        <ul class="space-y-2">
+            {% for action in actions %}
+            <li class="flex items-center justify-between text-sm">
+                <div class="min-w-0">
+                    <p class="text-gray-700 font-medium truncate">{{ action.name }}</p>
+                    <p class="text-xs text-gray-400 truncate">{{ action.trigger_description }}</p>
+                </div>
+                <!-- Toggle (read-only display) -->
+                <div class="relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors {{ 'bg-brand-500' if action.is_enabled else 'bg-gray-200' }}">
+                    <span class="pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform {{ 'translate-x-4' if action.is_enabled else 'translate-x-0' }}"></span>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-sm text-gray-400">No actions linked. <a href="/chatbots/{{ chatbot.id }}/actions" class="text-brand-500 hover:text-brand-600 font-medium">Go to Actions tab →</a></p>
+        {% endif %}
+    </div>
+
+    <!-- Knowledge sources in config -->
+    <div>
+        <div class="flex items-center justify-between mb-2">
+            <p class="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Knowledge Sources</p>
+            <a href="/chatbots/{{ chatbot.id }}/sources" class="text-xs text-brand-500 hover:text-brand-600 font-medium">Manage →</a>
+        </div>
+        {% if knowledge_bases %}
+        <div class="flex flex-wrap gap-2">
+            {% for kb in knowledge_bases %}
+            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-warm-100 text-gray-700">{{ kb.name }}</span>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-sm text-gray-400">No knowledge base yet. <a href="/chatbots/{{ chatbot.id }}/sources" class="text-brand-500 hover:text-brand-600 font-medium">Add one →</a></p>
+        {% endif %}
+    </div>
+</div>
+
+</div><!-- end space-y-6 -->
 {% endblock %}

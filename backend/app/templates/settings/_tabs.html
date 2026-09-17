@@ -1,0 +1,24 @@
+{% set p = request.url.path %}
+<nav class="flex gap-1 border-b border-warm-200 mb-6 overflow-x-auto">
+    {% for tab in [
+        {"href": "/settings", "label": "General", "match": "/settings", "exact": true},
+        {"href": "/settings/team", "label": "Team", "match": "/settings/team"},
+        {"href": "/settings/billing", "label": "Billing", "match": "/settings/billing"},
+        {"href": "/settings/integrations", "label": "Integrations", "match": "/settings/integrations"},
+        {"href": "/settings/llm", "label": "AI Models", "match": "/settings/llm"},
+        {"href": "/settings/security", "label": "Security", "match": "/settings/security"},
+        {"href": "/settings/data-retention", "label": "Data Retention", "match": "/settings/data-retention"},
+        {"href": "/settings/webhooks", "label": "Webhooks", "match": "/settings/webhooks"},
+        {"href": "/settings/intelligence", "label": "Intelligence", "match": "/settings/intelligence"},
+        {"href": "/settings/audit", "label": "Audit Log", "match": "/settings/audit"},
+    ] %}
+    <a href="{{ tab.href }}" class="px-3 py-2.5 text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition-colors
+        {% if (tab.get('exact') and (p == tab.match or p == tab.match ~ '/')) or (not tab.get('exact') and tab.match in p) %}
+            border-brand-500 text-brand-600
+        {% else %}
+            border-transparent text-gray-500 hover:text-gray-700
+        {% endif %}">
+        {{ tab.label }}
+    </a>
+    {% endfor %}
+</nav>

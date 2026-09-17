@@ -1,0 +1,116 @@
+{% set status = chatbot.setup_status %}
+{% set cj = crawl_job %}
+{% set pages_queued = cj.pages_queued if cj else 0 %}
+{% set pages_discovered = cj.pages_discovered if cj else 0 %}
+{% set is_crawl_failed = cj and cj.status == 'failed' %}
+{% set crawl_done = status == 'configuring' %}
+
+{% if status == 'setup_failed' %}
+  <div class="text-center py-4">
+    <svg class="w-10 h-10 text-amber-400 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+    </svg>
+    <h2 class="text-base font-bold text-gray-900 mb-2">Autoconfig failed</h2>
+    <p class="text-sm text-gray-500 mb-1">{{ chatbot.setup_error or "Your bot was created but couldn't be auto-configured." }}</p>
+    <p class="text-sm text-gray-500 mb-5">You can set it up manually in settings.</p>
+    <a href="/chatbots/{{ chatbot.id | string }}"
+       class="inline-flex items-center px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-lg text-sm font-semibold transition-colors">
+      Go to settings
+    </a>
+  </div>
+
+{% elif is_crawl_failed %}
+  <div class="bg-red-50 border border-red-200 rounded-xl p-5 text-sm text-red-700 space-y-3">
+    <div class="flex items-start gap-2">
+      <svg class="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+      </svg>
+      <span>{{ cj.error_message or "The crawl could not complete." }}</span>
+    </div>
+    <p class="text-xs text-red-500">Your bot was created but has no knowledge base content.</p>
+    <div class="flex gap-2 pt-1">
+      <a href="/chatbots/new" class="px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-warm-200 rounded-lg hover:bg-warm-50 transition-colors">Start over</a>
+      <a href="/chatbots/{{ chatbot.id | string }}" class="px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-warm-200 rounded-lg hover:bg-warm-50 transition-colors">Go to settings</a>
+    </div>
+  </div>
+
+{% else %}
+  <div class="space-y-4">
+
+    {# Discovering pages #}
+    <div class="flex items-center gap-3">
+      {% if crawl_done or pages_discovered > 0 %}
+        <svg class="w-5 h-5 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+      {% else %}
+        <svg class="w-5 h-5 text-brand-500 flex-shrink-0 spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+        </svg>
+      {% endif %}
+      <div class="flex-1">
+        <div class="text-sm font-medium text-gray-700">Discovering pages</div>
+        {% if crawl_done or pages_discovered > 0 %}
+          <div class="text-xs text-gray-400">{{ pages_discovered }} pages found</div>
+        {% endif %}
+      </div>
+    </div>
+
+    {# Fetching pages #}
+    {% if crawl_done or pages_discovered > 0 %}
+    {% set fetch_done = crawl_done or (pages_discovered > 0 and pages_queued >= pages_discovered) %}
+    <div class="flex items-center gap-3">
+      {% if fetch_done %}
+        <svg class="w-5 h-5 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+      {% else %}
+        <svg class="w-5 h-5 text-brand-500 flex-shrink-0 spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+        </svg>
+      {% endif %}
+      <div class="flex-1">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-sm font-medium text-gray-700">Fetching pages</span>
+          {% if not crawl_done %}<span class="text-xs text-gray-400">{{ pages_queued }} / {{ pages_discovered or pages_queued }}</span>{% endif %}
+        </div>
+        {% if not crawl_done and pages_discovered > 0 %}
+        <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+          <div class="h-full bg-brand-400 rounded-full transition-all duration-500"
+               style="width: {{ ((pages_queued / pages_discovered) * 100) | int }}%"></div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    {# Indexing content #}
+    {% if fetch_done %}
+    <div class="flex items-center gap-3">
+      {% if crawl_done %}
+        <svg class="w-5 h-5 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+      {% else %}
+        <svg class="w-5 h-5 text-brand-500 flex-shrink-0 spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+        </svg>
+      {% endif %}
+      <div class="flex-1">
+        <div class="text-sm font-medium text-gray-700">Indexing content</div>
+      </div>
+    </div>
+    {% endif %}
+
+    {# AI configuring #}
+    {% if crawl_done %}
+    <div class="flex items-center gap-3">
+      <svg class="w-5 h-5 text-brand-500 flex-shrink-0 spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+      </svg>
+      <span class="text-sm text-gray-600">AI is configuring your bot…</span>
+    </div>
+    {% endif %}
+
+  </div>
+{% endif %}

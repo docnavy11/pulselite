@@ -1,0 +1,76 @@
+{% if error %}
+<div class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+    <p class="font-medium mb-1">Could not scan site</p>
+    <p class="text-xs text-red-500">{{ error }}</p>
+    <button class="mt-2 text-xs text-red-600 hover:text-red-800 underline"
+            onclick="resetCrawlPreview()">Try again</button>
+</div>
+
+{% else %}
+<!-- Step 2: Directory tree selection -->
+<div id="crawl-preview-panel">
+    <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-2">
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-green-100 text-green-700">
+                {{ total }} pages found
+            </span>
+            <span class="text-[11px] text-gray-400">{{ url }}</span>
+        </div>
+        <button type="button" onclick="resetCrawlPreview()"
+                class="text-[11px] text-gray-400 hover:text-gray-600 transition-colors flex items-center gap-1">
+            <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            Rescan
+        </button>
+    </div>
+
+    <!-- Directory tree -->
+    <div class="rounded-lg border border-warm-200 bg-white overflow-hidden mb-3 max-h-52 overflow-y-auto">
+        {% if groups %}
+        {% for path, group in groups.items() %}
+        <div class="border-b border-warm-100 last:border-0">
+            <!-- Level 1 -->
+            <label class="flex items-center gap-2 px-3 py-2 hover:bg-warm-50 cursor-pointer select-none">
+                <input type="checkbox" class="dir-checkbox rounded border-gray-300 text-brand-500 w-3.5 h-3.5"
+                       id="dir-{{ loop.index }}"
+                       data-path="{{ path }}" checked
+                       onchange="updateExcludePaths()">
+                <svg class="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg>
+                <span class="text-xs font-medium text-gray-700 flex-1 truncate">{{ group.label }}</span>
+                <span class="text-[10px] text-gray-400 ml-auto shrink-0">
+                    {{ group.count + group.children.values()|sum(attribute='count') }} pages
+                </span>
+            </label>
+            <!-- Level 2 children -->
+            {% for cpath, child in group.children.items() %}
+            <label class="flex items-center gap-2 pl-8 pr-3 py-1.5 hover:bg-warm-50 cursor-pointer select-none border-t border-warm-50">
+                <input type="checkbox" class="dir-checkbox rounded border-gray-300 text-brand-500 w-3.5 h-3.5"
+                       data-path="{{ cpath }}" checked
+                       onchange="updateExcludePaths()">
+                <svg class="w-3 h-3 text-gray-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                <span class="text-xs text-gray-600 flex-1 truncate">{{ child.label }}</span>
+                <span class="text-[10px] text-gray-400 ml-auto shrink-0">{{ child.count }} pages</span>
+            </label>
+            {% endfor %}
+        </div>
+        {% endfor %}
+        {% else %}
+        <div class="px-4 py-3 text-xs text-gray-400">All pages at root level</div>
+        {% endif %}
+    </div>
+
+    <!-- Hidden inputs for the crawl form -->
+    <input type="hidden" name="url" id="crawl-url-value" value="{{ url }}">
+    <input type="hidden" name="exclude_paths" id="crawl-exclude-paths" value="">
+
+    <!-- Page count indicator + submit -->
+    <div class="flex items-center justify-between">
+        <p id="crawl-page-count" class="text-[11px] text-gray-400">{{ total }} of {{ total }} pages selected</p>
+        <button type="button"
+                onclick="submitCrawlWithPaths('{{ chatbot_id }}')"
+                class="flex items-center gap-1.5 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-[13px] font-semibold transition-colors">
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 9l3 3m0 0l-3 3m3-3H8m13 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            Crawl <span id="crawl-btn-count">{{ total }}</span> pages
+        </button>
+    </div>
+</div>
+{% endif %}

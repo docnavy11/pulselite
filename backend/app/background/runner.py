@@ -57,7 +57,7 @@ async def submit_job(
     async with async_session_factory() as db:
         await db.execute(text("""
             INSERT INTO background_jobs (id, job_type, payload, max_retries)
-            VALUES (:id, :job_type, :payload::jsonb, :max_retries)
+            VALUES (:id, :job_type, CAST(:payload AS jsonb), :max_retries)
         """), {
             "id": job_id,
             "job_type": job_type,

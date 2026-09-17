@@ -1,52 +1,731 @@
 {% extends "base.html" %}
-{% block title %}Sources — {{ chatbot.name }} — PulseLight{% endblock %}
+{% block title %}Knowledge — {{ chatbot.name }} — PulseLight{% endblock %}
 {% block content %}
+
 <div class="mb-6">
-    <a href="/chatbots/{{ chatbot.id }}" class="text-sm text-gray-500 hover:text-gray-700">&larr; {{ chatbot.name }}</a>
-    <h1 class="text-2xl font-bold text-gray-900 mt-1">Sources</h1>
+    <h1 class="text-2xl font-black tracking-tight text-gray-900">{{ chatbot.display_name or chatbot.name }}</h1>
 </div>
 
-<nav class="flex gap-4 border-b border-gray-200 mb-6">
-    <a href="/chatbots/{{ chatbot.id }}" class="pb-2 text-sm text-gray-500 hover:text-gray-700 border-b-2 border-transparent">Overview</a>
-    <a href="/chatbots/{{ chatbot.id }}/sources" class="pb-2 text-sm font-medium border-b-2 border-indigo-600 text-indigo-600">Sources</a>
-    <a href="/chatbots/{{ chatbot.id }}/deploy" class="pb-2 text-sm text-gray-500 hover:text-gray-700 border-b-2 border-transparent">Deploy</a>
-    <a href="/chatbots/{{ chatbot.id }}/settings" class="pb-2 text-sm text-gray-500 hover:text-gray-700 border-b-2 border-transparent">Settings</a>
-</nav>
+{% include "chatbots/_tabs.html" %}
 
-{% if documents %}
-<div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
-    <table class="min-w-full divide-y divide-gray-200">
-        <thead class="bg-gray-50">
-            <tr>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Title</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Chunks</th>
-            </tr>
-        </thead>
-        <tbody class="divide-y divide-gray-200" id="documents-table">
-            {% for doc in documents %}
-            <tr id="doc-{{ doc.id }}" sse-swap="document:{{ doc.id }}">
-                <td class="px-6 py-4 text-sm">{{ doc.title or doc.source_url or 'Untitled' }}</td>
-                <td class="px-6 py-4 text-sm text-gray-500">{{ doc.source_type }}</td>
-                <td class="px-6 py-4">
-                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
-                        {% if doc.status == 'indexed' %}bg-green-100 text-green-800
-                        {% elif doc.status == 'processing' %}bg-yellow-100 text-yellow-800
-                        {% elif doc.status == 'failed' %}bg-red-100 text-red-800
-                        {% else %}bg-gray-100 text-gray-800{% endif %}">
-                        {{ doc.status }}
-                    </span>
-                </td>
-                <td class="px-6 py-4 text-sm text-gray-500">{{ doc.chunk_count }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<!-- Header row -->
+<div class="flex items-center justify-between mb-4">
+    <h2 class="text-lg font-semibold text-gray-900">Sources</h2>
+    <button onclick="document.getElementById('add-source-modal').classList.remove('hidden')"
+            class="flex items-center gap-1.5 px-3 py-1.5 bg-brand-500 hover:bg-brand-600 text-white rounded-lg text-[13px] font-semibold transition-colors">
+        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+        Add Source
+    </button>
 </div>
-{% else %}
-<div class="text-center py-12 bg-white rounded-lg border border-gray-200">
-    <p class="text-gray-500">No documents yet. Add sources to train your chatbot.</p>
+
+<!-- Character usage bar -->
+{% if char_usage.limit %}
+{% set pct = [((char_usage.used / char_usage.limit) * 100)|round|int, 100]|min %}
+<div class="mb-4 flex items-center gap-3 text-xs">
+    <div class="h-1.5 flex-1 rounded-full bg-gray-100 max-w-xs">
+        <div class="h-1.5 rounded-full transition-all {{ 'bg-red-500' if pct >= 95 else 'bg-amber-500' if pct >= 80 else 'bg-brand-500' }}"
+             style="width: {{ pct }}%"></div>
+    </div>
+    <span class="{{ 'text-red-600' if pct >= 95 else 'text-amber-600' if pct >= 80 else 'text-gray-500' }}">
+        {{ '{:,}'.format(char_usage.used) }} / {{ '{:,}'.format(char_usage.limit) }} chars
+        {% if pct >= 95 %} — limit reached{% elif pct >= 80 %} — approaching limit{% endif %}
+    </span>
 </div>
 {% endif %}
+
+<!-- Documents grouped by source type -->
+{% set active_docs = documents | selectattr('status', '!=', 'failed') | list %}
+{% set failed_docs_list = documents | selectattr('status', 'equalto', 'failed') | list %}
+
+{% set group_labels = {
+    'url': 'Web Pages', 'text': 'Text', 'file': 'Files',
+    'sitemap': 'Sitemaps', 'google_drive': 'Google Drive',
+    'zendesk': 'Zendesk', 'qa': 'Q&A', 'notion': 'Notion'
+} %}
+{% set group_order = ['url', 'text', 'file', 'sitemap', 'google_drive', 'zendesk', 'qa', 'notion'] %}
+
+{% if not active_docs and not failed_docs_list %}
+<div class="bg-white rounded-xl border border-warm-200 flex flex-col items-center justify-center py-14 text-gray-400">
+    <svg class="w-10 h-10 mb-3 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+    <p class="text-sm font-medium text-gray-500">No sources yet</p>
+    <p class="text-xs mt-1">Add URLs, files, or text to build the knowledge base</p>
+</div>
+{% else %}
+
+{% set ns = namespace(seen=[]) %}
+<div class="space-y-5" id="sources-list">
+{% for type_key in group_order %}
+    {% set group = active_docs | selectattr('source_type', 'equalto', type_key) | list %}
+    {% if group %}
+    {% set _ = ns.seen.append(type_key) %}
+    <div>
+        <div class="flex items-center gap-2 mb-2">
+            {% if type_key == 'url' %}
+            <svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/></svg>
+            {% elif type_key == 'file' %}
+            <svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            {% else %}
+            <svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h7"/></svg>
+            {% endif %}
+            <h3 class="text-sm font-medium text-gray-700">{{ group_labels.get(type_key, type_key | capitalize) }}</h3>
+            <span class="text-xs text-gray-400">{{ group | length }}</span>
+        </div>
+        <div class="rounded-lg border border-warm-200 bg-white overflow-hidden">
+            <table class="w-full text-sm">
+                <tbody>
+                {% for doc in group %}
+                <tr id="doc-{{ doc.id }}" class="group border-b border-warm-100 last:border-0 hover:bg-warm-50 transition-colors">
+                    <td class="px-4 py-3">
+                        <div class="min-w-0">
+                            <span class="truncate block max-w-sm font-medium text-gray-800">{{ doc.title or doc.source_url or 'Untitled' }}</span>
+                            {% if doc.source_url and doc.title and doc.source_url != doc.title %}
+                            <span class="truncate block max-w-sm text-[11px] text-gray-400">{{ doc.source_url }}</span>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td class="px-4 py-3 w-28">
+                        {% if doc.status == 'processing' %}
+                        <span class="flex items-center gap-1.5 text-amber-500 text-[11px] animate-pulse">
+                            <span class="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block"></span>Processing…
+                        </span>
+                        {% elif doc.status == 'pending' %}
+                        <span class="flex items-center gap-1.5 text-gray-400 text-[11px]">
+                            <span class="w-1.5 h-1.5 rounded-full bg-gray-300 inline-block"></span>Pending
+                        </span>
+                        {% elif doc.status == 'indexed' %}
+                        <span class="flex items-center gap-1.5 text-green-600 text-[11px]">
+                            <span class="w-1.5 h-1.5 rounded-full bg-green-400 inline-block"></span>Indexed
+                        </span>
+                        {% else %}
+                        <span class="flex items-center gap-1.5 text-gray-500 text-[11px]">
+                            <span class="w-1.5 h-1.5 rounded-full bg-gray-300 inline-block"></span>{{ doc.status }}
+                        </span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-gray-400 text-[11px] w-28">
+                        {{ doc.last_indexed_at.strftime('%b %d, %Y') if doc.last_indexed_at else '—' }}
+                    </td>
+                    <td class="px-4 py-3 w-28">
+                        <select name="sync_frequency"
+                                hx-put="/documents/{{ doc.id }}/sync-frequency"
+                                hx-swap="none"
+                                hx-trigger="change"
+                                class="text-xs text-gray-600 border border-warm-200 rounded px-2 py-1 bg-white">
+                            {% for val, lbl in [('manual','Manual'),('daily','Daily'),('weekly','Weekly'),('monthly','Monthly')] %}
+                            <option value="{{ val }}" {{ 'selected' if doc.sync_frequency == val }}>{{ lbl }}</option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    <td class="py-3 px-4 text-right w-28">
+                        <div class="flex items-center gap-3 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button hx-post="/documents/{{ doc.id }}/reindex" hx-swap="none"
+                                    class="text-[11px] text-gray-400 hover:text-gray-700 transition-colors">Reindex</button>
+                            <button hx-delete="/documents/{{ doc.id }}" hx-target="#doc-{{ doc.id }}" hx-swap="outerHTML swap:0.15s"
+                                    hx-confirm="Delete this document?"
+                                    class="text-[11px] text-red-400 hover:text-red-600 transition-colors">Delete</button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+{% endfor %}
+
+<!-- Any ungrouped active docs (unknown source types) -->
+{% set ungrouped = active_docs | rejectattr('source_type', 'in', group_order) | list %}
+{% if ungrouped %}
+<div>
+    <div class="flex items-center gap-2 mb-2">
+        <svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        <h3 class="text-sm font-medium text-gray-700">Other</h3>
+        <span class="text-xs text-gray-400">{{ ungrouped | length }}</span>
+    </div>
+    <div class="rounded-lg border border-warm-200 bg-white overflow-hidden">
+        <table class="w-full text-sm"><tbody>
+        {% for doc in ungrouped %}
+        <tr id="doc-{{ doc.id }}" class="group border-b border-warm-100 last:border-0 hover:bg-warm-50 transition-colors">
+            <td class="px-4 py-3"><span class="truncate block max-w-sm font-medium text-gray-800">{{ doc.title or doc.source_url or 'Untitled' }}</span></td>
+            <td class="px-4 py-3 w-28 text-[11px] text-gray-400">{{ doc.source_type }}</td>
+            <td class="py-3 px-4 text-right w-28">
+                <div class="flex items-center gap-3 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button hx-post="/documents/{{ doc.id }}/reindex" hx-swap="none" class="text-[11px] text-gray-400 hover:text-gray-700">Reindex</button>
+                    <button hx-delete="/documents/{{ doc.id }}" hx-target="#doc-{{ doc.id }}" hx-swap="outerHTML swap:0.15s" hx-confirm="Delete this document?" class="text-[11px] text-red-400 hover:text-red-600">Delete</button>
+                </div>
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody></table>
+    </div>
+</div>
+{% endif %}
+</div>
+{% endif %}
+
+<!-- Failed pages section -->
+{% if failed_docs_list %}
+<div class="mt-5" x-data="{ open: true }" id="failed-section">
+    <div class="flex items-center justify-between mb-2">
+        <button onclick="toggleSection('failed-content', this)"
+                class="flex items-center gap-2 text-sm font-medium text-red-500 hover:text-red-700 transition-colors">
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+            <span class="chevron text-xs transition-transform rotate-90">▶</span>
+            Failed pages
+            <span class="text-xs font-normal text-red-400">({{ failed_docs_list | length }})</span>
+        </button>
+        {% if failed_docs_list | length > 1 %}
+        <button hx-post="/chatbots/{{ chatbot.id }}/retry-failed" hx-swap="none"
+                class="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors">
+            <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            Retry all
+        </button>
+        {% endif %}
+    </div>
+    <div id="failed-content" class="mt-2">
+        <div class="rounded-lg border border-red-100 bg-white overflow-hidden">
+            <table class="w-full text-xs">
+                <thead>
+                    <tr class="border-b border-red-100 bg-red-50">
+                        <th class="text-left px-4 py-2.5 font-medium text-red-600">URL</th>
+                        <th class="text-left px-4 py-2.5 font-medium text-red-600">Reason</th>
+                        <th class="text-right px-4 py-2.5 font-medium text-red-600">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for doc in failed_docs_list %}
+                {% set raw_error = doc.metadata_.get('error', '') if doc.metadata_ else '' %}
+                <tr id="doc-{{ doc.id }}" class="group border-b border-red-50 last:border-0 hover:bg-red-50 transition-colors">
+                    <td class="px-4 py-2.5 max-w-[240px]">
+                        <span class="truncate block text-gray-600" title="{{ doc.source_url }}">{{ doc.source_url or doc.title or 'Unknown URL' }}</span>
+                    </td>
+                    <td class="px-4 py-2.5 max-w-[260px]">
+                        {% if raw_error %}
+                        <span class="text-red-500 font-medium">{{ raw_error }}</span>
+                        {% else %}
+                        <span class="text-gray-400">Unknown error</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-2.5 text-right">
+                        <div class="flex items-center gap-3 justify-end">
+                            <button hx-post="/documents/{{ doc.id }}/reindex" hx-swap="none"
+                                    class="flex items-center gap-1 text-gray-400 hover:text-gray-700 transition-colors">
+                                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                                Retry
+                            </button>
+                            <button hx-delete="/documents/{{ doc.id }}" hx-target="#doc-{{ doc.id }}" hx-swap="outerHTML swap:0.15s"
+                                    hx-confirm="Delete this document?"
+                                    class="text-red-300 hover:text-red-600 transition-colors">Delete</button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Crawl history section -->
+{% if crawl_jobs %}
+<div class="mt-6">
+    <button onclick="toggleSection('crawl-history-content', this)"
+            class="flex items-center gap-2 text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors mb-2">
+        <span class="chevron text-xs transition-transform">▶</span>
+        Crawl history
+        <span class="text-xs font-normal text-gray-400">({{ crawl_jobs | length }})</span>
+    </button>
+    <div id="crawl-history-content" class="hidden">
+        <div class="rounded-lg border border-warm-200 bg-white overflow-hidden">
+            <table class="w-full text-xs">
+                <thead>
+                    <tr class="border-b border-warm-200 bg-warm-50">
+                        <th class="text-left px-4 py-2.5 font-medium text-gray-500">URL</th>
+                        <th class="text-left px-4 py-2.5 font-medium text-gray-500">Status</th>
+                        <th class="text-left px-4 py-2.5 font-medium text-gray-500">Crawled</th>
+                        <th class="text-left px-4 py-2.5 font-medium text-gray-500">Failed</th>
+                        <th class="text-left px-4 py-2.5 font-medium text-gray-500">Duration</th>
+                        <th class="text-left px-4 py-2.5 font-medium text-gray-500">Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for job in crawl_jobs %}
+                {% if job.completed_at and job.created_at %}
+                    {% set dur_sec = ((job.completed_at - job.created_at).total_seconds())|int %}
+                    {% set duration = (dur_sec|string + 's') if dur_sec < 60 else ((dur_sec // 60)|string + 'm') %}
+                {% else %}
+                    {% set duration = '—' %}
+                {% endif %}
+                <tr class="border-b border-warm-100 last:border-0">
+                    <td class="px-4 py-2.5 text-gray-600 max-w-[160px]">
+                        <span class="truncate block" title="{{ job.root_url }}">{{ job.root_url }}</span>
+                    </td>
+                    <td class="px-4 py-2.5">
+                        <span class="flex items-center gap-1.5 capitalize">
+                            <span class="w-1.5 h-1.5 rounded-full flex-shrink-0
+                                {{ 'bg-green-400' if job.status == 'completed'
+                                else 'bg-blue-400' if job.status == 'running'
+                                else 'bg-red-400' if job.status == 'failed'
+                                else 'bg-gray-300' }}"></span>
+                            {{ job.status }}
+                        </span>
+                    </td>
+                    <td class="px-4 py-2.5 text-gray-500">{{ job.pages_queued }}</td>
+                    <td class="px-4 py-2.5">
+                        {% if job.pages_failed > 0 %}
+                        <span class="font-medium {{ 'text-red-500' if (job.pages_failed / [job.pages_queued + job.pages_failed, 1]|max) > 0.5 else 'text-amber-500' }}">{{ job.pages_failed }}</span>
+                        {% else %}
+                        <span class="text-gray-300">—</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-2.5 text-gray-400">{{ duration }}</td>
+                    <td class="px-4 py-2.5 text-gray-400">{{ job.created_at.strftime('%b %d, %Y') }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Crawl status area (shown below sources list after crawl starts) -->
+<div id="crawl-status-area" class="mt-4"></div>
+
+<!-- ============================================================
+     ADD SOURCE MODAL — two-column layout matching old React UI
+     ============================================================ -->
+<div id="add-source-modal" class="fixed inset-0 z-50 hidden" onclick="if(event.target===this)closeSourceModal()">
+    <div class="absolute inset-0 bg-black/20 backdrop-blur-[1px]"></div>
+    <div class="relative flex items-center justify-center min-h-full p-4">
+        <div class="bg-white rounded-2xl shadow-2xl border border-warm-200 w-full max-w-2xl flex overflow-hidden" style="max-height:90vh" onclick="event.stopPropagation()">
+
+            <!-- LEFT: source type picker -->
+            <div class="w-48 flex-shrink-0 bg-warm-50 border-r border-warm-200 overflow-y-auto py-3">
+                <p class="px-4 pb-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Source type</p>
+                {% set source_types = [
+                    ('website', 'Full Website',   'Scan & crawl an entire site',  '#10b981'),
+                    ('url',     'Web Page',        'Crawl any public URL',         '#3b82f6'),
+                    ('upload',  'File Upload',     'PDF, DOCX, TXT, CSV',          '#8b5cf6'),
+                    ('text',    'Plain Text',      'Paste text or Q&A pairs',      '#f59e0b'),
+                    ('gdrive',  'Google Drive',    'Docs, Sheets, folders',        '#f97316'),
+                    ('zendesk', 'Zendesk',         'Help Center articles',         '#06b6d4'),
+                    ('salesforce','Salesforce',    'Knowledge articles',           '#0ea5e9'),
+                    ('dropbox', 'Dropbox',         'Files from any folder',        '#6366f1'),
+                ] %}
+                {% for sid, slabel, sdesc, scolor in source_types %}
+                <button id="src-btn-{{ sid }}" onclick="switchSource('{{ sid }}')"
+                        class="w-full text-left px-4 py-2.5 transition-colors hover:bg-white group
+                               {{ 'bg-white border-r-2 border-brand-500' if loop.first else '' }}">
+                    <p class="text-[13px] font-medium text-gray-800 group-hover:text-gray-900">{{ slabel }}</p>
+                    <p class="text-[11px] text-gray-400 mt-0.5 leading-tight">{{ sdesc }}</p>
+                </button>
+                {% endfor %}
+            </div>
+
+            <!-- RIGHT: form panel -->
+            <div class="flex-1 flex flex-col min-h-0 overflow-hidden">
+                <!-- Header -->
+                <div class="flex items-start justify-between px-6 pt-5 pb-4">
+                    <div class="flex items-center gap-3">
+                        <div id="src-icon-badge" class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style="background:#d1fae5">
+                            <svg class="w-5 h-5" style="color:#10b981" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/></svg>
+                        </div>
+                        <div>
+                            <h3 id="src-title" class="text-[15px] font-semibold text-gray-900">Full Website</h3>
+                            <p id="src-desc" class="text-[12px] text-gray-400">Scan & crawl an entire site</p>
+                        </div>
+                    </div>
+                    <button onclick="closeSourceModal()" class="text-gray-400 hover:text-gray-600 transition-colors mt-0.5">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                </div>
+
+                <!-- Body (scrollable) -->
+                <div class="flex-1 overflow-y-auto px-6 pb-2">
+
+                    <!-- WEBSITE: 2-step crawl with preview -->
+                    <div id="src-panel-website">
+                        <!-- Step 1: URL input + scan -->
+                        <div id="website-step1">
+                            <label class="block text-xs font-medium text-gray-500 mb-1">Website URL</label>
+                            <input id="website-url" type="url" placeholder="https://example.com" autocomplete="off"
+                                   class="block w-full rounded-lg border border-warm-200 px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                                   onkeydown="if(event.key==='Enter'){event.preventDefault();scanWebsite()}">
+                            <p class="text-[11px] text-gray-400 mb-3">We'll discover all pages via sitemap or link crawling, then let you choose which sections to include.</p>
+                            <button type="button" onclick="scanWebsite()"
+                                    id="scan-btn"
+                                    class="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-semibold transition-colors">
+                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                                Scan site
+                            </button>
+                        </div>
+                        <!-- Step 2: directory tree (injected by HTMX) -->
+                        <div id="website-preview" class="hidden mt-1"
+                             hx-on::after-request="document.getElementById('scan-btn').disabled=false; document.getElementById('scan-btn').textContent='Scan site'">
+                        </div>
+                    </div>
+
+                    <!-- URL: multi-URL list -->
+                    <div id="src-panel-url" class="hidden">
+                        <label class="block text-xs font-medium text-gray-500 mb-1">Page URLs</label>
+                        <p class="text-[11px] text-gray-400 mb-2">Add one or more URLs and press Enter or click +</p>
+                        <div class="flex gap-2 mb-2">
+                            <input id="url-input" type="url" placeholder="https://docs.example.com/page"
+                                   class="flex-1 rounded-lg border border-warm-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+                                   onkeydown="if(event.key==='Enter'){event.preventDefault();addUrlToList()}">
+                            <button type="button" onclick="addUrlToList()"
+                                    class="px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-semibold transition-colors">+</button>
+                        </div>
+                        <p id="url-error" class="text-[11px] text-red-500 mb-2 hidden"></p>
+                        <div id="url-list" class="space-y-1.5 mb-2 max-h-48 overflow-y-auto"></div>
+                    </div>
+
+                    <!-- FILE UPLOAD: drag & drop -->
+                    <div id="src-panel-upload" class="hidden">
+                        <div id="dropzone"
+                             class="border-2 border-dashed border-warm-300 rounded-xl p-8 text-center cursor-pointer hover:border-purple-400 hover:bg-purple-50 transition-colors"
+                             onclick="document.getElementById('file-input').click()"
+                             ondragover="event.preventDefault();this.classList.add('border-purple-400','bg-purple-50')"
+                             ondragleave="this.classList.remove('border-purple-400','bg-purple-50')"
+                             ondrop="event.preventDefault();this.classList.remove('border-purple-400','bg-purple-50');handleFileDrop(event.dataTransfer.files)">
+                            <svg class="w-8 h-8 mx-auto mb-2 text-purple-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+                            <p class="text-sm text-gray-500 font-medium">Drop files here or click to browse</p>
+                            <p class="text-[11px] text-gray-400 mt-1">PDF, DOCX, TXT, CSV, MD</p>
+                        </div>
+                        <input id="file-input" type="file" accept=".pdf,.docx,.csv,.txt,.md" multiple class="hidden" onchange="handleFileDrop(this.files)">
+                        <div id="file-list" class="mt-3 space-y-1.5 max-h-40 overflow-y-auto"></div>
+                    </div>
+
+                    <!-- PLAIN TEXT: with Q&A toggle -->
+                    <div id="src-panel-text" class="hidden">
+                        <div class="flex items-center gap-2 mb-3">
+                            <span class="text-xs font-medium text-gray-500">Mode:</span>
+                            <div class="inline-flex rounded-lg border border-warm-200 bg-white p-0.5">
+                                <button type="button" id="text-mode-plain" onclick="setTextMode('plain')"
+                                        class="px-3 py-1 text-xs font-medium rounded-md transition-colors bg-amber-500 text-white">Plain text</button>
+                                <button type="button" id="text-mode-qa" onclick="setTextMode('qa')"
+                                        class="px-3 py-1 text-xs font-medium rounded-md transition-colors text-gray-500 hover:text-gray-700">Q&A pairs</button>
+                            </div>
+                        </div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">Title</label>
+                        <input id="text-title" type="text" placeholder="Article title"
+                               class="block w-full rounded-lg border border-warm-200 px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-1 focus:ring-amber-400">
+                        <label class="block text-xs font-medium text-gray-500 mb-1">Content</label>
+                        <p id="qa-hint" class="text-[11px] text-gray-400 mb-1.5 hidden font-mono">Q: What is your return policy?<br>A: We offer 30-day returns…</p>
+                        <textarea id="text-content" placeholder="Paste your content here…" rows="6"
+                                  class="block w-full rounded-lg border border-warm-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400 resize-none"></textarea>
+                    </div>
+
+                    <!-- INTEGRATION STUBS -->
+                    {% for stub_id, stub_title, stub_desc, stub_color, stub_hint in [
+                        ('gdrive',     'Google Drive',  'Connect your Google Drive to sync Docs, Sheets, and Slides.',                    '#f97316', 'Go to Settings → Integrations to connect Google Drive.'),
+                        ('zendesk',    'Zendesk',       'Import your Help Center articles automatically.',                               '#06b6d4', 'Go to Settings → Integrations to connect Zendesk.'),
+                        ('salesforce', 'Salesforce',    'Sync Salesforce Knowledge articles into your chatbot.',                         '#0ea5e9', 'Go to Settings → Integrations to connect Salesforce.'),
+                        ('dropbox',    'Dropbox',       'Sync files from a Dropbox folder.',                                            '#6366f1', 'Go to Settings → Integrations to connect Dropbox.'),
+                    ] %}
+                    <div id="src-panel-{{ stub_id }}" class="hidden">
+                        <div class="rounded-xl border border-warm-200 bg-warm-50 p-5 text-center">
+                            <p class="text-sm font-semibold text-gray-800 mb-1">{{ stub_title }} integration</p>
+                            <p class="text-[13px] text-gray-500 mb-4">{{ stub_desc }}</p>
+                            <p class="text-[11px] text-gray-400">{{ stub_hint }}</p>
+                            <a href="/settings/integrations" onclick="closeSourceModal()"
+                               class="inline-flex items-center gap-1.5 mt-4 px-4 py-2 rounded-lg text-sm font-semibold text-white transition-colors"
+                               style="background: {{ stub_color }}">
+                                Go to Integrations
+                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 9l3 3m0 0l-3 3m3-3H8"/></svg>
+                            </a>
+                        </div>
+                    </div>
+                    {% endfor %}
+
+                </div><!-- end scrollable body -->
+
+                <!-- Footer -->
+                <div class="px-6 py-4 border-t border-warm-200 flex items-center justify-between gap-3 flex-shrink-0">
+                    <button type="button" onclick="closeSourceModal()"
+                            class="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors">Cancel</button>
+                    <button type="button" id="src-submit-btn" onclick="submitSource()"
+                            class="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold text-white transition-colors"
+                            style="background:#10b981">
+                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M13 9l3 3m0 0l-3 3m3-3H8m13 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        <span id="src-submit-label">Crawl site</span>
+                    </button>
+                </div>
+            </div><!-- end right panel -->
+        </div>
+    </div>
+</div>
+
+<script>
+// ── Source modal state ──────────────────────────────────────────────────
+const CHATBOT_ID = '{{ chatbot.id }}';
+let _currentSource = 'website';
+let _urlList = [];
+let _fileList = [];
+let _textMode = 'plain';
+
+const SOURCE_META = {
+    website:    { title:'Full Website',  desc:'Scan & crawl an entire site',  color:'#10b981', bg:'#d1fae5', submitLabel:'Crawl site' },
+    url:        { title:'Web Page',      desc:'Crawl any public URL',         color:'#3b82f6', bg:'#dbeafe', submitLabel:'Add URL' },
+    upload:     { title:'File Upload',   desc:'PDF, DOCX, TXT, CSV',          color:'#8b5cf6', bg:'#ede9fe', submitLabel:'Upload files' },
+    text:       { title:'Plain Text',    desc:'Paste text or Q&A pairs',      color:'#f59e0b', bg:'#fef3c7', submitLabel:'Add text' },
+    gdrive:     { title:'Google Drive',  desc:'Docs, Sheets, folders',        color:'#f97316', bg:'#ffedd5', submitLabel:null },
+    zendesk:    { title:'Zendesk',       desc:'Help Center articles',         color:'#06b6d4', bg:'#cffafe', submitLabel:null },
+    salesforce: { title:'Salesforce',    desc:'Knowledge articles',           color:'#0ea5e9', bg:'#e0f2fe', submitLabel:null },
+    dropbox:    { title:'Dropbox',       desc:'Files from any folder',        color:'#6366f1', bg:'#e0e7ff', submitLabel:null },
+};
+
+const PANELS = ['website','url','upload','text','gdrive','zendesk','salesforce','dropbox'];
+
+function openSourceModal() {
+    document.getElementById('add-source-modal').classList.remove('hidden');
+    switchSource('website');
+}
+function closeSourceModal() {
+    document.getElementById('add-source-modal').classList.add('hidden');
+}
+
+function switchSource(id) {
+    _currentSource = id;
+    const meta = SOURCE_META[id];
+
+    // Update sidebar active state
+    PANELS.forEach(p => {
+        const btn = document.getElementById('src-btn-' + p);
+        if (!btn) return;
+        if (p === id) {
+            btn.classList.add('bg-white','border-r-2','border-brand-500');
+        } else {
+            btn.classList.remove('bg-white','border-r-2','border-brand-500');
+        }
+    });
+
+    // Update header
+    document.getElementById('src-title').textContent = meta.title;
+    document.getElementById('src-desc').textContent = meta.desc;
+    const badge = document.getElementById('src-icon-badge');
+    badge.style.background = meta.bg;
+    badge.querySelector('svg').style.color = meta.color;
+
+    // Show/hide panels
+    PANELS.forEach(p => {
+        const el = document.getElementById('src-panel-' + p);
+        if (el) el.classList.toggle('hidden', p !== id);
+    });
+
+    // Footer button
+    const submitBtn = document.getElementById('src-submit-btn');
+    const submitLabel = document.getElementById('src-submit-label');
+    if (meta.submitLabel) {
+        submitBtn.style.display = '';
+        submitBtn.style.background = meta.color;
+        submitLabel.textContent = meta.submitLabel;
+    } else {
+        submitBtn.style.display = 'none';
+    }
+}
+
+// ── Website crawl (2-step) ──────────────────────────────────────────────
+function scanWebsite() {
+    const url = document.getElementById('website-url').value.trim();
+    if (!url) return;
+    const btn = document.getElementById('scan-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg> Scanning…';
+
+    const preview = document.getElementById('website-preview');
+    preview.classList.remove('hidden');
+
+    htmx.ajax('POST', '/chatbots/' + CHATBOT_ID + '/crawl/preview', {
+        target: '#website-preview',
+        swap: 'innerHTML',
+        values: { url: url }
+    }).finally(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg> Scan site';
+        // Hide step1 on success
+        const hasError = preview.querySelector('.border-red-200');
+        document.getElementById('website-step1').classList.toggle('hidden', !hasError);
+        if (hasError) preview.classList.add('hidden');
+    });
+}
+
+function resetCrawlPreview() {
+    document.getElementById('website-preview').classList.add('hidden');
+    document.getElementById('website-preview').innerHTML = '';
+    document.getElementById('website-step1').classList.remove('hidden');
+    document.getElementById('website-url').value = '';
+}
+
+function updateExcludePaths() {
+    const checked = document.querySelectorAll('#website-preview .dir-checkbox');
+    const total = checked.length;
+    const excluded = Array.from(checked).filter(c => !c.checked).map(c => c.dataset.path);
+    const selected = total - excluded.length;
+    const countEl = document.getElementById('crawl-page-count');
+    const btnCount = document.getElementById('crawl-btn-count');
+    // Rough total from preview badge
+    const totalMatch = document.querySelector('#website-preview .bg-green-100');
+    const pageTotal = totalMatch ? parseInt(totalMatch.textContent) : '?';
+    if (countEl) countEl.textContent = selected + ' of ' + pageTotal + ' sections selected';
+    if (btnCount) btnCount.textContent = selected;
+    document.getElementById('crawl-exclude-paths').value = excluded.join(',');
+}
+
+function submitCrawlWithPaths(chatbotId) {
+    const url = document.getElementById('crawl-url-value')?.value || document.getElementById('website-url').value;
+    const exclude = document.getElementById('crawl-exclude-paths')?.value || '';
+    closeSourceModal();
+    htmx.ajax('POST', '/chatbots/' + chatbotId + '/crawl', {
+        target: '#crawl-status-area',
+        swap: 'innerHTML',
+        values: { url: url, exclude_paths: exclude }
+    });
+}
+
+// ── URL list ────────────────────────────────────────────────────────────
+function addUrlToList() {
+    const input = document.getElementById('url-input');
+    const err = document.getElementById('url-error');
+    const val = input.value.trim();
+    err.classList.add('hidden');
+    if (!val) return;
+    try { new URL(val); } catch(e) { err.textContent = 'Enter a valid https:// URL'; err.classList.remove('hidden'); return; }
+    if (!val.startsWith('http')) { err.textContent = 'URL must start with http:// or https://'; err.classList.remove('hidden'); return; }
+    if (_urlList.includes(val)) { input.value=''; return; }
+    _urlList.push(val);
+    renderUrlList();
+    input.value = '';
+    input.focus();
+}
+
+function removeUrl(idx) {
+    _urlList.splice(idx, 1);
+    renderUrlList();
+}
+
+function renderUrlList() {
+    const list = document.getElementById('url-list');
+    list.innerHTML = _urlList.map((u, i) =>
+        `<div class="flex items-center gap-2 bg-blue-50 rounded-lg px-3 py-1.5 text-xs">
+            <span class="flex-1 truncate text-blue-800">${u}</span>
+            <button type="button" onclick="removeUrl(${i})" class="text-blue-300 hover:text-blue-600 flex-shrink-0">✕</button>
+        </div>`
+    ).join('');
+    document.getElementById('src-submit-label').textContent = _urlList.length > 1 ? `Add ${_urlList.length} URLs` : 'Add URL';
+}
+
+// ── File list ───────────────────────────────────────────────────────────
+function handleFileDrop(files) {
+    const list = document.getElementById('file-list');
+    _fileList = Array.from(files);
+    list.innerHTML = _fileList.map((f, i) => {
+        const sz = f.size > 1048576 ? (f.size/1048576).toFixed(1)+'MB' : f.size > 1024 ? (f.size/1024).toFixed(0)+'KB' : f.size+'B';
+        return `<div class="flex items-center gap-2 bg-purple-50 rounded-lg px-3 py-1.5 text-xs">
+            <svg class="w-3.5 h-3.5 text-purple-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            <span class="flex-1 truncate text-purple-800">${f.name}</span>
+            <span class="text-purple-400">${sz}</span>
+        </div>`;
+    }).join('');
+    document.getElementById('src-submit-label').textContent = _fileList.length > 1 ? `Upload ${_fileList.length} files` : 'Upload file';
+}
+
+// ── Text mode toggle ────────────────────────────────────────────────────
+function setTextMode(mode) {
+    _textMode = mode;
+    ['plain','qa'].forEach(m => {
+        const btn = document.getElementById('text-mode-' + m);
+        if (m === mode) { btn.classList.add('bg-amber-500','text-white'); btn.classList.remove('text-gray-500'); }
+        else { btn.classList.remove('bg-amber-500','text-white'); btn.classList.add('text-gray-500'); }
+    });
+    const qa = document.getElementById('qa-hint');
+    const ta = document.getElementById('text-content');
+    if (mode === 'qa') {
+        qa.classList.remove('hidden');
+        ta.placeholder = 'Q: What is your return policy?\nA: We offer 30-day returns…\n\nQ: How do I contact support?\nA: Email support@example.com';
+        ta.classList.add('font-mono');
+    } else {
+        qa.classList.add('hidden');
+        ta.placeholder = 'Paste your content here…';
+        ta.classList.remove('font-mono');
+    }
+}
+
+// ── Submit ──────────────────────────────────────────────────────────────
+async function submitSource() {
+    const src = _currentSource;
+    const btn = document.getElementById('src-submit-btn');
+    btn.disabled = true;
+    document.getElementById('src-submit-label').textContent = 'Adding…';
+
+    try {
+        if (src === 'website') {
+            // handled by submitCrawlWithPaths inside the preview panel
+            return;
+        }
+        if (src === 'url') {
+            if (_urlList.length === 0) {
+                // try the input field value
+                const v = document.getElementById('url-input').value.trim();
+                if (v) _urlList.push(v);
+            }
+            for (const url of _urlList) {
+                await htmx.ajax('POST', '/chatbots/' + CHATBOT_ID + '/sources/url', {
+                    target: '#sources-list', swap: 'beforeend', values: { url }
+                });
+            }
+            _urlList = [];
+            renderUrlList();
+            closeSourceModal();
+            return;
+        }
+        if (src === 'text') {
+            const title = document.getElementById('text-title').value.trim();
+            const content = document.getElementById('text-content').value.trim();
+            if (!title || !content) return;
+            await htmx.ajax('POST', '/chatbots/' + CHATBOT_ID + '/sources/text', {
+                target: '#sources-list', swap: 'beforeend', values: { title, content }
+            });
+            document.getElementById('text-title').value = '';
+            document.getElementById('text-content').value = '';
+            closeSourceModal();
+            return;
+        }
+        if (src === 'upload') {
+            for (const file of _fileList) {
+                const fd = new FormData();
+                fd.append('file', file);
+                const resp = await fetch('/chatbots/' + CHATBOT_ID + '/sources/upload', {
+                    method: 'POST', body: fd,
+                    headers: { 'HX-Request': 'true' }
+                });
+                const html = await resp.text();
+                document.getElementById('sources-list').insertAdjacentHTML('beforeend', html);
+            }
+            _fileList = [];
+            document.getElementById('file-list').innerHTML = '';
+            closeSourceModal();
+            return;
+        }
+    } finally {
+        btn.disabled = false;
+        switchSource(src); // reset label
+    }
+}
+
+// ── Collapsible sections ────────────────────────────────────────────────
+function toggleSection(contentId, btn) {
+    const el = document.getElementById(contentId);
+    const chevron = btn.querySelector('.chevron');
+    el.classList.toggle('hidden');
+    if (chevron) chevron.classList.toggle('rotate-90');
+}
+
+// Expose openSourceModal for the button at top
+document.querySelector('[onclick*="add-source-modal"]')?.setAttribute('onclick', 'openSourceModal()');
+</script>
+
 {% endblock %}

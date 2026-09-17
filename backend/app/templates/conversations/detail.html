@@ -3,29 +3,9 @@
 {% block content %}
 <div class="mb-6">
     <a href="/conversations" class="text-sm text-gray-500 hover:text-gray-700">&larr; Conversations</a>
-    <div class="flex items-center gap-3 mt-1">
-        <h1 class="text-2xl font-bold text-gray-900">Conversation</h1>
-        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
-            {% if conversation.status == 'open' %}bg-green-100 text-green-800{% else %}bg-gray-100 text-gray-800{% endif %}">
-            {{ conversation.status }}
-        </span>
-    </div>
 </div>
-
-<div class="bg-white rounded-lg border border-gray-200 p-6 space-y-4 max-w-2xl">
-    {% for msg in messages %}
-    <div class="{% if msg.author_type == 'contact' %}ml-0 mr-12{% else %}ml-12 mr-0{% endif %}">
-        <div class="flex items-center gap-2 mb-1">
-            <span class="text-xs font-medium text-gray-500 uppercase">{{ msg.author_type }}</span>
-            <span class="text-xs text-gray-400">{{ msg.created_at.strftime('%H:%M') }}</span>
-            {% if msg.confidence_score %}
-            <span class="text-xs text-gray-400">({{ '%.0f' % (msg.confidence_score * 100) }}%)</span>
-            {% endif %}
-        </div>
-        <div class="rounded-lg p-3 text-sm {% if msg.author_type == 'contact' %}bg-gray-100{% else %}bg-indigo-50{% endif %}">
-            {{ msg.content }}
-        </div>
-    </div>
-    {% endfor %}
+<div class="bg-white border border-warm-200 rounded-xl overflow-hidden min-h-[500px]">
+    {% set selected = conversation %}
+    {% include "conversations/_detail.html" %}
 </div>
 {% endblock %}

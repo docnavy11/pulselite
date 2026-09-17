@@ -1,0 +1,271 @@
+{% extends "base.html" %}
+{% block title %}Admin — PulseLight{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold text-gray-900 mb-1">Admin</h1>
+<p class="text-sm text-gray-500 mb-6">System health, logs, and audit trail.</p>
+
+<!-- Tabs -->
+<div class="flex gap-0 border-b border-gray-200 mb-6">
+    {% for key, label in tabs %}
+    <a href="/admin?tab={{ key }}"
+       class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors
+       {% if tab == key %}border-brand-600 text-brand-700{% else %}border-transparent text-gray-500 hover:text-gray-700{% endif %}">
+        {{ label }}
+    </a>
+    {% endfor %}
+</div>
+
+
+{# ── System Health ── #}
+{% if tab == 'health' %}
+
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+
+    <!-- Database -->
+    <div class="bg-white rounded-xl border border-warm-200 p-5">
+        <div class="flex items-center gap-2 mb-3">
+            <span class="w-2.5 h-2.5 rounded-full flex-shrink-0 {% if db_info.connected %}bg-green-500{% else %}bg-red-500{% endif %}"></span>
+            <h3 class="text-sm font-semibold text-gray-700">Database</h3>
+        </div>
+        <div class="space-y-1.5 text-xs text-gray-600">
+            <div class="flex justify-between"><span>Status</span><span class="font-medium {% if db_info.connected %}text-green-700{% else %}text-red-700{% endif %}">{% if db_info.connected %}Connected{% else %}Disconnected{% endif %}</span></div>
+            {% if db_info.pool_size is defined %}<div class="flex justify-between"><span>Pool size</span><span>{{ db_info.pool_size }}</span></div>{% endif %}
+            {% if db_info.pool_checked_in is defined %}<div class="flex justify-between"><span>Checked in</span><span>{{ db_info.pool_checked_in }}</span></div>{% endif %}
+            {% if db_info.pool_checked_out is defined %}<div class="flex justify-between"><span>Checked out</span><span>{{ db_info.pool_checked_out }}</span></div>{% endif %}
+            {% if db_info.pool_overflow is defined %}<div class="flex justify-between"><span>Overflow</span><span>{{ db_info.pool_overflow }}</span></div>{% endif %}
+        </div>
+    </div>
+
+    <!-- Redis -->
+    <div class="bg-white rounded-xl border border-warm-200 p-5">
+        <div class="flex items-center gap-2 mb-3">
+            <span class="w-2.5 h-2.5 rounded-full flex-shrink-0 {% if redis_info.connected %}bg-green-500{% else %}bg-red-500{% endif %}"></span>
+            <h3 class="text-sm font-semibold text-gray-700">Redis</h3>
+        </div>
+        <div class="space-y-1.5 text-xs text-gray-600">
+            <div class="flex justify-between"><span>Status</span><span class="font-medium {% if redis_info.connected %}text-green-700{% else %}text-red-700{% endif %}">{% if redis_info.connected %}Connected{% else %}Disconnected{% endif %}</span></div>
+            {% if redis_info.used_memory_human %}<div class="flex justify-between"><span>Memory</span><span>{{ redis_info.used_memory_human }}</span></div>{% endif %}
+            {% if redis_info.connected_clients is not none %}<div class="flex justify-between"><span>Clients</span><span>{{ redis_info.connected_clients }}</span></div>{% endif %}
+            {% if redis_info.uptime_in_seconds %}<div class="flex justify-between"><span>Uptime</span><span>{{ (redis_info.uptime_in_seconds / 3600)|int }}h</span></div>{% endif %}
+        </div>
+    </div>
+
+    <!-- System -->
+    <div class="bg-white rounded-xl border border-warm-200 p-5">
+        <div class="flex items-center gap-2 mb-3">
+            <span class="w-2.5 h-2.5 rounded-full flex-shrink-0 bg-green-500"></span>
+            <h3 class="text-sm font-semibold text-gray-700">System</h3>
+        </div>
+        <div class="space-y-1.5 text-xs text-gray-600">
+            {% if sys_info.python_version %}<div class="flex justify-between"><span>Python</span><span>{{ sys_info.python_version }}</span></div>{% endif %}
+            {% if sys_info.uptime %}<div class="flex justify-between"><span>Uptime</span><span>{{ sys_info.uptime }}</span></div>{% endif %}
+            {% if sys_info.hostname %}<div class="flex justify-between"><span>Host</span><span class="truncate max-w-[200px]">{{ sys_info.hostname }}</span></div>{% endif %}
+            {% if sys_info.pid %}<div class="flex justify-between"><span>PID</span><span>{{ sys_info.pid }}</span></div>{% endif %}
+            <div class="flex justify-between"><span>Worker</span><span class="font-medium {% if worker_ok %}text-green-700{% else %}text-red-700{% endif %}">{% if worker_ok %}Running{% if worker_queue_depth > 0 %} ({{ worker_queue_depth }} queued){% endif %}{% else %}Stopped{% endif %}</span></div>
+            <div class="flex justify-between"><span>Scheduler</span><span class="font-medium {% if scheduler_ok %}text-green-700{% else %}text-amber-600{% endif %}">{% if scheduler_ok %}Running — {{ scheduler_jobs }} job{{ 's' if scheduler_jobs != 1 else '' }}{% else %}Not running{% endif %}</span></div>
+        </div>
+    </div>
+
+    <!-- Storage -->
+    <div class="bg-white rounded-xl border border-warm-200 p-5">
+        <div class="flex items-center gap-2 mb-3">
+            <span class="w-2.5 h-2.5 rounded-full flex-shrink-0 bg-green-500"></span>
+            <h3 class="text-sm font-semibold text-gray-700">Storage</h3>
+        </div>
+        <div class="space-y-1.5 text-xs text-gray-600">
+            <div class="flex justify-between"><span>Documents</span><span>{{ "{:,}".format(doc_count) }}</span></div>
+            <div class="flex justify-between"><span>Chunks</span><span>{{ "{:,}".format(chunk_count) }}</span></div>
+            <div class="flex justify-between"><span>Conversations</span><span>{{ "{:,}".format(conv_count) }}</span></div>
+            <div class="flex justify-between"><span>Chatbots</span><span>{{ chatbot_count }}</span></div>
+            <div class="flex justify-between"><span>Knowledge bases</span><span>{{ kb_count }}</span></div>
+        </div>
+    </div>
+
+</div>
+
+
+{# ── Server Logs ── #}
+{% elif tab == 'server-logs' %}
+
+<div class="flex items-center gap-3 mb-4">
+    <form method="get" action="/admin" class="flex items-center gap-2">
+        <input type="hidden" name="tab" value="server-logs">
+        <select name="level" onchange="this.form.submit()"
+                class="text-xs border border-warm-200 rounded-lg px-2 py-1.5 bg-white text-gray-600 focus:outline-none focus:ring-1 focus:ring-brand-500">
+            <option value="" {% if not level_filter %}selected{% endif %}>All levels</option>
+            {% for lvl in ["DEBUG", "INFO", "WARNING", "ERROR"] %}
+            <option value="{{ lvl }}" {% if level_filter == lvl %}selected{% endif %}>{{ lvl }}</option>
+            {% endfor %}
+        </select>
+    </form>
+    <a href="/admin?tab=server-logs{% if level_filter %}&level={{ level_filter }}{% endif %}"
+       class="text-xs text-brand-600 hover:underline">Refresh</a>
+    <span class="text-xs text-gray-400">{{ log_entries|length }} entries (last 200)</span>
+</div>
+
+{% if log_entries %}
+<div class="bg-white rounded-xl border border-warm-200 overflow-hidden">
+    <div class="overflow-x-auto">
+        <table class="min-w-full text-xs">
+            <thead class="bg-gray-50 border-b border-warm-200">
+                <tr>
+                    <th class="px-4 py-2.5 text-left font-medium text-gray-500">Timestamp</th>
+                    <th class="px-4 py-2.5 text-left font-medium text-gray-500">Level</th>
+                    <th class="px-4 py-2.5 text-left font-medium text-gray-500">Logger</th>
+                    <th class="px-4 py-2.5 text-left font-medium text-gray-500">Message</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-warm-100">
+                {% for entry in log_entries %}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-4 py-2 font-mono text-gray-500 whitespace-nowrap">
+                        {{ entry.timestamp[:19].replace('T', ' ') if entry.timestamp else '—' }}
+                    </td>
+                    <td class="px-4 py-2">
+                        <span class="inline-flex px-1.5 py-0.5 rounded text-[10px] font-semibold
+                            {% if entry.level == 'ERROR' %}bg-red-100 text-red-700
+                            {% elif entry.level == 'WARNING' %}bg-yellow-100 text-yellow-700
+                            {% elif entry.level == 'INFO' %}bg-blue-100 text-blue-700
+                            {% else %}bg-gray-100 text-gray-500{% endif %}">
+                            {{ entry.level }}
+                        </span>
+                    </td>
+                    <td class="px-4 py-2 font-mono text-gray-500 max-w-[180px] truncate">{{ entry.logger or '—' }}</td>
+                    <td class="px-4 py-2 font-mono text-gray-700 max-w-[500px] truncate" title="{{ entry.message }}">
+                        {{ entry.message or '—' }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="text-center py-12 bg-white rounded-xl border border-warm-200">
+    <p class="text-sm text-gray-400">No log entries yet.</p>
+</div>
+{% endif %}
+
+
+{# ── Audit Trail ── #}
+{% elif tab == 'audit' %}
+
+<div class="flex items-center justify-between mb-3">
+    <span class="text-xs text-gray-400">Showing {{ audit_logs|length }} of {{ audit_total }} entries</span>
+</div>
+
+{% if audit_logs %}
+<div class="bg-white rounded-xl border border-warm-200 overflow-hidden">
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-warm-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Timestamp</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">User</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Resource Type</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Resource ID</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">IP</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-warm-100">
+                {% for log in audit_logs %}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{{ log.timestamp.strftime('%b %d, %H:%M:%S') }}</td>
+                    <td class="px-4 py-3 text-xs text-gray-700">{{ log.user_email or '—' }}</td>
+                    <td class="px-4 py-3">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">{{ log.action }}</span>
+                    </td>
+                    <td class="px-4 py-3 text-xs text-gray-600">{{ log.resource_type or '—' }}</td>
+                    <td class="px-4 py-3 text-xs font-mono text-gray-500">{{ (log.resource_id or '')[:12] }}{% if log.resource_id and log.resource_id|length > 12 %}…{% endif %}</td>
+                    <td class="px-4 py-3 text-xs font-mono text-gray-400">{{ log.ip_address or '—' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% if audit_offset + audit_limit < audit_total %}
+<div class="mt-3">
+    <a href="/admin?tab=audit&offset={{ audit_offset + audit_limit }}"
+       class="text-sm text-brand-600 hover:underline">Load more</a>
+</div>
+{% endif %}
+{% else %}
+<div class="text-center py-12 bg-white rounded-xl border border-warm-200">
+    <p class="text-sm text-gray-400">No audit log entries yet.</p>
+</div>
+{% endif %}
+
+
+{# ── Retrieval Logs ── #}
+{% elif tab == 'retrievals' %}
+
+<div class="flex items-center justify-between mb-3">
+    <span class="text-xs text-gray-400">Showing {{ retrieval_rows|length }} of {{ retrieval_total }} entries</span>
+</div>
+
+{% if retrieval_rows %}
+<div class="bg-white rounded-xl border border-warm-200 overflow-hidden">
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-warm-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Timestamp</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Chatbot</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Query</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Confidence</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Chunks</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Escalated</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Duration</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-warm-100">
+                {% for log, chatbot_name in retrieval_rows %}
+                {% set total_ms = (log.retrieval_ms or 0) + (log.generation_ms or 0) %}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{{ log.created_at.strftime('%b %d, %H:%M') }}</td>
+                    <td class="px-4 py-3 text-xs text-gray-700">{{ chatbot_name or '—' }}</td>
+                    <td class="px-4 py-3 text-xs text-gray-600 max-w-[250px] truncate" title="{{ log.query }}">{{ log.query }}</td>
+                    <td class="px-4 py-3">
+                        {% set pct = (log.confidence_score * 100)|int %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
+                            {% if pct >= 70 %}bg-green-100 text-green-700
+                            {% elif pct >= 40 %}bg-amber-100 text-amber-700
+                            {% else %}bg-red-100 text-red-700{% endif %}">
+                            {{ "%.2f"|format(log.confidence_score) }}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3 text-xs text-gray-600">{{ log.retrieved_chunk_ids|length if log.retrieved_chunk_ids else '—' }}</td>
+                    <td class="px-4 py-3">
+                        {% if log.escalated %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">Yes</span>
+                        {% else %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">No</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
+                        {% if total_ms %}
+                            {% if total_ms < 1000 %}{{ total_ms }}ms{% else %}{{ "%.1f"|format(total_ms / 1000) }}s{% endif %}
+                        {% else %}—{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% if retrieval_offset + retrieval_limit < retrieval_total %}
+<div class="mt-3">
+    <a href="/admin?tab=retrievals&offset={{ retrieval_offset + retrieval_limit }}"
+       class="text-sm text-brand-600 hover:underline">Load more</a>
+</div>
+{% endif %}
+{% else %}
+<div class="text-center py-12 bg-white rounded-xl border border-warm-200">
+    <p class="text-sm text-gray-400">No retrieval logs yet. Chat with a chatbot to generate logs.</p>
+</div>
+{% endif %}
+
+{% endif %}
+{% endblock %}

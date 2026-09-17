@@ -16,7 +16,7 @@ import httpx
 
 from app.models.actions import ActionEvent, ChatbotAction
 from app.services.encryption import decrypt_api_key
-from app.services.llm import get_internal_model, get_llm_client
+from app.services.llm import get_internal_client, get_internal_model, get_llm_client
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ def build_client_payload(action: ChatbotAction) -> dict[str, Any]:
 
 async def _ask_llm_trigger(conversation_text: str, trigger_description: str, model: str) -> bool:
     """Ask a fast LLM whether the action should fire. Returns True/False."""
-    client = get_llm_client("openrouter")
+    client = get_internal_client()
     prompt = (
         f"Conversation:\n{conversation_text}\n\n"
         f'Action trigger: "{trigger_description}"\n\n'

@@ -14,16 +14,25 @@ logger = logging.getLogger(__name__)
 _subscribers: dict[str, set[asyncio.Queue]] = defaultdict(set)
 
 
+_KEEPALIVE_INTERVAL = 20  # seconds
+
+
 async def subscribe(workspace_id: str) -> AsyncGenerator[str, None]:
     """Yields SSE-formatted events for a workspace. Used by the events stream endpoint."""
     queue: asyncio.Queue = asyncio.Queue()
     _subscribers[workspace_id].add(queue)
+    # Tell the browser to wait 8 seconds before reconnecting after a disconnect
+    yield "retry: 8000\n\n"
     try:
         while True:
-            event = await queue.get()
+            try:
+                event = await asyncio.wait_for(queue.get(), timeout=_KEEPALIVE_INTERVAL)
+            except asyncio.TimeoutError:
+                # Send keepalive comment to prevent proxy timeouts
+                yield ": ping\n\n"
+                continue
             event_type = event.get("type", "message")
             data = event.get("data", "")
-            # SSE format: multi-line data needs each line prefixed with "data: "
             if isinstance(data, dict):
                 data = json.dumps(data)
             lines = data.split("\n")

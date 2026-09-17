@@ -302,11 +302,11 @@ async def _create_chatbot(
     result: dict = {"ok": True, "chatbot_id": str(bot.id), "name": bot.name}
     if url:
         from app.services.crawl_service import prepare_crawl
-        from app.workers.tasks.crawl_website import crawl_website
+        from app.background.runner import submit_job
         job_id, _kb_id = await prepare_crawl(
-            db, workspace_id, url, max_pages=50, chatbot_id=bot.id
+            db, workspace_id, url, chatbot_id=bot.id
         )
-        crawl_website.delay(job_id)
+        await submit_job("crawl_website", {"job_id": job_id})
         result["crawl_job_id"] = job_id
     return result
 
@@ -332,9 +332,8 @@ async def _run_crawl(
     db: AsyncSession, workspace_id: uuid.UUID, chatbot_id: str, url: str
 ) -> dict:
     from app.services.crawl_service import prepare_crawl
-    from app.workers.tasks.crawl_website import crawl_website
+    from app.background.runner import submit_job
 
-    # Verify chatbot belongs to this workspace
     result = await db.execute(
         select(Chatbot).where(
             Chatbot.id == uuid.UUID(chatbot_id),
@@ -345,9 +344,8 @@ async def _run_crawl(
     if not bot:
         return {"error": "Chatbot not found"}
 
-    # prepare_crawl signature: (db, workspace_id, url, max_pages, kb_id=None, chatbot_id=None)
     job_id, _kb_id = await prepare_crawl(
-        db, workspace_id, url, max_pages=50, chatbot_id=uuid.UUID(chatbot_id)
+        db, workspace_id, url, chatbot_id=uuid.UUID(chatbot_id)
     )
-    crawl_website.delay(job_id)
+    await submit_job("crawl_website", {"job_id": job_id})
     return {"ok": True, "crawl_job_id": job_id}

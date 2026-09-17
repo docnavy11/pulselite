@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Webhook Deliveries — PulseLight{% endblock %}
+{% block content %}
+<div class="mb-6">
+    <a href="/settings/webhooks" class="text-sm text-gray-500 hover:text-gray-700">&larr; Webhooks</a>
+    <h1 class="text-2xl font-bold text-gray-900 mt-1">Deliveries</h1>
+</div>
+
+{% if deliveries %}
+<div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
+    <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+            <tr>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Event</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">HTTP</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Attempts</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200">
+            {% for d in deliveries %}
+            <tr>
+                <td class="px-6 py-4 text-sm">{{ d.event_type }}</td>
+                <td class="px-6 py-4">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
+                        {% if d.status == 'delivered' %}bg-green-100 text-green-800
+                        {% elif d.status == 'failed' %}bg-red-100 text-red-800
+                        {% else %}bg-yellow-100 text-yellow-800{% endif %}">
+                        {{ d.status }}
+                    </span>
+                </td>
+                <td class="px-6 py-4 text-sm text-gray-500">{{ d.last_status_code or '—' }}</td>
+                <td class="px-6 py-4 text-sm text-gray-500">{{ d.attempts }}/{{ d.max_attempts }}</td>
+                <td class="px-6 py-4 text-sm text-gray-500">{{ d.created_at.strftime('%b %d, %H:%M') }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="text-center py-12 bg-white rounded-lg border border-gray-200">
+    <p class="text-gray-500">No deliveries yet.</p>
+</div>
+{% endif %}
+{% endblock %}

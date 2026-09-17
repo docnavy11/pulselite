@@ -11,16 +11,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.knowledge import Chatbot, CrawlJob, Document, KnowledgeBase
 from app.services.crawler import DiscoveredUrl, discover_urls
 from app.services.fetcher import fetch
-from app.services.realtime import (
-    emit_to_workspace,
-    write_chatbot_setup_state,
-    write_crawl_state,
-    clear_crawl_state,
-)
+from app.realtime.events import notify_workspace
+
+
+# Compatibility shims — old Redis state functions replaced by SSE push
+async def emit_to_workspace(workspace_id, event, data):
+    await notify_workspace(workspace_id, event, data)
+
+async def write_chatbot_setup_state(*args, **kwargs): pass
+async def write_crawl_state(*args, **kwargs): pass
+async def clear_crawl_state(*args, **kwargs): pass
 
 logger = logging.getLogger(__name__)
 
-_FETCH_CONCURRENCY = 5
+_FETCH_CONCURRENCY = 30
 
 
 @dataclass
@@ -106,7 +110,7 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
     """Discover URLs, fetch each page, create Documents, fire ingest tasks.
     Updates CrawlJob.phase and CrawlJob.error_message at each transition so
     the polling endpoint gives the frontend real-time visibility."""
-    from app.workers.tasks.ingest_document import ingest_document
+    from app.background.runner import submit_job
 
     r = await db.execute(select(CrawlJob).where(CrawlJob.id == job_id))
     job = r.scalar_one()
@@ -371,7 +375,7 @@ async def execute_crawl(db: AsyncSession, job_id: uuid.UUID) -> None:
 
     # Fire ingest tasks — all docs committed, workers can read them
     for doc_id in doc_ids:
-        ingest_document.delay(doc_id)
+        await submit_job("ingest_document", {"document_id": doc_id})
 
     # Mark job as completed
     job.status = "completed"

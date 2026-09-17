@@ -164,9 +164,10 @@ async def add_qa_to_kb(
     )
     db.add(doc)
     pair.kb_document_id = doc.id
-    await db.commit()  # Commit BEFORE dispatching Celery task
+    await db.commit()
 
-    from app.workers.tasks.ingest_document import ingest_document
-    ingest_document.delay(str(doc.id))
+    from app.background.runner import submit_job
+    import asyncio
+    asyncio.ensure_future(submit_job("ingest_document", {"document_id": str(doc.id)}))
 
     return doc

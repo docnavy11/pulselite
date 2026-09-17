@@ -1,52 +1,191 @@
 <!DOCTYPE html>
-<html lang="en" class="h-full bg-gray-50">
+<html lang="en" class="h-full">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}PulseLight{% endblock %}</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+                    colors: {
+                        brand: { 50: '#fff3ee', 100: '#ffe4d6', 200: '#ffcbb8', 300: '#ffa882', 400: '#ff8552', 500: '#ff6b35', 600: '#e85a26', 700: '#c44a1e', 800: '#9e3c18' },
+                        warm: { 50: '#faf8f5', 100: '#f5f0ea', 200: '#f0ebe3', 300: '#ede8e0' },
+                        sidebar: { bg: '#ffffff', hover: '#faf8f5', active: '#fff3ee', text: '#4b5563', textActive: '#ff6b35', border: '#f0ebe3' }
+                    }
+                }
+            }
+        }
+    </script>
     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
     <script src="https://unpkg.com/htmx-ext-sse@2.2.2/sse.js"></script>
     <style>
-        [hx-swap-oob] { display: contents; }
-        .htmx-indicator { opacity: 0; transition: opacity 200ms ease-in; }
-        .htmx-request .htmx-indicator { opacity: 1; }
-        .toast { animation: slideIn 0.3s ease-out, fadeOut 0.3s ease-in 2.7s forwards; }
-        @keyframes slideIn { from { transform: translateY(-1rem); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        @keyframes fadeOut { to { opacity: 0; } }
+        .toast { animation: toastIn 0.3s ease-out, toastOut 0.3s ease-in 3.7s forwards; }
+        @keyframes toastIn { from { transform: translateX(1rem); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes toastOut { to { opacity: 0; transform: translateX(1rem); } }
+        .nav-item { transition: all 0.15s ease; }
+        .settings-sub { max-height: 0; overflow: hidden; transition: max-height 0.2s ease; }
+        .settings-sub.open { max-height: 500px; }
+        [hx-boost] a { transition: opacity 0.1s; }
+        .htmx-request [hx-boost] a { opacity: 0.6; }
     </style>
+    {% block head %}{% endblock %}
 </head>
-<body class="h-full" hx-ext="sse" sse-connect="/events/stream">
+<body class="h-full bg-warm-50 font-sans" hx-ext="sse" sse-connect="/events/stream">
     {% block body %}
     <div class="flex h-full">
         <!-- Sidebar -->
-        <aside class="w-56 bg-white border-r border-gray-200 flex flex-col">
-            <div class="p-4 border-b border-gray-200">
-                <h1 class="text-lg font-bold text-gray-900">PulseLight</h1>
-                {% if request.state.workspace %}
-                <p class="text-xs text-gray-500 mt-1">{{ request.state.workspace.name }}</p>
-                {% endif %}
+        <aside id="sidebar" class="w-60 bg-sidebar-bg border-r border-sidebar-border flex flex-col flex-shrink-0 overflow-y-auto">
+            <!-- Brand -->
+            <div class="px-5 py-4 flex items-center gap-2.5">
+                <div class="w-7 h-7 rounded-lg bg-brand-500 flex items-center justify-center">
+                    <svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                </div>
+                <span class="text-gray-900 font-semibold text-sm tracking-tight">PulseLight</span>
             </div>
-            <nav class="flex-1 p-3 space-y-1">
-                <a href="/dashboard" class="flex items-center px-3 py-2 text-sm rounded-md hover:bg-gray-100 {% if request.url.path == '/dashboard' or request.url.path == '/' %}bg-gray-100 font-medium{% endif %}">
+
+            <!-- Workspace switcher -->
+            {% if request.state.workspace %}
+            <div class="px-3 mb-2 relative" id="ws-switcher">
+                <button onclick="toggleWsSwitcher()"
+                        class="flex items-center gap-2 w-full px-2 py-1.5 bg-warm-100 hover:bg-warm-200 rounded-lg transition-colors">
+                    <div class="w-5 h-5 rounded-md bg-gradient-to-br from-brand-500 to-amber-400 flex items-center justify-center text-white text-[9px] font-bold flex-shrink-0">
+                        {{ request.state.workspace.name[0]|upper }}
+                    </div>
+                    <span class="text-[11px] font-semibold text-gray-600 flex-1 text-left truncate">{{ request.state.workspace.name }}</span>
+                    <svg id="ws-chevron" class="w-3 h-3 text-gray-400 transition-transform flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                </button>
+
+                <div id="ws-dropdown" class="hidden absolute left-3 right-3 top-full mt-1 bg-white border border-warm-200 rounded-xl shadow-lg z-50 overflow-hidden">
+                    <!-- Workspace list -->
+                    {% for ws in request.state.workspaces %}
+                    <form method="POST" action="/workspaces/switch">
+                        <input type="hidden" name="workspace_id" value="{{ ws.id }}">
+                        <button type="submit"
+                                class="flex items-center gap-2 w-full px-3 py-2 text-left text-[11px] transition-colors {% if ws.id == request.state.workspace.id %}bg-brand-50 text-brand-600 font-semibold{% else %}text-gray-600 hover:bg-warm-50{% endif %}">
+                            <div class="w-4 h-4 rounded-[4px] bg-gradient-to-br from-brand-500 to-amber-400 flex items-center justify-center text-white text-[8px] font-bold flex-shrink-0">
+                                {{ ws.name[0]|upper }}
+                            </div>
+                            <span class="flex-1 truncate">{{ ws.name }}</span>
+                            {% if ws.id == request.state.workspace.id %}
+                            <svg class="w-2.5 h-2.5 text-brand-500 flex-shrink-0" fill="none" viewBox="0 0 10 10" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M2 5l2 2 4-4"/></svg>
+                            {% endif %}
+                        </button>
+                    </form>
+                    {% endfor %}
+
+                    <div class="h-px bg-warm-200 mx-2"></div>
+
+                    <!-- New workspace -->
+                    <div id="ws-new-form" class="hidden px-3 py-2 space-y-1.5">
+                        <form method="POST" action="/workspaces/new" class="space-y-1.5">
+                            <input name="name" type="text" placeholder="Workspace name" autofocus
+                                   class="w-full rounded-md border border-warm-200 px-2 py-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-brand-500"/>
+                            <div class="flex gap-1.5">
+                                <button type="submit" class="flex-1 py-1 text-[10px] font-semibold bg-brand-500 hover:bg-brand-600 text-white rounded-md transition-colors">Create</button>
+                                <button type="button" onclick="toggleWsNewForm(false)" class="flex-1 py-1 text-[10px] font-medium text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors">Cancel</button>
+                            </div>
+                        </form>
+                    </div>
+                    <button id="ws-new-btn" onclick="toggleWsNewForm(true)"
+                            class="flex items-center gap-2 w-full px-3 py-2 text-[11px] text-gray-400 hover:text-gray-600 hover:bg-warm-50 transition-colors">
+                        <svg class="w-3 h-3" fill="none" viewBox="0 0 12 12" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" d="M6 2v8M2 6h8"/></svg>
+                        New workspace
+                    </button>
+
+                    <div class="h-px bg-warm-200 mx-2"></div>
+                    <a href="/settings" onclick="closeWsSwitcher()"
+                       class="flex items-center gap-2 w-full px-3 py-2 text-[11px] text-gray-400 hover:text-gray-600 hover:bg-warm-50 transition-colors">
+                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3"/></svg>
+                        Workspace settings
+                    </a>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Main nav -->
+            <nav class="flex-1 px-3 space-y-0.5" hx-boost="true">
+                {% set p = request.url.path %}
+
+                <a href="/dashboard" class="nav-item flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] {% if p == '/dashboard' or p == '/' %}bg-sidebar-active text-sidebar-textActive font-medium{% else %}text-sidebar-text hover:bg-sidebar-hover{% endif %}">
+                    <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
                     Overview
                 </a>
-                <a href="/chatbots" class="flex items-center px-3 py-2 text-sm rounded-md hover:bg-gray-100 {% if '/chatbots' in request.url.path %}bg-gray-100 font-medium{% endif %}">
+
+                <a href="/chatbots" class="nav-item flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] {% if '/chatbots' in p %}bg-sidebar-active text-sidebar-textActive font-medium{% else %}text-sidebar-text hover:bg-sidebar-hover{% endif %}">
+                    <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75"><path stroke-linecap="round" stroke-linejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
                     Chatbots
                 </a>
-                <a href="/conversations" class="flex items-center px-3 py-2 text-sm rounded-md hover:bg-gray-100 {% if '/conversations' in request.url.path %}bg-gray-100 font-medium{% endif %}">
+
+                <a href="/conversations" class="nav-item flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] {% if '/conversations' in p %}bg-sidebar-active text-sidebar-textActive font-medium{% else %}text-sidebar-text hover:bg-sidebar-hover{% endif %}">
+                    <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75"><path stroke-linecap="round" stroke-linejoin="round" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a2 2 0 01-2-2v-6a2 2 0 012-2h8zM15 2H7a2 2 0 00-2 2v6a2 2 0 002 2h2v4l4-4h2a2 2 0 002-2V4a2 2 0 00-2-2z"/></svg>
                     Conversations
                 </a>
-                <a href="/settings" class="flex items-center px-3 py-2 text-sm rounded-md hover:bg-gray-100 {% if '/settings' in request.url.path %}bg-gray-100 font-medium{% endif %}">
-                    Settings
+
+                <a href="/logs" class="nav-item flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] {% if '/logs' in p and '/audit' not in p %}bg-sidebar-active text-sidebar-textActive font-medium{% else %}text-sidebar-text hover:bg-sidebar-hover{% endif %}">
+                    <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                    Logs
                 </a>
+
+                <a href="/intelligence" class="nav-item flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] {% if '/intelligence' in p %}bg-sidebar-active text-sidebar-textActive font-medium{% else %}text-sidebar-text hover:bg-sidebar-hover{% endif %}">
+                    <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75"><path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+                    Intelligence
+                </a>
+
+                <a href="/articles" class="nav-item flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] {% if '/articles' in p %}bg-sidebar-active text-sidebar-textActive font-medium{% else %}text-sidebar-text hover:bg-sidebar-hover{% endif %}">
+                    <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75"><path stroke-linecap="round" stroke-linejoin="round" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/></svg>
+                    Articles
+                </a>
+
+                <a href="/admin" class="nav-item flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] {% if '/admin' in p %}bg-sidebar-active text-sidebar-textActive font-medium{% else %}text-sidebar-text hover:bg-sidebar-hover{% endif %}">
+                    <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                    Admin
+                </a>
+
+                <!-- Settings (collapsible) -->
+                <div class="pt-2">
+                    <button onclick="document.getElementById('settings-sub').classList.toggle('open'); this.querySelector('.chevron').classList.toggle('rotate-90')"
+                            class="nav-item flex items-center justify-between w-full px-2.5 py-2 rounded-md text-[13px] {% if '/settings' in p %}text-sidebar-textActive{% else %}text-sidebar-text hover:bg-sidebar-hover hover:text-sidebar-textActive{% endif %}">
+                        <span class="flex items-center gap-2.5">
+                            <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                            Settings
+                        </span>
+                        <svg class="chevron w-3 h-3 text-gray-400 transition-transform {% if '/settings' in p %}rotate-90{% endif %}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+                    </button>
+                    <div id="settings-sub" class="settings-sub pl-9 space-y-0.5 mt-0.5 {% if '/settings' in p %}open{% endif %}">
+                        <a href="/settings" class="block py-1.5 px-2.5 rounded-md text-[13px] {% if p == '/settings' or p == '/settings/' %}text-sidebar-textActive bg-sidebar-active font-medium{% else %}text-sidebar-text hover:bg-sidebar-hover{% endif %}">General</a>
+                        <a href="/settings/team" class="block py-1.5 px-2.5 rounded-md text-[13px] {% if '/settings/team' in p %}text-sidebar-textActive bg-sidebar-active font-medium{% else %}text-sidebar-text hover:bg-sidebar-hover{% endif %}">Team</a>
+                        <a href="/settings/billing" class="block py-1.5 px-2.5 rounded-md text-[13px] {% if '/settings/billing' in p %}text-sidebar-textActive bg-sidebar-active font-medium{% else %}text-sidebar-text hover:bg-sidebar-hover{% endif %}">Billing</a>
+                        <a href="/settings/integrations" class="block py-1.5 px-2.5 rounded-md text-[13px] {% if '/settings/integrations' in p %}text-sidebar-textActive bg-sidebar-active font-medium{% else %}text-sidebar-text hover:bg-sidebar-hover{% endif %}">Integrations</a>
+                        <a href="/settings/llm" class="block py-1.5 px-2.5 rounded-md text-[13px] {% if '/settings/llm' in p %}text-sidebar-textActive bg-sidebar-active font-medium{% else %}text-sidebar-text hover:bg-sidebar-hover{% endif %}">AI Models</a>
+                        <a href="/settings/security" class="block py-1.5 px-2.5 rounded-md text-[13px] {% if '/settings/security' in p %}text-sidebar-textActive bg-sidebar-active font-medium{% else %}text-sidebar-text hover:bg-sidebar-hover{% endif %}">Security</a>
+                        <a href="/settings/data-retention" class="block py-1.5 px-2.5 rounded-md text-[13px] {% if '/settings/data-retention' in p %}text-sidebar-textActive bg-sidebar-active font-medium{% else %}text-sidebar-text hover:bg-sidebar-hover{% endif %}">Data Retention</a>
+                        <a href="/settings/webhooks" class="block py-1.5 px-2.5 rounded-md text-[13px] {% if '/settings/webhooks' in p %}text-sidebar-textActive bg-sidebar-active font-medium{% else %}text-sidebar-text hover:bg-sidebar-hover{% endif %}">Webhooks</a>
+                        <a href="/settings/intelligence" class="block py-1.5 px-2.5 rounded-md text-[13px] {% if '/settings/intelligence' in p %}text-sidebar-textActive bg-sidebar-active font-medium{% else %}text-sidebar-text hover:bg-sidebar-hover{% endif %}">Intelligence</a>
+                        <a href="/settings/audit" class="block py-1.5 px-2.5 rounded-md text-[13px] {% if '/settings/audit' in p %}text-sidebar-textActive bg-sidebar-active font-medium{% else %}text-sidebar-text hover:bg-sidebar-hover{% endif %}">Audit Log</a>
+                    </div>
+                </div>
             </nav>
+
+            <!-- User footer -->
             {% if request.state.user %}
-            <div class="p-3 border-t border-gray-200">
-                <div class="flex items-center justify-between">
-                    <span class="text-sm text-gray-700 truncate">{{ request.state.user.email }}</span>
-                    <form method="POST" action="/logout" class="inline">
-                        <button type="submit" class="text-xs text-gray-400 hover:text-gray-600">Logout</button>
+            <div class="px-3 py-3 border-t border-sidebar-border">
+                <div class="flex items-center gap-2.5 px-2">
+                    <div class="w-7 h-7 rounded-full bg-brand-100 flex items-center justify-center flex-shrink-0">
+                        <span class="text-brand-700 text-xs font-medium">{{ request.state.user.name[0]|upper if request.state.user.name else request.state.user.email[0]|upper }}</span>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-xs text-gray-900 truncate">{{ request.state.user.name or request.state.user.email }}</p>
+                        <p class="text-[11px] text-gray-400">Self-Hosted</p>
+                    </div>
+                    <form method="POST" action="/logout">
+                        <button type="submit" class="text-gray-400 hover:text-gray-600" title="Sign out">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75"><path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                        </button>
                     </form>
                 </div>
             </div>
@@ -54,8 +193,83 @@
         </aside>
 
         <!-- Main content -->
-        <main class="flex-1 overflow-y-auto">
-            <div class="max-w-5xl mx-auto px-6 py-8">
+        <main class="flex-1 overflow-y-auto flex flex-col min-h-0">
+
+            <!-- Top bar -->
+            {% set _path = request.url.path %}
+            {% set _segs = _path.split('/') | select | list %}
+            {% set _new_actions = {
+                'chatbots':      ('New chatbot',   '/chatbots/new'),
+                'conversations': ('Export',        '/conversations'),
+                'intelligence':  ('Add source',    '/intelligence'),
+                'articles':      ('New article',   '/articles/new'),
+                'admin':         ('',              ''),
+                'settings':      ('',              ''),
+                'logs':          ('',              '')
+            } %}
+            {% set _first_seg = _segs[0] if _segs else 'dashboard' %}
+            {% set _action = _new_actions.get(_first_seg, ('New chatbot', '/chatbots/new')) %}
+
+            {% set _seg_labels = {
+                'dashboard': 'Overview', 'chatbots': 'Chatbots', 'conversations': 'Conversations',
+                'intelligence': 'Intelligence', 'settings': 'Settings', 'sources': 'Knowledge',
+                'actions': 'Actions', 'customize': 'Appearance', 'chat': 'Test', 'deploy': 'Publish',
+                'team': 'Team', 'billing': 'Billing', 'integrations': 'Integrations',
+                'llm': 'AI Models', 'security': 'Security', 'data-retention': 'Data Retention',
+                'webhooks': 'Webhooks', 'articles': 'Articles', 'admin': 'Admin',
+                'logs': 'Logs', 'gaps': 'Gaps', 'sentiment': 'Sentiment', 'audit': 'Audit Log',
+                'new': 'New', 'qa': 'Q&A'
+            } %}
+
+            <header class="h-12 flex items-center gap-3 px-5 bg-white border-b border-warm-200 flex-shrink-0">
+                <!-- Breadcrumb -->
+                <div class="flex-1 min-w-0">
+                    {% if _segs | length <= 1 %}
+                        <span class="text-[13px] font-semibold text-gray-800">
+                            {{ _seg_labels.get(_segs[0] if _segs else 'dashboard', (_segs[0] if _segs else 'Overview') | capitalize) }}
+                        </span>
+                    {% else %}
+                        <nav class="flex items-center gap-1 text-[12px]">
+                            {% set _href = '' %}
+                            {% for seg in _segs %}
+                                {% set _href = _href + '/' + seg %}
+                                {% set _is_last = loop.last %}
+                                {% set _is_uuid = seg | length == 36 and '-' in seg %}
+                                {% set _label = '…' if _is_uuid else _seg_labels.get(seg, seg | capitalize) %}
+                                {% if not loop.first %}<span class="text-gray-300">›</span>{% endif %}
+                                {% if _is_last %}
+                                    <span class="font-semibold text-gray-800">{{ _label }}</span>
+                                {% else %}
+                                    <a href="{{ _href }}" class="text-gray-400 hover:text-gray-600 transition-colors">{{ _label }}</a>
+                                {% endif %}
+                            {% endfor %}
+                        </nav>
+                    {% endif %}
+                </div>
+
+                <!-- Search pill -->
+                <button onclick="openSearch()" class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-warm-50 border border-warm-200 text-gray-400 hover:border-warm-300 hover:text-gray-600 transition-colors text-[11px]">
+                    <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                    <span class="hidden sm:inline">Search…</span>
+                    <kbd class="hidden sm:inline ml-1 text-[9px] font-medium bg-white border border-warm-200 rounded px-1 py-0.5 text-gray-400">⌘K</kbd>
+                </button>
+
+                <!-- Bell -->
+                <button class="p-1.5 rounded-lg hover:bg-warm-50 transition-colors">
+                    <svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75"><path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+                </button>
+
+                <!-- + New (context-aware, hidden on pages with no action) -->
+                {% if _action[0] %}
+                <a href="{{ _action[1] }}"
+                   class="flex items-center gap-1.5 px-3 py-1.5 bg-brand-500 hover:bg-brand-600 text-white rounded-lg text-[11px] font-semibold transition-colors">
+                    <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                    <span class="hidden sm:inline">{{ _action[0] }}</span>
+                </a>
+                {% endif %}
+            </header>
+
+            <div class="px-8 py-8">
                 {% block content %}{% endblock %}
             </div>
         </main>
@@ -63,6 +277,114 @@
     {% endblock %}
 
     <!-- Toast container -->
-    <div id="toasts" class="fixed top-4 right-4 z-50 space-y-2" sse-swap="toast" hx-swap="afterbegin"></div>
+    <div id="toasts" class="fixed top-4 right-4 z-50 space-y-2 pointer-events-none" sse-swap="toast" hx-swap="afterbegin"></div>
+
+    <!-- Command Palette -->
+    <div id="search-backdrop" class="fixed inset-0 z-50 hidden" onclick="closeSearch()">
+        <div class="absolute inset-0 bg-black/20 backdrop-blur-[1px]"></div>
+        <div class="relative flex items-start justify-center pt-[20vh]">
+            <div id="search-palette"
+                 class="w-full max-w-lg mx-4 bg-white rounded-2xl shadow-2xl border border-warm-200 overflow-hidden"
+                 onclick="event.stopPropagation()">
+                <!-- Input row -->
+                <div class="flex items-center gap-2.5 px-4 py-3 border-b border-warm-200">
+                    <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                    <input id="search-input" type="text" placeholder="Search or jump to…"
+                           class="flex-1 text-[13px] text-gray-700 outline-none placeholder-gray-400 bg-transparent"
+                           hx-get="/search" hx-target="#search-results" hx-swap="innerHTML"
+                           hx-trigger="input changed delay:150ms, keyup[key=='Enter']"
+                           name="q" autocomplete="off" />
+                    <kbd class="text-[10px] font-medium bg-warm-50 border border-warm-200 rounded px-1.5 py-0.5 text-gray-400">esc</kbd>
+                </div>
+                <!-- Results -->
+                <div id="search-results" class="max-h-72 overflow-y-auto py-2"
+                     hx-get="/search" hx-trigger="load" hx-swap="innerHTML">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Auto-open settings nav if on a settings page
+        if (window.location.pathname.startsWith('/settings')) {
+            const sub = document.getElementById('settings-sub');
+            if (sub) sub.classList.add('open');
+        }
+
+        // Workspace switcher
+        function toggleWsSwitcher() {
+            const dd = document.getElementById('ws-dropdown');
+            const chevron = document.getElementById('ws-chevron');
+            if (dd.classList.contains('hidden')) {
+                dd.classList.remove('hidden');
+                chevron.classList.add('rotate-180');
+            } else {
+                closeWsSwitcher();
+            }
+        }
+        function closeWsSwitcher() {
+            const dd = document.getElementById('ws-dropdown');
+            const chevron = document.getElementById('ws-chevron');
+            if (dd) dd.classList.add('hidden');
+            if (chevron) chevron.classList.remove('rotate-180');
+            toggleWsNewForm(false);
+        }
+        function toggleWsNewForm(show) {
+            const form = document.getElementById('ws-new-form');
+            const btn = document.getElementById('ws-new-btn');
+            if (!form) return;
+            form.classList.toggle('hidden', !show);
+            btn.classList.toggle('hidden', show);
+            if (show) form.querySelector('input')?.focus();
+        }
+        // Close on outside click
+        document.addEventListener('mousedown', function(e) {
+            const switcher = document.getElementById('ws-switcher');
+            if (switcher && !switcher.contains(e.target)) closeWsSwitcher();
+        });
+
+        // Command palette
+        function openSearch() {
+            document.getElementById('search-backdrop').classList.remove('hidden');
+            const inp = document.getElementById('search-input');
+            inp.value = '';
+            inp.focus();
+            // Load default results
+            htmx.trigger(inp, 'load');
+        }
+
+        function closeSearch() {
+            document.getElementById('search-backdrop').classList.add('hidden');
+        }
+
+        document.addEventListener('keydown', function(e) {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+                e.preventDefault();
+                const backdrop = document.getElementById('search-backdrop');
+                if (backdrop.classList.contains('hidden')) openSearch();
+                else closeSearch();
+            }
+            if (e.key === 'Escape') closeSearch();
+            // Arrow key navigation
+            if (!document.getElementById('search-backdrop').classList.contains('hidden')) {
+                if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    const items = document.querySelectorAll('#search-results .search-item');
+                    if (!items.length) return;
+                    const current = document.querySelector('#search-results .search-item.bg-brand-50');
+                    let idx = -1;
+                    items.forEach((el, i) => { if (el === current) idx = i; });
+                    if (current) current.classList.remove('bg-brand-50', 'text-brand-600');
+                    const next = items[e.key === 'ArrowDown' ? Math.min(idx + 1, items.length - 1) : Math.max(idx - 1, 0)];
+                    next.classList.add('bg-brand-50', 'text-brand-600');
+                    next.scrollIntoView({ block: 'nearest' });
+                }
+                if (e.key === 'Enter') {
+                    const active = document.querySelector('#search-results .search-item.bg-brand-50');
+                    if (active) { closeSearch(); active.click(); }
+                }
+            }
+        });
+    </script>
 </body>
 </html>

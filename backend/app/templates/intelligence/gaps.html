@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Documentation Gaps — PulseLight{% endblock %}
+{% block content %}
+<div class="mb-6">
+    <a href="/intelligence" class="text-sm text-gray-500 hover:text-gray-700">&larr; Intelligence</a>
+    <h1 class="text-2xl font-bold text-gray-900 mt-1">Documentation Gaps</h1>
+    <p class="text-sm text-gray-500 mt-1">Topics your knowledge base doesn't cover well</p>
+</div>
+
+<!-- Status filter -->
+<div class="flex gap-1.5 mb-6">
+    {% for f in [("", "All statuses"), ("open", "Open"), ("draft_ready", "Draft Ready"), ("approved", "Approved"), ("dismissed", "Dismissed")] %}
+    <a href="/intelligence/gaps{% if f[0] %}?status={{ f[0] }}{% endif %}"
+       class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors
+        {% if (request.query_params.get('status', '') == f[0]) or (not request.query_params.get('status') and f[0] == '') %}bg-brand-50 text-brand-600 border border-brand-200{% else %}bg-white text-gray-500 border border-warm-200 hover:bg-warm-50{% endif %}">
+        {{ f[1] }}
+    </a>
+    {% endfor %}
+</div>
+
+{% if clusters %}
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    {% for cluster in clusters %}
+    <a href="/intelligence/gaps/{{ cluster.id }}" class="block bg-white rounded-xl border border-warm-200 p-5 hover:shadow-md transition-all
+        border-l-4
+        {% if cluster.status == 'open' %}border-l-red-500
+        {% elif cluster.status == 'draft_ready' or cluster.status == 'ai_draft_pending' %}border-l-amber-500
+        {% elif cluster.status == 'approved' %}border-l-green-500
+        {% else %}border-l-gray-300{% endif %}">
+
+        <div class="flex items-start justify-between mb-2">
+            <h3 class="text-sm font-semibold text-gray-900 line-clamp-2">{{ cluster.topic_label }}</h3>
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium flex-shrink-0 ml-2
+                {% if cluster.status == 'open' %}bg-red-100 text-red-700
+                {% elif cluster.status == 'draft_ready' or cluster.status == 'ai_draft_pending' %}bg-amber-100 text-amber-700
+                {% elif cluster.status == 'approved' %}bg-green-100 text-green-700
+                {% else %}bg-gray-100 text-gray-500{% endif %}">
+                {{ cluster.status.replace('_', ' ') }}
+            </span>
+        </div>
+
+        <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-100 text-[11px] font-medium text-gray-600 mb-2">
+            {{ cluster.gap_count }} unanswered question{{ 's' if cluster.gap_count != 1 else '' }}
+        </span>
+
+        {% if cluster.representative_query %}
+        <p class="text-xs text-gray-500 italic line-clamp-2 mb-2">&ldquo;{{ cluster.representative_query }}&rdquo;</p>
+        {% endif %}
+
+        {% if cluster.topic_keywords %}
+        <div class="flex flex-wrap gap-1">
+            {% for kw in cluster.topic_keywords[:4] %}
+            <span class="text-[10px] bg-warm-100 text-gray-500 rounded-full px-2 py-0.5">{{ kw }}</span>
+            {% endfor %}
+            {% if cluster.topic_keywords|length > 4 %}
+            <span class="text-[10px] text-gray-400">+{{ cluster.topic_keywords|length - 4 }}</span>
+            {% endif %}
+        </div>
+        {% endif %}
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<div class="flex flex-col items-center justify-center py-16 text-center bg-white rounded-xl border border-warm-200">
+    <svg class="w-10 h-10 text-gray-300 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>
+    <p class="text-sm font-medium text-gray-600">No documentation gaps found</p>
+    <p class="text-xs text-gray-400 mt-1">Gaps are detected as customers ask unanswered questions</p>
+</div>
+{% endif %}
+{% endblock %}

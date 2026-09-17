@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Billing — Settings — PulseLight{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold text-gray-900 mb-6">Settings</h1>
+
+{% include "settings/_tabs.html" %}
+
+<div class="space-y-6 max-w-2xl">
+    {% if not cloud_mode %}
+    <div class="bg-white rounded-xl border border-warm-200 p-6">
+        <p class="text-sm text-gray-600">Self-hosted mode — all features unlocked, no billing required.</p>
+    </div>
+    {% else %}
+
+    <!-- Balance + Plan -->
+    <div class="grid grid-cols-2 gap-4">
+        <div class="bg-white rounded-xl border border-warm-200 p-5">
+            <p class="text-sm text-gray-500">Credit Balance</p>
+            <p class="text-3xl font-bold text-gray-900 mt-1">{{ balance }}</p>
+        </div>
+        <div class="bg-white rounded-xl border border-warm-200 p-5">
+            <p class="text-sm text-gray-500">Plan</p>
+            <p class="text-lg font-bold text-gray-900 mt-1 capitalize">{{ workspace.plan }}</p>
+            <form method="POST" action="/settings/billing/portal" class="mt-2">
+                <button class="text-xs text-brand-600 hover:text-brand-500">Manage subscription &rarr;</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Auto-recharge -->
+    <form hx-post="/settings/billing/auto-recharge" hx-swap="none"
+          class="bg-white rounded-xl border border-warm-200 p-6 space-y-4">
+        <div>
+            <h2 class="text-sm font-semibold text-gray-900 mb-1">Auto-recharge</h2>
+            <p class="text-xs text-gray-500">Automatically top up credits when the balance falls below a threshold.</p>
+        </div>
+
+        <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" name="auto_recharge_enabled"
+                   {% if workspace.auto_recharge_enabled %}checked{% endif %}
+                   onchange="document.getElementById('recharge-options').classList.toggle('hidden', !this.checked)"
+                   class="rounded border-warm-200 text-brand-600 focus:ring-brand-500">
+            <span class="text-sm text-gray-700">Enable auto-recharge</span>
+        </label>
+
+        <div id="recharge-options" class="space-y-3 {% if not workspace.auto_recharge_enabled %}hidden{% endif %}">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Recharge when balance falls below</label>
+                <input type="number" name="auto_recharge_threshold" min="0" step="50"
+                       value="{{ workspace.auto_recharge_threshold or 200 }}"
+                       class="w-48 rounded-lg border border-warm-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+                <span class="text-sm text-gray-500 ml-2">credits</span>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Top-up amount</label>
+                <select name="auto_recharge_amount"
+                        class="rounded-lg border border-warm-200 px-3 py-2 text-sm text-gray-700 focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+                    {% for amt in [500, 1000, 2000, 5000, 10000] %}
+                    <option value="{{ amt }}" {% if (workspace.auto_recharge_amount or 1000) == amt %}selected{% endif %}>
+                        {{ amt }} credits
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="flex justify-end pt-2">
+            <button type="submit"
+                    class="bg-brand-500 text-white rounded-lg px-4 py-2 text-sm font-semibold hover:bg-brand-600 transition-colors">
+                Save
+            </button>
+        </div>
+    </form>
+
+    <!-- Credit history -->
+    {% if history %}
+    <div class="bg-white rounded-lg border border-warm-200 overflow-hidden">
+        <h3 class="px-6 py-3 text-sm font-medium text-gray-700 bg-gray-50">Recent credit activity</h3>
+        <table class="min-w-full divide-y divide-gray-200">
+            <tbody class="divide-y divide-gray-200">
+                {% for entry in history %}
+                <tr>
+                    <td class="px-6 py-3 text-sm">{{ entry.reason }}</td>
+                    <td class="px-6 py-3 text-sm text-right {% if entry.amount > 0 %}text-green-600{% else %}text-red-600{% endif %}">
+                        {{ '+' if entry.amount > 0 else '' }}{{ entry.amount }}
+                    </td>
+                    <td class="px-6 py-3 text-sm text-gray-500">{{ entry.created_at.strftime('%b %d, %H:%M') }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    {% endif %}
+</div>
+{% endblock %}

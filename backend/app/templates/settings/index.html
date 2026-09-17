@@ -1,48 +1,100 @@
 {% extends "base.html" %}
-{% block title %}Settings — PulseLight{% endblock %}
+{% block title %}General — Settings — PulseLight{% endblock %}
 {% block content %}
 <h1 class="text-2xl font-bold text-gray-900 mb-6">Settings</h1>
 
-<div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
-    <!-- Settings nav -->
-    <nav class="space-y-1">
-        <a href="/settings" class="block px-3 py-2 text-sm rounded-md bg-gray-100 font-medium">General</a>
-        <a href="/settings/llm" class="block px-3 py-2 text-sm rounded-md hover:bg-gray-100">AI Models</a>
-    </nav>
+{% include "settings/_tabs.html" %}
 
-    <!-- General settings -->
-    <div class="lg:col-span-3">
-        <form hx-post="/settings" hx-swap="none" class="bg-white rounded-lg border border-gray-200 p-6 space-y-4">
+<div class="space-y-6 max-w-lg">
+    <!-- Workspace Settings -->
+    <div class="bg-white rounded-xl border border-warm-200 p-6 space-y-4">
+        <h2 class="text-sm font-semibold text-gray-900">Workspace Settings</h2>
+        <form hx-post="/settings" hx-swap="none" class="space-y-4">
             <div>
-                <label for="name" class="block text-sm font-medium text-gray-700">Workspace name</label>
+                <label for="name" class="block text-sm font-medium text-gray-700 mb-1">Workspace Name</label>
                 <input type="text" name="name" id="name" value="{{ workspace.name }}"
-                    class="mt-1 block w-full max-w-md rounded-md border border-gray-300 px-3 py-2 text-sm">
+                       class="block w-full rounded-lg border border-warm-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
             </div>
             <div>
-                <label for="timezone" class="block text-sm font-medium text-gray-700">Timezone</label>
-                <input type="text" name="timezone" id="timezone" value="{{ workspace.timezone }}"
-                    class="mt-1 block w-full max-w-md rounded-md border border-gray-300 px-3 py-2 text-sm">
+                <label for="timezone" class="block text-sm font-medium text-gray-700 mb-1">Timezone</label>
+                <select name="timezone" id="timezone"
+                        class="block w-full rounded-lg border border-warm-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+                    {% for tz in timezones %}
+                    <option value="{{ tz }}" {% if workspace.timezone == tz %}selected{% endif %}>{{ tz.replace('_', ' ') }}</option>
+                    {% endfor %}
+                </select>
             </div>
-            <div class="flex justify-end pt-2">
-                <button type="submit" class="bg-indigo-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-indigo-700">Save</button>
-            </div>
+            <button type="submit" class="bg-brand-500 text-white rounded-lg px-4 py-2 text-sm font-semibold hover:bg-brand-600 transition-colors">Save</button>
         </form>
+    </div>
 
-        <!-- Team members -->
-        <div class="mt-8 bg-white rounded-lg border border-gray-200 p-6">
-            <h3 class="text-sm font-medium text-gray-700 mb-4">Team members</h3>
-            <div class="space-y-2">
-                {% for agent, role in members %}
-                <div class="flex items-center justify-between py-2">
-                    <div>
-                        <p class="text-sm font-medium text-gray-900">{{ agent.name }}</p>
-                        <p class="text-xs text-gray-500">{{ agent.email }}</p>
-                    </div>
-                    <span class="text-xs text-gray-500 capitalize">{{ role }}</span>
-                </div>
-                {% endfor %}
-            </div>
+    <!-- Data Export -->
+    <div class="bg-white rounded-xl border border-warm-200 p-6 space-y-3">
+        <h2 class="text-sm font-semibold text-gray-900">Data Export (GDPR)</h2>
+        <p class="text-sm text-gray-500">Export all your workspace data for compliance. You'll receive a download link once ready.</p>
+        <button hx-post="/settings/export" hx-swap="none"
+                class="inline-flex items-center gap-2 bg-white border border-warm-200 text-gray-700 rounded-lg px-4 py-2 text-sm font-medium hover:bg-warm-50 transition-colors">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+            </svg>
+            Export My Data
+        </button>
+    </div>
+
+    <!-- Danger Zone -->
+    <div class="bg-white rounded-xl border border-red-200 p-6 space-y-3">
+        <h2 class="text-sm font-semibold text-red-600">Danger Zone</h2>
+        <p class="text-sm text-gray-500">Permanently delete this workspace and all its data. This cannot be undone.</p>
+        <button onclick="openDeleteModal()"
+                class="inline-flex items-center gap-2 bg-red-600 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-red-700 transition-colors">
+            Delete Workspace
+        </button>
+    </div>
+</div>
+
+<!-- Delete confirmation modal -->
+<div id="delete-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 space-y-4">
+        <h2 class="text-lg font-semibold text-red-600">Delete Workspace</h2>
+        <p class="text-sm text-gray-500">
+            This action is permanent and cannot be undone. Type
+            <strong class="text-gray-800">{{ workspace.name }}</strong> to confirm.
+        </p>
+        <input type="text" id="delete-confirm-input" placeholder="{{ workspace.name }}"
+               oninput="document.getElementById('delete-confirm-btn').disabled = this.value !== '{{ workspace.name }}'"
+               class="block w-full rounded-lg border border-warm-200 px-3 py-2 text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500">
+        <div class="flex justify-end gap-3">
+            <button type="button" onclick="closeDeleteModal()"
+                    class="px-4 py-2 text-sm font-medium text-gray-700 bg-warm-50 hover:bg-warm-100 rounded-lg border border-warm-200 transition-colors">
+                Cancel
+            </button>
+            <button id="delete-confirm-btn" disabled
+                    onclick="confirmDelete()"
+                    class="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                Delete Forever
+            </button>
         </div>
     </div>
 </div>
+
+<script>
+function openDeleteModal() {
+    document.getElementById('delete-modal').classList.remove('hidden');
+    document.getElementById('delete-confirm-input').value = '';
+    document.getElementById('delete-confirm-btn').disabled = true;
+    setTimeout(() => document.getElementById('delete-confirm-input').focus(), 50);
+}
+function closeDeleteModal() {
+    document.getElementById('delete-modal').classList.add('hidden');
+}
+async function confirmDelete() {
+    try {
+        const resp = await fetch('/settings/delete-workspace', { method: 'POST' });
+        if (resp.ok) window.location.href = '/login';
+    } catch(e) {}
+}
+document.getElementById('delete-modal').addEventListener('click', function(e) {
+    if (e.target === this) closeDeleteModal();
+});
+</script>
 {% endblock %}

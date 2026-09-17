@@ -76,6 +76,8 @@ class Settings(BaseSettings):
     AI_API_KEY: str = ""
     DEFAULT_CHATBOT_MODEL: str = ""
     INTERNAL_MODEL: str = ""
+    # Provider for PulseLight's own LLM calls; "agentsdk" needs no API key.
+    INTERNAL_PROVIDER: str = "agentsdk"
 
     # Bootstrap admin account
     ADMIN_EMAIL: str = ""

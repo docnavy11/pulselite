@@ -1,0 +1,19 @@
+<tr id="doc-{{ doc.id }}">
+    <td class="px-6 py-4 text-sm">{{ doc.title or doc.source_url or 'Untitled' }}</td>
+    <td class="px-6 py-4 text-sm text-gray-500">{{ doc.source_type }}</td>
+    <td class="px-6 py-4">
+        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
+            {% if doc.status == 'indexed' %}bg-green-100 text-green-800
+            {% elif doc.status == 'processing' %}bg-yellow-100 text-yellow-800
+            {% elif doc.status == 'failed' %}bg-red-100 text-red-800
+            {% else %}bg-gray-100 text-gray-800{% endif %}">
+            {{ doc.status }}
+        </span>
+    </td>
+    <td class="px-6 py-4 text-sm text-gray-500">{{ doc.chunk_count }}</td>
+    <td class="px-6 py-4 text-right">
+        <button hx-post="/documents/{{ doc.id }}/reindex" hx-swap="none" class="text-xs text-brand-600 hover:text-brand-500 mr-2">Reindex</button>
+        <button hx-delete="/documents/{{ doc.id }}" hx-target="closest tr" hx-swap="outerHTML swap:0.2s"
+                hx-confirm="Delete this document?" class="text-xs text-red-600 hover:text-red-500">Delete</button>
+    </td>
+</tr>

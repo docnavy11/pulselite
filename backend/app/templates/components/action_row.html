@@ -1,0 +1,13 @@
+<div id="action-{{ action.id }}" class="bg-white rounded-lg border border-gray-200 p-4 flex items-center justify-between">
+    <div>
+        <p class="text-sm font-medium text-gray-900">{{ action.name }}</p>
+        <p class="text-xs text-gray-500">{{ action.action_type }} — {{ action.trigger_description }}</p>
+    </div>
+    <div class="flex items-center gap-2">
+        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {% if action.is_enabled %}bg-green-100 text-green-800{% else %}bg-gray-100 text-gray-800{% endif %}">
+            {% if action.is_enabled %}Active{% else %}Disabled{% endif %}
+        </span>
+        <button hx-delete="/chatbots/{{ action.chatbot_id }}/actions/{{ action.id }}" hx-target="#action-{{ action.id }}" hx-swap="outerHTML"
+                class="text-xs text-red-500 hover:text-red-700">Delete</button>
+    </div>
+</div>

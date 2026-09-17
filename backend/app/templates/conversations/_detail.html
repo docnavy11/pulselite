@@ -1,0 +1,93 @@
+{% set conv = conversation if conversation is defined else selected %}
+<div class="flex flex-col h-full">
+    <!-- Header -->
+    <div class="flex items-center justify-between px-5 py-3 border-b border-warm-200 bg-warm-50">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold text-white"
+                 style="background-color: hsl({{ (conv.id|string|length * 47) % 360 }}, 60%, 55%)">
+                {{ (conv.id|string)[0]|upper }}
+            </div>
+            <div>
+                <p class="text-sm font-semibold text-gray-900">#{{ (conv.id|string)[:8] }}</p>
+                <p class="text-[11px] text-gray-400">{{ conv.created_at.strftime('%b %d, %Y %H:%M') }}</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-2">
+            {% if conv.confidence_avg %}
+            <span class="text-xs text-gray-400">{{ '%.0f' % (conv.confidence_avg * 100) }}% conf.</span>
+            {% endif %}
+            <!-- Status badge (HTMX-swappable) -->
+            {% set sd = conv.status %}
+            {% if conv.outcome == 'resolved_autonomously' %}{% set sd = 'resolved' %}{% elif conv.outcome == 'escalated_to_human' %}{% set sd = 'escalated' %}{% endif %}
+            <span id="conv-status-badge" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium
+                {% if sd == 'open' %}bg-green-100 text-green-700
+                {% elif sd == 'escalated' %}bg-amber-100 text-amber-700
+                {% elif sd == 'resolved' %}bg-blue-100 text-blue-700
+                {% else %}bg-gray-100 text-gray-600{% endif %}">
+                {{ sd|capitalize }}
+            </span>
+            <select onchange="htmx.ajax('PATCH', '/conversations/{{ conv.id }}/status', {target: '#conv-status-badge', swap: 'outerHTML', values: {status: this.value}}); this.value=''"
+                    class="text-xs border border-warm-200 rounded-lg px-2 py-1 text-gray-600 bg-white focus:outline-none focus:border-brand-500 cursor-pointer">
+                <option value="">Change…</option>
+                {% for s, label in [("open", "Open"), ("closed", "Closed"), ("resolved", "Resolved"), ("escalated", "Escalated")] %}
+                <option value="{{ s }}">{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+
+    <!-- Messages -->
+    <div class="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+        {% for msg in messages %}
+        <div class="{% if msg.author_type == 'contact' %}mr-16{% else %}ml-16{% endif %}">
+            <div class="flex items-center gap-2 mb-1">
+                <span class="text-[11px] font-medium {% if msg.author_type == 'contact' %}text-gray-500{% else %}text-brand-500{% endif %} uppercase">
+                    {{ msg.author_type }}
+                </span>
+                <span class="text-[11px] text-gray-400">{{ msg.created_at.strftime('%H:%M') }}</span>
+                {% if msg.confidence_score %}
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium
+                    {% set pct = (msg.confidence_score * 100)|int %}
+                    {% if pct >= 80 %}bg-green-100 text-green-700
+                    {% elif pct >= 50 %}bg-amber-100 text-amber-700
+                    {% else %}bg-red-100 text-red-700{% endif %}">
+                    {{ pct }}%
+                </span>
+                {% endif %}
+            </div>
+            <div class="rounded-xl px-4 py-2.5 text-sm leading-relaxed
+                {% if msg.author_type == 'contact' %}bg-gray-900 text-white
+                {% else %}bg-white border border-warm-200 text-gray-700{% endif %}">
+                {{ msg.content }}
+            </div>
+        </div>
+        {% endfor %}
+        {% if not messages %}
+        <div class="text-center text-sm text-gray-400 py-8">No messages in this conversation</div>
+        {% endif %}
+    </div>
+
+    <!-- Analysis footer -->
+    {% if analysis %}
+    <div class="border-t border-warm-200 px-5 py-3 bg-warm-50">
+        <div class="flex items-center gap-4 text-xs text-gray-500">
+            {% if analysis.sentiment_label %}
+            <span>Sentiment: <strong class="{% if analysis.sentiment_score and analysis.sentiment_score >= 0.3 %}text-green-600{% elif analysis.sentiment_score and analysis.sentiment_score >= -0.3 %}text-amber-600{% else %}text-red-600{% endif %}">{{ analysis.sentiment_label }}</strong></span>
+            {% endif %}
+            {% if analysis.intent_primary %}
+            <span>Intent: <strong class="text-gray-700">{{ analysis.intent_primary }}</strong></span>
+            {% endif %}
+            {% if analysis.outcome_category %}
+            <span>Outcome: <strong class="text-gray-700">{{ analysis.outcome_category }}</strong></span>
+            {% endif %}
+        </div>
+        {% if analysis.topics %}
+        <div class="flex flex-wrap gap-1 mt-1.5">
+            {% for topic in analysis.topics %}
+            <span class="text-[10px] bg-white border border-warm-200 rounded px-1.5 py-0.5 text-gray-500">{{ topic }}</span>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>

@@ -1,61 +1,227 @@
 {% extends "base.html" %}
-{% block title %}Settings — {{ chatbot.name }} — PulseLight{% endblock %}
+{% block title %}Configure — {{ chatbot.name }} — PulseLight{% endblock %}
 {% block content %}
 <div class="mb-6">
     <a href="/chatbots/{{ chatbot.id }}" class="text-sm text-gray-500 hover:text-gray-700">&larr; {{ chatbot.name }}</a>
-    <h1 class="text-2xl font-bold text-gray-900 mt-1">Chatbot Settings</h1>
+    <h1 class="text-2xl font-bold text-gray-900 mt-1">Configure</h1>
 </div>
 
-<nav class="flex gap-4 border-b border-gray-200 mb-6">
-    <a href="/chatbots/{{ chatbot.id }}" class="pb-2 text-sm text-gray-500 hover:text-gray-700 border-b-2 border-transparent">Overview</a>
-    <a href="/chatbots/{{ chatbot.id }}/sources" class="pb-2 text-sm text-gray-500 hover:text-gray-700 border-b-2 border-transparent">Sources</a>
-    <a href="/chatbots/{{ chatbot.id }}/deploy" class="pb-2 text-sm text-gray-500 hover:text-gray-700 border-b-2 border-transparent">Deploy</a>
-    <a href="/chatbots/{{ chatbot.id }}/settings" class="pb-2 text-sm font-medium border-b-2 border-indigo-600 text-indigo-600">Settings</a>
-</nav>
+{% include "chatbots/_tabs.html" %}
 
-<form hx-put="/chatbots/{{ chatbot.id }}" hx-swap="none" class="bg-white rounded-lg border border-gray-200 p-6 max-w-lg space-y-4">
-    <div>
-        <label for="name" class="block text-sm font-medium text-gray-700">Name</label>
-        <input type="text" name="name" id="name" value="{{ chatbot.name }}"
-            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm">
+<form hx-put="/chatbots/{{ chatbot.id }}" hx-swap="none" class="space-y-6 max-w-2xl">
+
+    <!-- Bot Persona -->
+    <div class="bg-white rounded-xl border border-warm-200 p-6">
+        <h2 class="text-sm font-semibold text-gray-900 mb-4">Bot Persona</h2>
+
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Display name</label>
+                <input type="text" name="display_name" value="{{ chatbot.display_name or '' }}" placeholder="e.g. Support Bot"
+                       class="block w-full rounded-lg border border-warm-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Tone</label>
+                <div class="flex gap-2">
+                    {% for t in ["professional", "friendly", "technical", "custom"] %}
+                    <label class="flex-1 cursor-pointer">
+                        <input type="radio" name="tone" value="{{ t }}" {% if chatbot.tone == t %}checked{% endif %} class="peer hidden">
+                        <div class="text-center py-2 px-3 rounded-lg border border-warm-200 text-sm peer-checked:border-brand-500 peer-checked:bg-brand-50 peer-checked:text-brand-700 hover:bg-warm-50 transition-colors">
+                            {{ t|capitalize }}
+                        </div>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div>
+                <div class="flex items-center justify-between mb-1">
+                    <label class="block text-sm font-medium text-gray-700">System prompt</label>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-gray-500">Load preset</span>
+                        <select onchange="if(this.value){document.getElementById('system_prompt').value=this.value; this.value=''}"
+                                class="rounded-lg border border-warm-200 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-brand-500 text-gray-700">
+                            <option value="">Choose a preset…</option>
+                            {% for preset in [
+                                ("Professional", "You are a professional customer support assistant. Be helpful, accurate, and concise. Always maintain a professional tone."),
+                                ("Friendly", "You are a friendly and approachable assistant. Use a warm, conversational tone. Be helpful and encouraging."),
+                                ("Concise", "You are a concise assistant. Give direct, to-the-point answers. Avoid unnecessary words or pleasantries."),
+                                ("Technical", "You are a technical support specialist. Provide detailed, accurate technical explanations. Use proper terminology."),
+                                ("Empathetic", "You are an empathetic support assistant. Acknowledge concerns, show understanding, and provide reassuring, helpful responses."),
+                            ] %}
+                            <option value="{{ preset[1] }}">{{ preset[0] }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <textarea name="system_prompt" id="system_prompt" rows="6"
+                          placeholder="You are a helpful support assistant…"
+                          class="block w-full rounded-lg border border-warm-200 px-3 py-2 text-sm font-mono focus:border-brand-500 focus:ring-1 focus:ring-brand-500">{{ chatbot.system_prompt or '' }}</textarea>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Language</label>
+                <input type="text" name="language" value="{{ chatbot.language }}" placeholder="en"
+                       class="block w-48 rounded-lg border border-warm-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+            </div>
+        </div>
     </div>
-    <div>
-        <label for="display_name" class="block text-sm font-medium text-gray-700">Display name</label>
-        <input type="text" name="display_name" id="display_name" value="{{ chatbot.display_name or '' }}"
-            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm">
+
+    <!-- Conversation Prompts -->
+    <div class="bg-white rounded-xl border border-warm-200 p-6">
+        <h2 class="text-sm font-semibold text-gray-900 mb-1">Conversation Prompts</h2>
+        <p class="text-xs text-gray-400 mb-4">What the bot says at the start, when it's stuck, and what it suggests.</p>
+
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Welcome message</label>
+                <textarea name="welcome_message" rows="2" placeholder="Hi! How can I help you today?"
+                          class="block w-full rounded-lg border border-warm-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500">{{ chatbot.welcome_message or '' }}</textarea>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Fallback message</label>
+                <textarea name="fallback_message" rows="2" placeholder="I'm not sure about that. Let me connect you with someone who can help."
+                          class="block w-full rounded-lg border border-warm-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500">{{ chatbot.fallback_message or '' }}</textarea>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                    Suggested questions <span class="text-gray-400 font-normal">(max 6)</span>
+                </label>
+                <!-- Chip input -->
+                <div class="flex gap-2 mb-2">
+                    <input type="text" id="suggestion-input" placeholder="e.g. How do I reset my password?"
+                           onkeydown="if(event.key==='Enter'){event.preventDefault();addSuggestion()}"
+                           class="flex-1 rounded-lg border border-warm-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+                    <button type="button" onclick="addSuggestion()"
+                            class="px-3 py-2 text-sm bg-warm-100 hover:bg-warm-200 text-gray-700 rounded-lg transition-colors">Add</button>
+                </div>
+                <!-- Chips -->
+                <div id="suggestions-chips" class="flex flex-col gap-1.5 mb-2">
+                    {% for q in (chatbot.suggested_questions or []) %}
+                    <div class="flex items-center justify-between gap-2 bg-warm-50 border border-warm-200 rounded-lg px-3 py-2 text-sm text-gray-700">
+                        <span class="truncate">{{ q }}</span>
+                        <button type="button" onclick="removeSuggestion(this)"
+                                class="shrink-0 text-gray-400 hover:text-red-500 transition-colors text-base leading-none">&times;</button>
+                    </div>
+                    {% endfor %}
+                </div>
+                <!-- Hidden input holding JSON array -->
+                <input type="hidden" name="suggested_questions"
+                       id="suggestions-hidden"
+                       value="{{ (chatbot.suggested_questions or [])|tojson }}">
+            </div>
+        </div>
     </div>
-    <div>
-        <label for="tone" class="block text-sm font-medium text-gray-700">Tone</label>
-        <select name="tone" id="tone" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm">
-            {% for t in ["professional", "friendly", "casual", "formal"] %}
-            <option value="{{ t }}" {% if chatbot.tone == t %}selected{% endif %}>{{ t|capitalize }}</option>
-            {% endfor %}
-        </select>
+
+    <!-- AI Behavior -->
+    <div class="bg-white rounded-xl border border-warm-200 p-6">
+        <h2 class="text-sm font-semibold text-gray-900 mb-4">AI Behavior</h2>
+
+        <div class="space-y-5">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Model</label>
+                <input type="text" name="llm_model" value="{{ chatbot.llm_model }}" placeholder="claude-haiku-4-5-20251001"
+                       class="block w-full rounded-lg border border-warm-200 px-3 py-2 text-sm font-mono focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+            </div>
+
+            <div>
+                <div class="flex items-center justify-between mb-1">
+                    <label class="text-sm font-medium text-gray-700">Temperature</label>
+                    <span id="temp-value" class="text-sm font-mono text-gray-500">{{ chatbot.temperature }}</span>
+                </div>
+                <input type="range" name="temperature" min="0" max="1" step="0.05" value="{{ chatbot.temperature }}"
+                       oninput="document.getElementById('temp-value').textContent=this.value"
+                       class="w-full h-2 bg-warm-200 rounded-lg appearance-none cursor-pointer accent-brand-500">
+                <div class="flex justify-between text-[10px] text-gray-400 mt-1"><span>Precise</span><span>Creative</span></div>
+            </div>
+
+            <div>
+                <div class="flex items-center justify-between mb-1">
+                    <label class="text-sm font-medium text-gray-700">Confidence threshold</label>
+                    <span id="conf-value" class="text-sm font-mono text-gray-500">{{ chatbot.confidence_threshold }}</span>
+                </div>
+                <input type="range" name="confidence_threshold" min="0.1" max="0.99" step="0.01" value="{{ chatbot.confidence_threshold }}"
+                       oninput="document.getElementById('conf-value').textContent=parseFloat(this.value).toFixed(2)"
+                       class="w-full h-2 bg-warm-200 rounded-lg appearance-none cursor-pointer accent-brand-500">
+                <div class="flex justify-between text-[10px] text-gray-400 mt-1"><span>More answers (may be wrong)</span><span>Fewer answers (more accurate)</span></div>
+            </div>
+
+            <div>
+                <div class="flex items-center justify-between mb-1">
+                    <label class="text-sm font-medium text-gray-700">Retrieved chunks (top-k)</label>
+                    <span id="topk-value" class="text-sm font-mono text-gray-500">{{ chatbot.retrieval_top_k }}</span>
+                </div>
+                <input type="range" name="retrieval_top_k" min="1" max="20" step="1" value="{{ chatbot.retrieval_top_k }}"
+                       oninput="document.getElementById('topk-value').textContent=this.value"
+                       class="w-full h-2 bg-warm-200 rounded-lg appearance-none cursor-pointer accent-brand-500">
+                <div class="flex justify-between text-[10px] text-gray-400 mt-1"><span>1</span><span>20</span></div>
+            </div>
+
+            <div class="flex items-center gap-6">
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" name="use_reranking" value="true" {% if chatbot.use_reranking %}checked{% endif %}
+                           class="rounded border-warm-200 text-brand-500 focus:ring-brand-500">
+                    <span class="text-sm text-gray-700">Use reranking</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" name="use_hybrid_retrieval" value="true" {% if chatbot.use_hybrid_retrieval %}checked{% endif %}
+                           class="rounded border-warm-200 text-brand-500 focus:ring-brand-500">
+                    <span class="text-sm text-gray-700">Hybrid retrieval</span>
+                </label>
+            </div>
+        </div>
     </div>
-    <div>
-        <label for="language" class="block text-sm font-medium text-gray-700">Language</label>
-        <input type="text" name="language" id="language" value="{{ chatbot.language }}"
-            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm">
-    </div>
-    <div>
-        <label for="welcome_message" class="block text-sm font-medium text-gray-700">Welcome message</label>
-        <textarea name="welcome_message" id="welcome_message" rows="2"
-            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm">{{ chatbot.welcome_message or '' }}</textarea>
-    </div>
-    <div>
-        <label for="system_prompt" class="block text-sm font-medium text-gray-700">System prompt</label>
-        <textarea name="system_prompt" id="system_prompt" rows="5"
-            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm">{{ chatbot.system_prompt or '' }}</textarea>
-    </div>
-    <div>
-        <label for="fallback_message" class="block text-sm font-medium text-gray-700">Fallback message</label>
-        <textarea name="fallback_message" id="fallback_message" rows="2"
-            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm">{{ chatbot.fallback_message or '' }}</textarea>
-    </div>
-    <div class="flex justify-end pt-2">
-        <button type="submit" class="bg-indigo-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-indigo-700">
-            Save changes
+
+    <div class="flex justify-end">
+        <button type="submit" class="bg-brand-500 text-white rounded-lg px-5 py-2.5 text-sm font-semibold hover:bg-brand-600 transition-colors">
+            Save settings
         </button>
     </div>
 </form>
+
+<script>
+function getSuggestions() {
+    try { return JSON.parse(document.getElementById('suggestions-hidden').value) || []; }
+    catch(e) { return []; }
+}
+function saveSuggestions(arr) {
+    document.getElementById('suggestions-hidden').value = JSON.stringify(arr);
+}
+function renderChips(arr) {
+    const container = document.getElementById('suggestions-chips');
+    container.innerHTML = arr.map((q, i) =>
+        `<div class="flex items-center justify-between gap-2 bg-warm-50 border border-warm-200 rounded-lg px-3 py-2 text-sm text-gray-700">
+            <span class="truncate">${q.replace(/</g,'&lt;')}</span>
+            <button type="button" onclick="removeSuggestionAt(${i})" class="shrink-0 text-gray-400 hover:text-red-500 transition-colors text-base leading-none">&times;</button>
+        </div>`
+    ).join('');
+}
+function addSuggestion() {
+    const input = document.getElementById('suggestion-input');
+    const val = input.value.trim();
+    const arr = getSuggestions();
+    if (val && !arr.includes(val) && arr.length < 6) {
+        arr.push(val);
+        saveSuggestions(arr);
+        renderChips(arr);
+        input.value = '';
+    }
+}
+function removeSuggestion(btn) {
+    const chip = btn.closest('div[class*="bg-warm-50"]');
+    const text = chip.querySelector('span').textContent.trim();
+    const arr = getSuggestions().filter(q => q !== text);
+    saveSuggestions(arr);
+    renderChips(arr);
+}
+function removeSuggestionAt(i) {
+    const arr = getSuggestions();
+    arr.splice(i, 1);
+    saveSuggestions(arr);
+    renderChips(arr);
+}
+</script>
 {% endblock %}

@@ -1,6 +1,7 @@
 """PulseLight v2 — FastAPI app with Jinja2 + HTMX, no React/Celery/Redis."""
 import logging
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,17 +20,23 @@ logger = logging.getLogger(__name__)
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown hooks."""
-    # Preload embedding model
+    app.state._start_time = datetime.now(timezone.utc)
+    # Preload embedding model BEFORE wiring LogBuffer — PyTorch/OMP thread spawning
+    # deadlocks if LogBuffer's threading.Lock is held on the app.* logger during model load.
     try:
         from app.services.ingestion.embedder import _get_model
         _get_model()
         logger.info("Embedding model preloaded")
     except Exception:
         logger.warning("Failed to preload embedding model", exc_info=True)
+    # Wire in-memory log buffer AFTER model load (app.* only, NOT root logger)
+    from app.services.log_buffer import LogBuffer as _LogBuffer
+    _log_buffer = _LogBuffer.get_instance()
+    _log_buffer.setFormatter(logging.Formatter("%(message)s"))
+    logging.getLogger("app").addHandler(_log_buffer)
 
     # Bootstrap admin user
     try:
@@ -100,6 +107,7 @@ async def session_middleware(request: Request, call_next):
     """Load user and workspace from session cookie. Redirect to /login if not authenticated."""
     request.state.user = None
     request.state.workspace = None
+    request.state.workspaces = []
 
     if _is_public(request.url.path):
         return await call_next(request)
@@ -137,6 +145,15 @@ async def session_middleware(request: Request, call_next):
         request.state.user = user
         request.state.workspace = workspace
 
+        # Load all workspaces the user is a member of (for switcher)
+        memberships_result = await db.execute(
+            select(WorkspaceMembership, Workspace)
+            .join(Workspace, Workspace.id == WorkspaceMembership.workspace_id)
+            .where(WorkspaceMembership.agent_id == user.id)
+            .order_by(Workspace.name)
+        )
+        request.state.workspaces = [ws for _, ws in memberships_result.all()]
+
     return await call_next(request)
 
 
@@ -160,6 +177,16 @@ from app.routes.dashboard import router as dashboard_router
 from app.routes.api import router as api_router
 from app.routes.events import router as events_router
 from app.routes.settings import router as settings_router
+from app.routes.qa import router as qa_router
+from app.routes.actions import router as actions_router
+from app.routes.crawl import router as crawl_router
+from app.routes.documents import router as documents_router
+from app.routes.intelligence import router as intelligence_router
+from app.routes.logs import router as logs_router
+from app.routes.articles import router as articles_router
+from app.routes.audit import router as audit_router
+from app.routes.admin import router as admin_router
+from app.routes.search import router as search_router
 
 app.include_router(auth_router)
 app.include_router(chatbots_router)
@@ -168,3 +195,13 @@ app.include_router(dashboard_router)
 app.include_router(api_router)
 app.include_router(events_router)
 app.include_router(settings_router)
+app.include_router(qa_router)
+app.include_router(actions_router)
+app.include_router(crawl_router)
+app.include_router(documents_router)
+app.include_router(intelligence_router)
+app.include_router(logs_router)
+app.include_router(articles_router)
+app.include_router(audit_router)
+app.include_router(admin_router)
+app.include_router(search_router)

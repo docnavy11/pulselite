@@ -1,0 +1,21 @@
+{# Partial: sentiment by segment bar chart #}
+{% if segment_data %}
+<div class="space-y-2">
+    {% for item in segment_data %}
+    {% set pct = ((item.avg_sentiment + 1) / 2 * 100) | int %}
+    {% set color = 'bg-green-500' if item.avg_sentiment >= 0.3 else ('bg-amber-400' if item.avg_sentiment >= -0.3 else 'bg-red-500') %}
+    <div class="flex items-center gap-3">
+        <span class="w-36 text-sm text-gray-700 truncate text-right flex-shrink-0" title="{{ item.name }}">{{ item.name }}</span>
+        <div class="flex-1 relative h-5 bg-gray-100 rounded-full overflow-hidden">
+            <div class="h-full rounded-full {{ color }} transition-all" style="width: {{ pct }}%;"></div>
+        </div>
+        <span class="w-14 text-xs font-mono text-right text-gray-600 flex-shrink-0">{{ item.avg_sentiment }}</span>
+        <span class="w-10 text-xs text-gray-400 text-right flex-shrink-0">{{ item.count }}×</span>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="flex items-center justify-center py-10 text-gray-400">
+    <p class="text-sm">No data available for this period</p>
+</div>
+{% endif %}

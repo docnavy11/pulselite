@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Data Retention — Settings — PulseLight{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold text-gray-900 mb-6">Settings</h1>
+{% include "settings/_tabs.html" %}
+
+<div class="max-w-lg">
+        <div class="bg-white rounded-xl border border-warm-200 p-6">
+            <h2 class="text-sm font-semibold text-gray-900 mb-2">Data Retention Policy</h2>
+            <p class="text-sm text-gray-500 mb-4">Choose how long conversation data is retained. Older data will be permanently deleted.</p>
+
+            <form hx-post="/settings/data-retention" hx-swap="none" class="space-y-3">
+                {% set current = workspace.data_retention_days %}
+                {% set is_custom = current is not none and current|string not in ['90', '180', '365'] %}
+
+                {% for option in [
+                    {"value": "", "label": "Keep forever", "desc": "Data is never automatically deleted"},
+                    {"value": "90", "label": "90 days", "desc": "Delete conversations older than 90 days"},
+                    {"value": "180", "label": "180 days", "desc": "Delete conversations older than 180 days"},
+                    {"value": "365", "label": "1 year", "desc": "Delete conversations older than 1 year"},
+                ] %}
+                <label class="flex items-start gap-3 p-3 rounded-lg border border-warm-200 hover:bg-gray-50 cursor-pointer has-[:checked]:border-brand-500 has-[:checked]:bg-brand-50">
+                    <input type="radio" name="retention_days" value="{{ option.value }}"
+                           {% if (option.value == '' and current is none) or (option.value != '' and current|string == option.value) %}checked{% endif %}
+                           onchange="document.getElementById('custom-days-row').style.display='none'"
+                           class="mt-0.5 text-brand-600 focus:ring-brand-500">
+                    <div>
+                        <p class="text-sm font-medium text-gray-900">{{ option.label }}</p>
+                        <p class="text-xs text-gray-500">{{ option.desc }}</p>
+                    </div>
+                </label>
+                {% endfor %}
+
+                {# Custom option #}
+                <label class="flex items-start gap-3 p-3 rounded-lg border border-warm-200 hover:bg-gray-50 cursor-pointer has-[:checked]:border-brand-500 has-[:checked]:bg-brand-50">
+                    <input type="radio" name="retention_days" value="custom"
+                           {% if is_custom %}checked{% endif %}
+                           onchange="document.getElementById('custom-days-row').style.display='block'"
+                           class="mt-0.5 text-brand-600 focus:ring-brand-500">
+                    <div class="flex-1">
+                        <p class="text-sm font-medium text-gray-900">Custom</p>
+                        <p class="text-xs text-gray-500">Specify exact number of days</p>
+                        <div id="custom-days-row" style="display: {% if is_custom %}block{% else %}none{% endif %};" class="mt-2">
+                            <input type="number" name="retention_days_custom" id="retention-days-custom"
+                                   value="{{ current if is_custom else '' }}" min="30" placeholder="e.g. 270"
+                                   class="w-32 rounded-lg border border-warm-200 px-3 py-1.5 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+                            <span class="text-xs text-gray-500 ml-2">days (minimum 30)</span>
+                        </div>
+                    </div>
+                </label>
+
+                <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 mt-3">
+                    <p class="text-xs text-amber-700">Deleted data cannot be recovered. Changes take effect within 24 hours.</p>
+                </div>
+
+                <button type="submit" class="bg-brand-500 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-brand-600 transition-colors mt-2">Save</button>
+            </form>
+
+            <script>
+            (function() {
+                var form = document.querySelector('form[hx-post="/settings/data-retention"]');
+                if (!form) return;
+                form.addEventListener('htmx:configRequest', function(evt) {
+                    var radios = form.querySelectorAll('input[name="retention_days"]');
+                    var selected;
+                    radios.forEach(function(r) { if (r.checked) selected = r.value; });
+                    if (selected === 'custom') {
+                        var days = document.getElementById('retention-days-custom').value;
+                        evt.detail.parameters['retention_days'] = days;
+                    }
+                });
+            })();
+            </script>
+        </div>
+    </div>
+{% endblock %}

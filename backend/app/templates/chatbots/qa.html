@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Q&A — {{ chatbot.name }} — PulseLight{% endblock %}
+{% block content %}
+<div class="mb-4">
+    <a href="/chatbots/{{ chatbot.id }}" class="text-sm text-gray-500 hover:text-gray-700">&larr; {{ chatbot.name }}</a>
+    <h1 class="text-2xl font-bold text-gray-900 mt-1">Q&A</h1>
+</div>
+
+{% include "chatbots/_tabs.html" %}
+
+<!-- Toolbar -->
+<div class="flex items-center justify-between mb-6">
+    <div class="flex items-center gap-2">
+        <!-- Generate with count selector -->
+        <div class="relative" id="gen-menu">
+            <button onclick="document.getElementById('gen-dropdown').classList.toggle('hidden')"
+                    class="inline-flex items-center gap-1.5 bg-brand-500 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-brand-600 transition-colors">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                Generate Q&A
+            </button>
+            <div id="gen-dropdown" class="hidden absolute top-full left-0 mt-1 bg-white border border-warm-200 rounded-lg shadow-lg py-1 z-10">
+                {% for count in [5, 10, 25, 50] %}
+                <button hx-post="/chatbots/{{ chatbot.id }}/qa/generate?count={{ count }}" hx-swap="none"
+                        onclick="document.getElementById('gen-dropdown').classList.add('hidden')"
+                        class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-warm-50">{{ count }} pairs</button>
+                {% endfor %}
+            </div>
+        </div>
+
+        <button hx-post="/chatbots/{{ chatbot.id }}/qa/run-tests" hx-swap="none"
+                class="inline-flex items-center gap-1.5 bg-white border border-warm-200 text-gray-700 rounded-lg px-4 py-2 text-sm font-medium hover:bg-warm-50 transition-colors">
+            Run All Tests
+        </button>
+    </div>
+
+    <!-- Filters -->
+    <div class="flex gap-1">
+        {% for f in [("", "All"), ("pending", "Pending"), ("passed", "Passed"), ("failed", "Failed"), ("escalated", "Escalated")] %}
+        <a href="/chatbots/{{ chatbot.id }}/qa{% if f[0] %}?status={{ f[0] }}{% endif %}"
+           class="px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors
+            {% if status_filter == f[0] or (status_filter is none and f[0] == '') %}bg-brand-50 text-brand-600{% else %}text-gray-400 hover:text-gray-600{% endif %}">
+            {{ f[1] }}
+        </a>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Manual add form -->
+<form hx-post="/chatbots/{{ chatbot.id }}/qa" hx-target="#qa-list" hx-swap="afterbegin"
+      class="bg-white rounded-xl border border-warm-200 p-4 mb-4 flex gap-3">
+    <input type="text" name="question" required placeholder="Add a question manually..."
+           class="flex-1 rounded-lg border border-warm-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+    <input type="text" name="answer" placeholder="Expected answer (optional)"
+           class="flex-1 rounded-lg border border-warm-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+    <button type="submit" class="bg-brand-500 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-brand-600 transition-colors whitespace-nowrap">Add</button>
+</form>
+
+<!-- Q&A list -->
+<div id="qa-list" class="space-y-2">
+    {% for pair in pairs %}
+    <div id="qa-{{ pair.id }}" class="bg-white rounded-xl border border-warm-200 p-4">
+        <div class="flex items-start justify-between gap-4">
+            <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium text-gray-900">{{ pair.question }}</p>
+                {% if pair.answer %}
+                <p class="text-sm text-gray-600 mt-1.5 whitespace-pre-wrap">{{ pair.answer }}</p>
+                {% endif %}
+                {% if pair.suggested_answer %}
+                <div class="mt-2 p-2.5 bg-brand-50 rounded-lg border border-brand-100">
+                    <p class="text-[11px] font-medium text-brand-700 mb-1">AI Suggestion</p>
+                    <p class="text-sm text-gray-700">{{ pair.suggested_answer }}</p>
+                </div>
+                {% endif %}
+            </div>
+            <div class="flex flex-col items-end gap-1.5 flex-shrink-0">
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium
+                    {% if pair.status == 'passed' %}bg-green-100 text-green-700
+                    {% elif pair.status == 'failed' %}bg-red-100 text-red-700
+                    {% elif pair.status == 'escalated' %}bg-amber-100 text-amber-700
+                    {% else %}bg-gray-100 text-gray-500{% endif %}">
+                    {{ pair.status }}
+                </span>
+                {% if pair.confidence_score %}
+                <span class="text-[11px] font-mono {% if pair.confidence_score >= 0.8 %}text-green-600{% elif pair.confidence_score >= 0.5 %}text-amber-600{% else %}text-red-600{% endif %}">
+                    {{ '%.0f' % (pair.confidence_score * 100) }}%
+                </span>
+                {% endif %}
+                <div class="flex gap-1 mt-1">
+                    <button hx-post="/chatbots/{{ chatbot.id }}/qa/{{ pair.id }}/retest" hx-swap="none"
+                            class="text-[11px] text-gray-400 hover:text-brand-600 px-1.5 py-0.5 rounded hover:bg-brand-50 transition-colors">Test</button>
+                    <button hx-post="/chatbots/{{ chatbot.id }}/qa/{{ pair.id }}/suggest" hx-swap="none"
+                            class="text-[11px] text-gray-400 hover:text-brand-600 px-1.5 py-0.5 rounded hover:bg-brand-50 transition-colors">Suggest</button>
+                    <button hx-delete="/chatbots/{{ chatbot.id }}/qa/{{ pair.id }}" hx-target="#qa-{{ pair.id }}" hx-swap="outerHTML swap:0.2s"
+                            class="text-[11px] text-gray-400 hover:text-red-600 px-1.5 py-0.5 rounded hover:bg-red-50 transition-colors">Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% if not pairs %}
+<div class="flex flex-col items-center justify-center py-16 text-center bg-white rounded-xl border border-warm-200">
+    <svg class="w-12 h-12 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>
+    <h3 class="text-sm font-semibold text-gray-800 mb-1">No Q&A pairs yet</h3>
+    <p class="text-xs text-gray-400 max-w-xs">Click "Generate Q&A" to auto-create test questions from your knowledge base, or add them manually.</p>
+</div>
+{% endif %}
+{% endblock %}

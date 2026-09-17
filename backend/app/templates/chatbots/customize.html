@@ -1,0 +1,255 @@
+{% extends "base.html" %}
+{% block title %}Appearance — {{ chatbot.name }} — PulseLight{% endblock %}
+{% block content %}
+<div class="mb-6">
+    <a href="/chatbots" class="text-sm text-gray-500 hover:text-gray-700">&larr; Chatbots</a>
+    <h1 class="text-2xl font-bold text-gray-900 mt-1">{{ chatbot.display_name or chatbot.name }}</h1>
+</div>
+
+{% include "chatbots/_tabs.html" %}
+
+{% set wc = chatbot.widget_config or {} %}
+
+<form hx-post="/chatbots/{{ chatbot.id }}/customize" hx-swap="none" class="space-y-6 max-w-2xl">
+
+    <!-- Widget Colors -->
+    <div class="bg-white rounded-xl border border-warm-200 p-6">
+        <h2 class="text-sm font-semibold text-gray-900 mb-4">Colors</h2>
+        <!-- Presets -->
+        <div class="flex gap-2 mb-4">
+            {% for color in ["#4f46e5", "#2563eb", "#0891b2", "#059669", "#ff6b35", "#d97706", "#dc2626", "#7c3aed", "#db2777"] %}
+            <button type="button" onclick="setColor('{{ color }}')"
+                    class="w-7 h-7 rounded-full border-2 border-white shadow hover:scale-110 transition-transform ring-1 ring-gray-200"
+                    style="background-color: {{ color }}"></button>
+            {% endfor %}
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Primary color</label>
+                <div class="flex items-center gap-3">
+                    <input type="color" name="primary_color" id="primary-color-picker" value="{{ wc.get('primary_color', '#ff6b35') }}"
+                           oninput="document.getElementById('primary-color-text').value=this.value"
+                           class="w-10 h-10 rounded-lg border border-warm-200 cursor-pointer p-0.5">
+                    <input type="text" id="primary-color-text" value="{{ wc.get('primary_color', '#ff6b35') }}"
+                           class="flex-1 rounded-lg border border-warm-200 px-3 py-2 text-sm font-mono"
+                           oninput="document.getElementById('primary-color-picker').value=this.value">
+                </div>
+                <p class="text-xs text-gray-400 mt-1">Used for the chat bubble, header, and send button.</p>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Text color</label>
+                <div class="flex items-center gap-3">
+                    <input type="color" name="text_color" id="text-color-picker" value="{{ wc.get('text_color', '#ffffff') }}"
+                           oninput="document.getElementById('text-color-text').value=this.value"
+                           class="w-10 h-10 rounded-lg border border-warm-200 cursor-pointer p-0.5">
+                    <input type="text" id="text-color-text" value="{{ wc.get('text_color', '#ffffff') }}"
+                           class="flex-1 rounded-lg border border-warm-200 px-3 py-2 text-sm font-mono"
+                           oninput="document.getElementById('text-color-picker').value=this.value">
+                </div>
+                <p class="text-xs text-gray-400 mt-1">Text on the primary color background.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Widget Position & Size -->
+    <div class="bg-white rounded-xl border border-warm-200 p-6">
+        <h2 class="text-sm font-semibold text-gray-900 mb-4">Position & Size</h2>
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Bubble position</label>
+                <div class="flex gap-2">
+                    {% for pos in [("bottom-right", "Bottom right"), ("bottom-left", "Bottom left")] %}
+                    <label class="flex-1 cursor-pointer">
+                        <input type="radio" name="position" value="{{ pos[0] }}"
+                               {% if wc.get('position', 'bottom-right') == pos[0] %}checked{% endif %} class="peer hidden">
+                        <div class="text-center py-2 px-3 rounded-lg border border-warm-200 text-sm peer-checked:border-brand-500 peer-checked:bg-brand-50 peer-checked:text-brand-700 hover:bg-warm-50 transition-colors">
+                            {{ pos[1] }}
+                        </div>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Initial state</label>
+                <div class="flex gap-2">
+                    {% for state in [("closed", "Closed"), ("open", "Open")] %}
+                    <label class="flex-1 cursor-pointer">
+                        <input type="radio" name="initial_open" value="{{ state[0] }}"
+                               {% if wc.get('initial_open', 'closed') == state[0] %}checked{% endif %} class="peer hidden">
+                        <div class="text-center py-2 px-3 rounded-lg border border-warm-200 text-sm peer-checked:border-brand-500 peer-checked:bg-brand-50 peer-checked:text-brand-700 hover:bg-warm-50 transition-colors">
+                            {{ state[1] }}
+                        </div>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chat Window Content -->
+    <div class="bg-white rounded-xl border border-warm-200 p-6">
+        <h2 class="text-sm font-semibold text-gray-900 mb-4">Chat Window</h2>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Window title</label>
+                <input type="text" name="window_title" value="{{ wc.get('window_title', '') }}"
+                       placeholder="{{ chatbot.display_name or chatbot.name }}"
+                       class="block w-full rounded-lg border border-warm-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Placeholder text</label>
+                <input type="text" name="input_placeholder" value="{{ wc.get('input_placeholder', '') }}"
+                       placeholder="Type a message..."
+                       class="block w-full rounded-lg border border-warm-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+            </div>
+            <div>
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" name="show_branding" value="true"
+                           {% if wc.get('show_branding', true) %}checked{% endif %}
+                           class="rounded border-warm-200 text-brand-500 focus:ring-brand-500">
+                    <span class="text-sm text-gray-700">Show "Powered by PulseLight" branding</span>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Replies -->
+    <div class="bg-white rounded-xl border border-warm-200 p-6">
+        <h2 class="text-sm font-semibold text-gray-900 mb-1">Quick Replies</h2>
+        <p class="text-xs text-gray-400 mb-4">Suggested reply buttons shown at the start of a conversation. Press Enter to add, max 6.</p>
+        <div class="flex gap-2 mb-2">
+            <input type="text" id="qr-input" placeholder="e.g. What's your pricing?"
+                   onkeydown="if(event.key==='Enter'){event.preventDefault();addQR()}"
+                   class="flex-1 rounded-lg border border-warm-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+            <button type="button" onclick="addQR()"
+                    class="px-3 py-2 text-sm bg-warm-100 hover:bg-warm-200 text-gray-700 rounded-lg transition-colors">Add</button>
+        </div>
+        <div id="qr-chips" class="flex flex-col gap-1.5 mb-2">
+            {% for r in (wc.get('quick_replies') or []) %}
+            <div class="flex items-center justify-between gap-2 bg-warm-50 border border-warm-200 rounded-lg px-3 py-2 text-sm text-gray-700">
+                <span class="truncate">{{ r }}</span>
+                <button type="button" onclick="removeQR(this)" class="shrink-0 text-gray-400 hover:text-red-500 transition-colors text-base leading-none">&times;</button>
+            </div>
+            {% endfor %}
+        </div>
+        <input type="hidden" name="quick_replies" id="qr-hidden" value="{{ (wc.get('quick_replies') or [])|tojson }}">
+    </div>
+
+    <!-- Lead Capture -->
+    <div class="bg-white rounded-xl border border-warm-200 p-6">
+        <h2 class="text-sm font-semibold text-gray-900 mb-4">Lead Capture</h2>
+        <div class="space-y-3">
+            <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" name="lead_capture_enabled" value="true"
+                       {% if wc.get('lead_capture_enabled') %}checked{% endif %}
+                       class="rounded border-warm-200 text-brand-500 focus:ring-brand-500">
+                <span class="text-sm text-gray-700">Collect visitor contact info</span>
+            </label>
+            <div class="pl-6">
+                <p class="text-xs text-gray-500 mb-2">Fields to capture:</p>
+                <div class="flex flex-wrap gap-3">
+                    {% for field in ["name", "email", "phone", "company"] %}
+                    <label class="flex items-center gap-1.5 text-sm text-gray-700 cursor-pointer">
+                        <input type="checkbox" name="lead_capture_fields" value="{{ field }}"
+                               {% if field in (wc.get('lead_capture_fields') or ['name', 'email']) %}checked{% endif %}
+                               class="rounded border-warm-200 text-brand-500 focus:ring-brand-500">
+                        {{ field|capitalize }}
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Behavior -->
+    <div class="bg-white rounded-xl border border-warm-200 p-6">
+        <h2 class="text-sm font-semibold text-gray-900 mb-4">Behavior</h2>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Auto-open delay <span class="text-gray-400 font-normal">(seconds, 0 = disabled)</span></label>
+                <input type="number" name="auto_open_delay" min="0" max="300" value="{{ wc.get('auto_open_delay', '') or '' }}" placeholder="0"
+                       class="block w-32 rounded-lg border border-warm-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+            </div>
+            <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" name="persist_conversation" value="true"
+                       {% if wc.get('persist_conversation') %}checked{% endif %}
+                       class="rounded border-warm-200 text-brand-500 focus:ring-brand-500">
+                <span class="text-sm text-gray-700">Persist conversation across page loads</span>
+            </label>
+        </div>
+    </div>
+
+    <!-- Allowed Domains -->
+    <div class="bg-white rounded-xl border border-warm-200 p-6">
+        <h2 class="text-sm font-semibold text-gray-900 mb-1">Allowed Domains</h2>
+        <p class="text-sm text-gray-500 mb-4">Restrict the widget to specific domains. Leave empty to allow all.</p>
+        <textarea name="allowed_domains" rows="3"
+                  placeholder="example.com&#10;app.example.com"
+                  class="block w-full rounded-lg border border-warm-200 px-3 py-2 text-sm font-mono focus:border-brand-500 focus:ring-1 focus:ring-brand-500">{{ (wc.get('allowed_domains') or [])|join('\n') }}</textarea>
+        <p class="text-xs text-gray-400 mt-1">One domain per line, no protocol or trailing slash.</p>
+    </div>
+
+    <!-- Custom CSS -->
+    <div class="bg-white rounded-xl border border-warm-200 p-6">
+        <h2 class="text-sm font-semibold text-gray-900 mb-1">Custom CSS</h2>
+        <p class="text-sm text-gray-500 mb-4">Override widget styles with custom CSS rules.</p>
+        <textarea name="custom_css" rows="6"
+                  placeholder=".pulselight-bubble { border-radius: 8px; }"
+                  class="block w-full rounded-lg border border-warm-200 px-3 py-2 text-sm font-mono focus:border-brand-500 focus:ring-1 focus:ring-brand-500">{{ wc.get('custom_css', '') }}</textarea>
+    </div>
+
+    <div class="flex justify-end">
+        <button type="submit" class="bg-brand-500 text-white rounded-lg px-5 py-2.5 text-sm font-semibold hover:bg-brand-600 transition-colors">
+            Save appearance
+        </button>
+    </div>
+</form>
+
+<script>
+function setColor(hex) {
+    document.getElementById('primary-color-picker').value = hex;
+    document.getElementById('primary-color-text').value = hex;
+}
+
+// Quick replies chip input
+function getQR() {
+    try { return JSON.parse(document.getElementById('qr-hidden').value) || []; } catch(e) { return []; }
+}
+function saveQR(arr) {
+    document.getElementById('qr-hidden').value = JSON.stringify(arr);
+}
+function renderQR(arr) {
+    const c = document.getElementById('qr-chips');
+    c.innerHTML = arr.map((r, i) =>
+        `<div class="flex items-center justify-between gap-2 bg-warm-50 border border-warm-200 rounded-lg px-3 py-2 text-sm text-gray-700">
+            <span class="truncate">${r.replace(/</g,'&lt;')}</span>
+            <button type="button" onclick="removeQRAt(${i})" class="shrink-0 text-gray-400 hover:text-red-500 transition-colors text-base leading-none">&times;</button>
+        </div>`
+    ).join('');
+}
+function addQR() {
+    const input = document.getElementById('qr-input');
+    const val = input.value.trim();
+    const arr = getQR();
+    if (val && !arr.includes(val) && arr.length < 6) {
+        arr.push(val);
+        saveQR(arr);
+        renderQR(arr);
+        input.value = '';
+    }
+}
+function removeQR(btn) {
+    const chip = btn.closest('div[class*="bg-warm-50"]');
+    const text = chip.querySelector('span').textContent.trim();
+    const arr = getQR().filter(r => r !== text);
+    saveQR(arr);
+    renderQR(arr);
+}
+function removeQRAt(i) {
+    const arr = getQR();
+    arr.splice(i, 1);
+    saveQR(arr);
+    renderQR(arr);
+}
+</script>
+{% endblock %}

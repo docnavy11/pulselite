@@ -1,0 +1,13 @@
+<nav class="space-y-0.5">
+    {% set p = request.url.path %}
+    <a href="/settings" class="block px-3 py-2 text-sm rounded-lg {% if p == '/settings' or p == '/settings/' %}bg-brand-50 text-brand-700 font-medium{% else %}text-gray-600 hover:bg-gray-100{% endif %}">General</a>
+    <a href="/settings/team" class="block px-3 py-2 text-sm rounded-lg {% if '/settings/team' in p %}bg-brand-50 text-brand-700 font-medium{% else %}text-gray-600 hover:bg-gray-100{% endif %}">Team</a>
+    <a href="/settings/billing" class="block px-3 py-2 text-sm rounded-lg {% if '/settings/billing' in p %}bg-brand-50 text-brand-700 font-medium{% else %}text-gray-600 hover:bg-gray-100{% endif %}">Billing</a>
+    <a href="/settings/integrations" class="block px-3 py-2 text-sm rounded-lg {% if '/settings/integrations' in p %}bg-brand-50 text-brand-700 font-medium{% else %}text-gray-600 hover:bg-gray-100{% endif %}">Integrations</a>
+    <a href="/settings/llm" class="block px-3 py-2 text-sm rounded-lg {% if '/settings/llm' in p %}bg-brand-50 text-brand-700 font-medium{% else %}text-gray-600 hover:bg-gray-100{% endif %}">AI Models</a>
+    <a href="/settings/security" class="block px-3 py-2 text-sm rounded-lg {% if '/settings/security' in p %}bg-brand-50 text-brand-700 font-medium{% else %}text-gray-600 hover:bg-gray-100{% endif %}">Security</a>
+    <a href="/settings/data-retention" class="block px-3 py-2 text-sm rounded-lg {% if '/settings/data-retention' in p %}bg-brand-50 text-brand-700 font-medium{% else %}text-gray-600 hover:bg-gray-100{% endif %}">Data Retention</a>
+    <a href="/settings/webhooks" class="block px-3 py-2 text-sm rounded-lg {% if '/settings/webhooks' in p %}bg-brand-50 text-brand-700 font-medium{% else %}text-gray-600 hover:bg-gray-100{% endif %}">Webhooks</a>
+    <a href="/settings/intelligence" class="block px-3 py-2 text-sm rounded-lg {% if '/settings/intelligence-config' in p or (p == '/settings/intelligence') %}bg-brand-50 text-brand-700 font-medium{% else %}text-gray-600 hover:bg-gray-100{% endif %}">Intelligence</a>
+    <a href="/settings/audit" class="block px-3 py-2 text-sm rounded-lg {% if '/settings/audit' in p %}bg-brand-50 text-brand-700 font-medium{% else %}text-gray-600 hover:bg-gray-100{% endif %}">Audit Log</a>
+</nav>

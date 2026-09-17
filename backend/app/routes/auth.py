@@ -1,7 +1,12 @@
-"""Authentication routes — login, register, logout, Google OAuth."""
+"""Authentication routes — login, register, logout, Google OAuth, workspace switching."""
+import secrets
+import uuid
+from datetime import datetime, timedelta, timezone
+
 import httpx
 from fastapi import APIRouter, Depends, Form, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
+from sqlalchemy import select, update as sa_update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -13,7 +18,9 @@ router = APIRouter()
 
 @router.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
-    return request.app.state.templates.TemplateResponse("auth/login.html", {"request": request})
+    return request.app.state.templates.TemplateResponse("auth/login.html", {
+        "request": request, "google_oauth": bool(settings.GOOGLE_CLIENT_ID),
+    })
 
 
 @router.post("/login")
@@ -68,6 +75,82 @@ async def register(
     response = RedirectResponse("/chatbots", status_code=303)
     response.set_cookie("session_id", session.id, httponly=True, samesite="lax", max_age=settings.SESSION_EXPIRY_DAYS * 86400)
     return response
+
+
+@router.post("/workspaces/switch")
+async def switch_workspace(
+    request: Request,
+    workspace_id: uuid.UUID = Form(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Switch the current session to a different workspace."""
+    from app.models.organizational import WorkspaceMembership, Workspace
+    from app.models.session import Session
+
+    user = request.state.user
+    # Verify the user is actually a member of the target workspace
+    membership = (await db.execute(
+        select(WorkspaceMembership).where(
+            WorkspaceMembership.agent_id == user.id,
+            WorkspaceMembership.workspace_id == workspace_id,
+        )
+    )).scalar_one_or_none()
+    if not membership:
+        return RedirectResponse("/dashboard", status_code=303)
+
+    # Update the session's workspace_id in-place
+    session_id = request.cookies.get("session_id")
+    await db.execute(
+        sa_update(Session)
+        .where(Session.id == session_id)
+        .values(workspace_id=workspace_id)
+    )
+    await db.commit()
+
+    # Redirect back to wherever they were (or dashboard)
+    referer = request.headers.get("referer", "/dashboard")
+    return RedirectResponse(referer, status_code=303)
+
+
+@router.post("/workspaces/new")
+async def create_workspace(
+    request: Request,
+    name: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a new workspace and switch to it."""
+    import re
+    from app.models.organizational import Workspace, WorkspaceMembership
+    from app.models.session import Session
+
+    user = request.state.user
+    name = name.strip()[:100]
+    if not name:
+        return RedirectResponse("/dashboard", status_code=303)
+
+    # Generate slug
+    slug_base = re.sub(r"[^a-z0-9-]", "-", name.lower())
+    slug_base = re.sub(r"-+", "-", slug_base).strip("-") or "workspace"
+    slug = f"{slug_base}-{secrets.token_hex(3)}"
+
+    new_ws = Workspace(id=uuid.uuid4(), name=name, slug=slug)
+    db.add(new_ws)
+    await db.flush()
+
+    membership = WorkspaceMembership(id=uuid.uuid4(), agent_id=user.id, workspace_id=new_ws.id, role="owner")
+    db.add(membership)
+    await db.flush()
+
+    # Update current session to point to new workspace
+    session_id = request.cookies.get("session_id")
+    await db.execute(
+        sa_update(Session)
+        .where(Session.id == session_id)
+        .values(workspace_id=new_ws.id)
+    )
+    await db.commit()
+
+    return RedirectResponse("/dashboard", status_code=303)
 
 
 @router.post("/logout")

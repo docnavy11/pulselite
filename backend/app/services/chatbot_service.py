@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.conversations import Conversation
 from app.models.intelligence import GapCluster, GapEvent, RetrievalLog
 from app.models.knowledge import Article, Chatbot, Chunk, CrawlJob, Document, KnowledgeBase
-from app.services.realtime import emit_to_workspace
+from app.realtime.events import notify_workspace
 
 
 async def create_chatbot(db: AsyncSession, workspace_id: uuid.UUID, **kwargs) -> Chatbot:
@@ -114,7 +114,7 @@ async def delete_chatbot(db: AsyncSession, workspace_id: uuid.UUID, chatbot_id: 
         )
         ws_row = ws_result.one_or_none()
         if ws_row:
-            await emit_to_workspace(str(workspace_id), "workspace:usage_updated", {
+            await notify_workspace(str(workspace_id), "workspace:usage_updated", {
                 "chars_indexed": ws_row.chars_indexed,
                 "chars_limit": get_plan_limits(ws_row.plan)["chars_indexed"],
                 "plan": ws_row.plan,

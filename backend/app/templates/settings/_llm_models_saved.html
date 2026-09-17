@@ -1,0 +1,51 @@
+{# Returned after saving allowed models — swapped into #models-panel, with OOB updates for the two model selects #}
+
+{# ── Primary: collapsed chips view (goes into #models-panel) ── #}
+{% if workspace.allowed_models %}
+<div class="flex flex-wrap gap-1.5">
+    {% for m in workspace.allowed_models %}
+    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-mono bg-brand-50 border border-brand-200 text-brand-700">
+        {{ m.split('/')[-1] }}
+    </span>
+    {% endfor %}
+</div>
+{% else %}
+<p class="text-xs text-gray-400 italic">All models allowed (no restriction). Load from OpenRouter to select specific models.</p>
+{% endif %}
+
+{# ── OOB: default chatbot model field ── #}
+<div id="default-model-input" hx-swap-oob="true">
+    {% set models = workspace.allowed_models or [] %}
+    {% set current = workspace.default_chatbot_model or '' %}
+    {% if models %}
+    <select name="default_chatbot_model"
+            class="flex-1 rounded-lg border border-warm-200 px-3 py-2 text-sm text-gray-700 focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+        <option value="">— use default —</option>
+        {% for m in models %}
+        <option value="{{ m }}" {% if current == m %}selected{% endif %}>{{ m.split('/')[-1] }}</option>
+        {% endfor %}
+    </select>
+    {% else %}
+    <input type="text" name="default_chatbot_model" value="{{ current }}"
+           placeholder="{{ env_default_chatbot_model or 'anthropic/claude-haiku-4-5-20251001' }}"
+           class="flex-1 rounded-lg border border-warm-200 px-3 py-2 text-sm font-mono focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+    {% endif %}
+</div>
+
+{# ── OOB: internal / background tasks model field ── #}
+<div id="internal-model-input" hx-swap-oob="true">
+    {% set current = workspace.internal_model or '' %}
+    {% if models %}
+    <select name="internal_model"
+            class="flex-1 rounded-lg border border-warm-200 px-3 py-2 text-sm text-gray-700 focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+        <option value="">— use default —</option>
+        {% for m in models %}
+        <option value="{{ m }}" {% if current == m %}selected{% endif %}>{{ m.split('/')[-1] }}</option>
+        {% endfor %}
+    </select>
+    {% else %}
+    <input type="text" name="internal_model" value="{{ current }}"
+           placeholder="{{ env_internal_model or 'anthropic/claude-haiku-4-5-20251001' }}"
+           class="flex-1 rounded-lg border border-warm-200 px-3 py-2 text-sm font-mono focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+    {% endif %}
+</div>
