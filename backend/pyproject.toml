@@ -87,6 +87,12 @@ ignore = [
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+# Twelve test modules import helpers as `from tests.factories import ...`, and
+# only `app*` is installed as a package - so `tests` is importable only if the
+# project root is on sys.path. It was, on the machine that wrote them, via a
+# leftover editable-install path file; on a clean checkout it is not, and the
+# suite failed to collect. Stated here instead of depending on that accident.
+pythonpath = ["."]
 
 [tool.coverage.run]
 omit = ["alembic/*", "scripts/*", "tests/*"]
