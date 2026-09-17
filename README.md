@@ -2,6 +2,39 @@
 
 AI-powered website chatbot platform. Paste a URL, the system crawls it, auto-configures a chatbot, and gives you a `<script>` tag to embed. Primary KPI: **Autonomous Resolution Rate** — the AI resolves conversations; humans only see what it can't handle.
 
+## What it looks like
+
+Screenshots are of a **demo workspace with sample data** — a fictional coffee
+roaster — not of a live customer install. Nothing here is a real account, a real
+site or a real conversation.
+
+**Paste a URL.** The whole setup is one field: the crawler fetches the site, the
+model proposes a configuration, and you review it before the bot goes live.
+
+![The setup wizard: website URL, then crawl, review config, go live](docs/img/setup.png)
+
+**The number the product is about.** Autonomous Resolution Rate — how many
+conversations the assistant closed without a person — alongside what it could
+not answer, because the second number is what tells you which article to write.
+
+![Overview: auto-resolution rate, total conversations, escalations, gaps](docs/img/overview.png)
+
+**The inbox.** Every conversation with its confidence, filterable by open,
+resolved and escalated.
+
+![Conversations list with status filters and confidence scores](docs/img/conversations.png)
+
+**Refusing is a feature.** Below the confidence threshold the assistant stops
+rather than inventing a policy, and hands over with the reason attached — here,
+an article that failed to index.
+
+![A conversation where the bot declines at 38% confidence and escalates](docs/img/conversation.png)
+
+**Per-bot configuration.** Model, tone, retrieval settings and fallback
+behaviour live with the bot rather than in a global config.
+
+![The chatbots list showing a configured bot, its model and its resolution rate](docs/img/chatbots.png)
+
 ## Status — read this first
 
 **Mid-rewrite, and not production software.** `main` is the v2 HTMX rewrite
