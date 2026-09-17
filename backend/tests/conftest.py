@@ -22,10 +22,17 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
 )
 
-# Point at the test database — override env BEFORE importing app modules
+# Point at the test database — override env BEFORE importing app modules.
+#
+# The database NAME stays hard-assigned on purpose: these tests create and drop
+# tables, so letting an ambient POSTGRES_DB through would let a stray .env point
+# the suite at the development database and empty it. Host and port are only
+# where that database lives, so those may be overridden - which is what lets the
+# suite run from the host (POSTGRES_HOST=localhost POSTGRES_PORT=3055) as well
+# as from inside compose, where "postgres" resolves and 5432 is right.
 os.environ["POSTGRES_DB"] = "pulse_test"
-os.environ["POSTGRES_HOST"] = "postgres"
-os.environ["POSTGRES_PORT"] = "5432"
+os.environ.setdefault("POSTGRES_HOST", "postgres")
+os.environ.setdefault("POSTGRES_PORT", "5432")
 os.environ["POSTGRES_USER"] = "pulse"
 os.environ["POSTGRES_PASSWORD"] = "pulse_dev_password"
 os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key-at-least-32-chars-long")
