@@ -105,7 +105,11 @@ class Settings(BaseSettings):
     CLOUD_MODE: bool = False
 
     # Server
-    HOST: str = "0.0.0.0"
+    # Binds every interface because the process runs inside a container, where
+    # the port is published by Docker rather than by this setting. Narrowing it
+    # to 127.0.0.1 would make the container unreachable. Exposure is decided by
+    # the port mapping and whatever proxy sits in front, not here.
+    HOST: str = "0.0.0.0"  # nosec B104
     PORT: int = 8000
     WORKERS: int = 4
 
