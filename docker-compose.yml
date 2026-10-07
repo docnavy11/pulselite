@@ -11,7 +11,9 @@ services:
       POSTGRES_PASSWORD: pulse_dev_password
       POSTGRES_DB: pulse
     ports:
-      - "3055:5432"
+      - "127.0.0.1:3055:5432"
+      - "[::1]:3055:5432"
+      - "100.121.192.61:3055:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
@@ -26,7 +28,9 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
+      - "[::1]:8000:8000"
+      - "100.121.192.61:8000:8000"
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
