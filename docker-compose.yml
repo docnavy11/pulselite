@@ -5,6 +5,7 @@ name: pulselite
 
 services:
   postgres:
+    restart: unless-stopped
     image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: pulse
